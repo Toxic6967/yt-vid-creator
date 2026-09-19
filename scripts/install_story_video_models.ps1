@@ -48,10 +48,10 @@ $targets = @(
         Url = "https://huggingface.co/Lightricks/LTX-Video/resolve/main/ltxv-2b-0.9.8-distilled-fp8.safetensors?download=true"
     },
     @{
-        Name = "LTX T5 XXL text encoder"
+        Name = "LTX T5 XXL FP8 text encoder"
         Dir = Join-Path $models "text_encoders"
-        File = "t5xxl_fp16.safetensors"
-        Url = "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors?download=true"
+        File = "t5xxl_fp8_e4m3fn_scaled.safetensors"
+        Url = "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn_scaled.safetensors?download=true"
     }
 )
 
