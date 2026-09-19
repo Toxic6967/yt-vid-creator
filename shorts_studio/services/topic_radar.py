@@ -14,6 +14,7 @@ from yt_dlp import YoutubeDL
 from ..db import (
     finish_radar_run,
     get_channel_profile,
+    get_recent_content_types,
     get_recent_generated_topics,
     list_topics,
     replace_topics,
@@ -350,14 +351,27 @@ def run_radar_job(run_id: str) -> None:
 
 
 def pick_best_roblox_topic() -> dict[str, Any]:
-    cached = list_topics(1)
-    if cached:
-        best = cached[0]
-    else:
-        results = scan_roblox_topics()
-        if not results:
-            raise RuntimeError("Roblox Trend Radar could not find a usable topic.")
-        best = results[0]
+    cached = list_topics(20)
+    results = cached or scan_roblox_topics()
+    if not results:
+        raise RuntimeError("Roblox Trend Radar could not find a usable topic.")
+
+    recent_types = [
+        x for x in get_recent_content_types(4)
+        if x in {"trend", "relatable", "evergreen"}
+    ]
+
+    # Keep the channel varied: after two factual/trend Shorts in a row,
+    # prefer the strongest relatable idea if it is reasonably competitive.
+    best = results[0]
+    if len(recent_types) >= 2 and all(x != "relatable" for x in recent_types[:2]):
+        relatable = [
+            item for item in results
+            if (item.get("evidence") or {}).get("content_type") == "relatable"
+        ]
+        if relatable and float(relatable[0].get("score", 0)) >= float(best.get("score", 0)) - 18:
+            best = relatable[0]
+
     return {
         "topic": best["title"],
         "content_type": (best.get("evidence") or {}).get("content_type", "trend"),
