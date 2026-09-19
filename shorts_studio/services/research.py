@@ -89,7 +89,7 @@ def discover_topic(niche: str, requested_topic: str | None = None) -> dict:
         "Prefer a specific idea with verifiable facts and a natural visual story. Avoid tragedy exploitation, "
         "celebrity gossip, vague listicles, and claims that depend on only one weak source.\n\n"
         f"NICHE: {niche}\nCANDIDATES:\n" + "\n".join(
-            f"[{i}] {c['title']} | {c['domain']} | {c['snippet']}"
+            f"[{i}] score={c['score']} | {c['title']} | {c['domain']} | {c['snippet']}"
             for i, c in enumerate(candidates[:12], start=1)
         ) + "\n\nReturn {\"candidate_index\": integer, \"topic\": string, \"reason\": string}.",
     )
@@ -196,10 +196,19 @@ Return JSON exactly in this shape:
   "warnings": []
 }}
 """
-    script = chat_json(
-        "You are a meticulous YouTube Shorts writer and fact checker. Accuracy and originality matter more than virality. Return JSON only.",
+    draft = chat_json(
+        "You are a meticulous YouTube Shorts writer. Accuracy and originality matter more than virality. Return JSON only.",
         prompt,
         temperature=0.45,
+    )
+
+    script = chat_json(
+        "You are a skeptical fact-check editor. Return corrected JSON only.",
+        "Audit the draft against the supplied source pack. Remove or rewrite every factual claim that is not clearly supported. "
+        "Do not add new facts. Keep the result within the same 20-45 second style and preserve the JSON shape. "
+        "Each scene must list the SOURCE numbers that support it. If two sources disagree, use cautious wording or omit the claim.\n\n"
+        f"SOURCE PACK:\n{source_text}\n\nDRAFT JSON:\n{draft}",
+        temperature=0.15,
     )
     scenes = script.get("scenes") or []
     if not scenes:
