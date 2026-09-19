@@ -70,7 +70,7 @@ document.querySelector('#auto-generate').onclick=async e=>{
     await jsonFetch('/api/auto-generate',{method:'POST',body:'{}'});
     showTab('review');
   }catch(err){alert(err.message)}
-  finally{btn.disabled=false;btn.textContent='GENERATE FULL SHORT'}
+  finally{btn.disabled=false;btn.textContent='GENERATE ROBLOX STORY'}
 };
 
 document.querySelector('#video-form').addEventListener('submit', async e=>{
@@ -81,7 +81,7 @@ document.querySelector('#video-form').addEventListener('submit', async e=>{
     channel_name: profile.channel_name,
     niche: profile.niche,
     topic: fd.get('topic'),
-    content_type: fd.get('content_type') || 'auto',
+    content_type: fd.get('content_type') || 'story',
     voice: fd.get('voice'),
     target_seconds: Number(fd.get('target_seconds')),
   };
