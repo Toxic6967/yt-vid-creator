@@ -38,3 +38,17 @@ class ImageRequest(BaseModel):
     prompt: str = Field(min_length=2, max_length=500)
     headline: str = Field(default="", max_length=90)
     aspect: str = Field(default="9:16", pattern=r"^(9:16|16:9|1:1)$")
+
+
+class AIImageRequest(BaseModel):
+    prompt: str = Field(min_length=2, max_length=1200)
+    negative_prompt: str = Field(default="blurry, low quality, watermark, text artifacts", max_length=800)
+    aspect: str = Field(default="9:16", pattern=r"^(9:16|16:9|1:1)$")
+    steps: int = Field(default=24, ge=8, le=60)
+
+
+class AIVideoRequest(BaseModel):
+    prompt: str = Field(min_length=2, max_length=1600)
+    negative_prompt: str = Field(default="blurry, low quality, distorted motion, watermark", max_length=800)
+    aspect: str = Field(default="9:16", pattern=r"^(9:16|16:9)$")
+    seconds: int = Field(default=5, ge=3, le=10)
