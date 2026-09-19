@@ -34,7 +34,12 @@ def _word_count(text: str) -> int:
     return len(re.findall(r"\b[\w'-]+\b", text or ""))
 
 
-def deterministic_checks(script: dict, target_seconds: int) -> dict[str, Any]:
+def deterministic_checks(
+    script: dict,
+    target_seconds: int,
+    *,
+    require_citations: bool = true,
+) -> dict[str, Any]:
     scenes = script.get("scenes") or []
     narration = " ".join(_clean(s.get("narration", ""), 500) for s in scenes)
     first = _clean((scenes[0].get("narration") if scenes else "") or script.get("hook", ""), 300)
@@ -72,7 +77,11 @@ def deterministic_checks(script: dict, target_seconds: int) -> dict[str, Any]:
         "max_scene_words": max_scene_words,
         "short_beats_ok": max_scene_words <= 18,
         "payoff_present": bool(last) and roles[-1:] == ["payoff"],
-        "citations_ok": all(bool(s.get("source_ids")) for s in scenes),
+        "citations_ok": (
+            all(bool(s.get("source_ids")) for s in scenes)
+            if require_citations
+            else True
+        ),
         "visual_queries_ok": all(bool(_clean(s.get("visual_query", ""))) for s in scenes),
     }
 
@@ -124,12 +133,24 @@ def _score_script(
     topic: str,
     niche: str,
     target_seconds: int,
+    *,
+    audience: str,
+    tone: str,
+    content_type: str,
+    require_citations: bool,
 ) -> dict[str, Any]:
-    checks = deterministic_checks(script, target_seconds)
+    checks = deterministic_checks(
+        script,
+        target_seconds,
+        require_citations=require_citations,
+    )
     rubric = chat_json(
         "You are a strict YouTube Shorts retention editor. Score the script, do not flatter it. Return JSON only.",
         f"""
 CHANNEL NICHE: {niche}
+AUDIENCE: {audience}
+CHANNEL TONE: {tone}
+CONTENT TYPE: {content_type}
 TOPIC: {topic}
 TARGET LENGTH: {target_seconds} seconds
 
@@ -144,7 +165,8 @@ Score each category from 0-100:
 - curiosity: each beat creates a reason to hear the next beat
 - progression: every beat adds new information and avoids repetition
 - payoff: ending resolves the promise made by the hook
-- naturalness: sounds like a sharp human gaming-documentary Short, not generic AI prose
+- naturalness: sounds like a real Roblox creator talking to the stated audience, not generic AI prose
+- relatability: the viewer can quickly recognise why the situation/topic matters to them
 - visual_pacing: scene plan creates frequent meaningful visual changes
 - clarity: easy to follow at Shorts speed
 
@@ -157,6 +179,7 @@ Return:
   "progression": 0,
   "payoff": 0,
   "naturalness": 0,
+  "relatability": 0,
   "visual_pacing": 0,
   "clarity": 0,
   "issues": ["specific issue"],
@@ -167,7 +190,7 @@ Return:
     )
 
     scores = {}
-    for key in ("hook", "curiosity", "progression", "payoff", "naturalness", "visual_pacing", "clarity"):
+    for key in ("hook", "curiosity", "progression", "payoff", "naturalness", "relatability", "visual_pacing", "clarity"):
         try:
             scores[key] = max(0.0, min(100.0, float(rubric.get(key, 0))))
         except Exception:
@@ -178,9 +201,10 @@ Return:
         + scores["curiosity"] * 0.16
         + scores["progression"] * 0.16
         + scores["payoff"] * 0.16
-        + scores["naturalness"] * 0.10
-        + scores["visual_pacing"] * 0.12
-        + scores["clarity"] * 0.08
+        + scores["naturalness"] * 0.09
+        + scores["relatability"] * 0.10
+        + scores["visual_pacing"] * 0.10
+        + scores["clarity"] * 0.07
     )
 
     mechanical_penalty = 0.0
@@ -198,7 +222,7 @@ Return:
         mechanical_penalty += 6
     if not checks["no_duplicate_scene_lines"]:
         mechanical_penalty += 10
-    if not checks["citations_ok"]:
+    if require_citations and not checks["citations_ok"]:
         mechanical_penalty += 8
 
     total = max(0.0, min(100.0, weighted - mechanical_penalty))
@@ -213,6 +237,7 @@ Return:
         and not checks["hook_has_filler"]
         and checks["payoff_present"]
         and checks["citations_ok"]
+        and scores["relatability"] >= (78 if content_type == "relatable" else 62)
     )
 
     return {
@@ -232,6 +257,11 @@ def _rewrite_script(
     niche: str,
     research: dict,
     target_seconds: int,
+    *,
+    audience: str,
+    tone: str,
+    content_type: str,
+    require_citations: bool,
 ) -> dict:
     sources = _source_pack(research)
     target_words = max(58, min(110, round(target_seconds * 2.45)))
@@ -240,6 +270,9 @@ def _rewrite_script(
         "You are a senior YouTube Shorts writer/editor. Rewrite for retention while preserving factual accuracy. Return JSON only.",
         f"""
 NICHE: {niche}
+AUDIENCE: {audience}
+TONE: {tone}
+CONTENT TYPE: {content_type}
 TOPIC: {topic}
 TARGET: about {target_words} spoken words in {target_seconds} seconds.
 
@@ -262,8 +295,9 @@ NON-NEGOTIABLE STRUCTURE:
 - The final scene role=payoff and must answer/resolve the hook. Do not end with generic engagement begging.
 - No "hey guys", "today we're", "in this video", "you won't believe", fake urgency, or unsupported superlatives.
 - Use short spoken sentences that sound natural aloud.
-- Use ONLY factual claims supported by the source pack.
-- Every factual scene must include valid SOURCE numbers.
+- If CONTENT TYPE is relatable, keep it as a familiar scenario and do not invent specific factual claims, statistics, dates or quotes.
+- If CONTENT TYPE is factual/trend, use ONLY factual claims supported by the source pack.
+- Factual scenes must include valid SOURCE numbers when citations are required.
 - on_screen_emphasis must be 1-5 punchy words, not the full narration.
 - visual_query must describe what should visibly appear for that exact beat.
 - edit_instruction should be a short editing direction such as "hard cut + fast push-in", "quick crop change", "UI highlight", or "wide-to-close zoom".
@@ -295,11 +329,35 @@ Return exactly:
     return _normalize_script(rewritten, topic)
 
 
-def _final_fact_check(script: dict, topic: str, research: dict) -> dict:
+def _final_fact_check(
+    script: dict,
+    topic: str,
+    research: dict,
+    *,
+    content_type: str,
+) -> dict:
     sources = _source_pack(research)
-    checked = chat_json(
-        "You are the final factual safety editor for a YouTube Short. Return corrected JSON only.",
-        f"""
+    if content_type == "relatable":
+        checked = chat_json(
+            "You are the final safety and naturalness editor for a relatable Roblox Short. Return corrected JSON only.",
+            f"""
+TOPIC: {topic}
+SCRIPT:
+{json.dumps(script, ensure_ascii=False)}
+
+This is a relatable/POV scenario, not a factual news report.
+- Keep the scenario plausible and recognisable.
+- Remove invented statistics, dates, developer claims, quotes, or claims that literally every Roblox player does something.
+- Keep the hook, escalation, payoff, short scenes and visual/edit fields.
+- Keep source_ids empty unless the script genuinely contains a sourced factual statement.
+Return the corrected script in the same JSON shape.
+""",
+            temperature=0.08,
+        )
+    else:
+        checked = chat_json(
+            "You are the final factual safety editor for a YouTube Short. Return corrected JSON only.",
+            f"""
 TOPIC: {topic}
 
 SOURCE PACK:
@@ -316,8 +374,8 @@ Check every factual statement against the source pack.
 - Do not make the script flatter or more generic unless accuracy requires it.
 Return the corrected script in the same JSON shape.
 """,
-        temperature=0.08,
-    )
+            temperature=0.08,
+        )
     return _normalize_script(checked, topic)
 
 
@@ -327,22 +385,59 @@ def optimize_retention(
     niche: str,
     research: dict,
     target_seconds: int,
+    *,
+    audience: str,
+    tone: str,
+    content_type: str = "trend",
+    require_citations: bool = True,
     max_rewrites: int = 2,
 ) -> dict:
     current = _normalize_script(script, topic)
     attempts = []
 
     for attempt in range(max_rewrites + 1):
-        score = _score_script(current, topic, niche, target_seconds)
+        score = _score_script(
+            current,
+            topic,
+            niche,
+            target_seconds,
+            audience=audience,
+            tone=tone,
+            content_type=content_type,
+            require_citations=require_citations,
+        )
         attempts.append({"attempt": attempt + 1, **score})
         if score["passed"] or attempt >= max_rewrites:
             break
         current = _rewrite_script(
-            current, score, topic, niche, research, target_seconds
+            current,
+            score,
+            topic,
+            niche,
+            research,
+            target_seconds,
+            audience=audience,
+            tone=tone,
+            content_type=content_type,
+            require_citations=require_citations,
         )
 
-    current = _final_fact_check(current, topic, research)
-    final_score = _score_script(current, topic, niche, target_seconds)
+    current = _final_fact_check(
+        current,
+        topic,
+        research,
+        content_type=content_type,
+    )
+    final_score = _score_script(
+        current,
+        topic,
+        niche,
+        target_seconds,
+        audience=audience,
+        tone=tone,
+        content_type=content_type,
+        require_citations=require_citations,
+    )
 
     current["retention"] = {
         "passed": final_score["passed"],
