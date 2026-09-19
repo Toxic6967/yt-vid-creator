@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import mimetypes
 import shutil
 import threading
 import uuid
@@ -13,19 +14,35 @@ from fastapi.templating import Jinja2Templates
 from .config import OUTPUT_DIR, ROOT_DIR, settings
 from .db import (
     create_job,
+    create_media_job,
     get_channel_profile,
     get_job,
+    get_media_job,
     get_topic,
     init_db,
     latest_radar_run,
     list_generated_images,
     list_jobs,
+    list_media_jobs,
     list_topics,
     save_channel_profile,
     start_radar_run,
     update_job,
+    update_media_job,
 )
-from .models import ChannelProfileRequest, GenerateRequest, ImageRequest, RegenerateRequest
+from .models import (
+    AIImageRequest,
+    AIVideoRequest,
+    ChannelProfileRequest,
+    GenerateRequest,
+    ImageRequest,
+    RegenerateRequest,
+)
+from .services.comfyui_client import (
+    health as comfyui_health,
+    run_image_job,
+    run_video_job,
+)
 from .services.editor import ffmpeg_health
 from .services.image_studio import create_graphic
 from .services.ollama_client import health as ollama_health
@@ -54,6 +71,7 @@ def api_health() -> dict:
         "app": {"ok": True, "name": settings.app_name},
         "ollama": ollama_health(),
         "ffmpeg": ffmpeg_health(),
+        "comfyui": comfyui_health(),
     }
 
 
@@ -225,3 +243,64 @@ def image_file(image_id: str):
     if not path.exists():
         raise HTTPException(404, "Image file is missing")
     return FileResponse(path, media_type="image/jpeg", filename=f"shorts-studio-{image_id}.jpg")
+
+
+@app.get("/api/media/health")
+def media_health() -> dict:
+    return comfyui_health()
+
+
+@app.get("/api/media/jobs")
+def media_jobs() -> list[dict]:
+    return list_media_jobs(40)
+
+
+@app.post("/api/media/image", status_code=202)
+def generate_ai_image(payload: AIImageRequest) -> dict:
+    job_id = uuid.uuid4().hex[:12]
+    create_media_job(job_id, "image", payload.prompt)
+    threading.Thread(
+        target=run_image_job,
+        args=(job_id, payload.model_dump()),
+        daemon=True,
+    ).start()
+    return {"id": job_id, "status": "queued"}
+
+
+@app.post("/api/media/video", status_code=202)
+def generate_ai_video(payload: AIVideoRequest) -> dict:
+    job_id = uuid.uuid4().hex[:12]
+    create_media_job(job_id, "video", payload.prompt)
+    threading.Thread(
+        target=run_video_job,
+        args=(job_id, payload.model_dump()),
+        daemon=True,
+    ).start()
+    return {"id": job_id, "status": "queued"}
+
+
+@app.get("/api/media/jobs/{job_id}/file")
+def media_job_file(job_id: str):
+    job = get_media_job(job_id)
+    if not job or not job.get("output_path"):
+        raise HTTPException(404, "Generated media file not found")
+    path = Path(job["output_path"])
+    if not path.exists():
+        raise HTTPException(404, "Generated media file is missing")
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(path, media_type=media_type, filename=path.name)
+
+
+@app.delete("/api/media/jobs/{job_id}")
+def delete_media_job(job_id: str) -> dict:
+    job = get_media_job(job_id)
+    if not job:
+        raise HTTPException(404, "Media job not found")
+    output = job.get("output_path")
+    if output:
+        try:
+            Path(output).unlink(missing_ok=True)
+        except Exception:
+            pass
+    update_media_job(job_id, status="deleted", output_path=None)
+    return {"ok": True}
