@@ -1,151 +1,120 @@
 # Shorts Studio V1
 
-Private/local-first YouTube Shorts generation workstation for Windows. It researches a topic, creates an original source-grounded script with a local LLM, generates narration, gathers reusable Wikimedia Commons visuals (or creates procedural visuals), edits a 1080x1920 Short with animated captions, produces metadata, and places the result into a manual review queue.
+Private/local-first **Roblox mini-movie creator** for Windows.
 
-**V1 never auto-publishes to YouTube.**
+The main workflow builds short cinematic Roblox stories aimed at young Roblox players: a strong opening, a recognisable situation, recurring/consistent characters, escalating conflict, a real payoff, character dialogue, generated movie-style scenes, active-word captions, subtle SFX, metadata, and a manual review queue.
 
-## Why this build is intentionally not a spam bot
+**Nothing is auto-published to YouTube.**
 
-Shorts Studio stores its research sources, scene-level source IDs, external visual attribution, and quality checks in a manifest beside every export. It refuses to proceed when it cannot find at least two independent sources. The goal is a creator-assist workflow where you review the result before publishing.
+## Current creative direction
+
+Story Studio is deliberately not a generic AI-slop generator. Before rendering, the local writer creates several concepts and scores them for hook, relatability, escalation, payoff, dialogue, visual movie potential, character consistency, and cringe avoidance.
+
+Weak stories are rewritten before expensive media generation. Story mode rejects canned morals, babyish wording, forced slang, random shock value, long exposition and generic creator filler.
+
+Typical formats include relatable gameplay pain, horror-game situations, teammate betrayal, rare-item luck, obbies, server mysteries, survival rounds, funny reversals and satisfying wins.
+
+## Story pipeline
+
+`IDEAS → COMMISSIONING SCORE → SCREENPLAY → STORY QC → CHARACTER BIBLE → SHOT PLAN → CHARACTER VOICES → CINEMATIC KEYFRAMES → KEYFRAME-TO-VIDEO → ACTIVE CAPTIONS → SFX/MUSIC → EDIT → QUALITY GATE → REVIEW`
+
+Story scenes carry exact character descriptions (hair, clothing, colours and personality), environment, action, camera, emotion, motion priority and dialogue speaker.
+
+For continuity, later SDXL keyframes can use the previous keyframe as an img2img reference. The stronger video path animates generated keyframes rather than asking a text-to-video model to invent the character and scene from scratch.
 
 ## Stack
 
-- FastAPI local dashboard on `127.0.0.1:8765`
-- SQLite job/review queue
-- Ollama + `qwen3:8b` for local topic selection, scripting, fact-check assistance, and metadata
-- DDGS for free web discovery
-- Wikimedia Commons API for reusable visual assets and attribution metadata
-- Procedural original visuals as a fallback
-- Edge TTS for no-key narration (internet connection required)
-- FFmpeg supplied through `imageio-ffmpeg` for the final edit
-- ASS animated captions generated from TTS word timings
+- FastAPI dashboard: `127.0.0.1:8765`
+- SQLite queue/history
+- Ollama + `qwen3:8b` for local story planning/writing/scoring
+- ComfyUI for images and video
+- SDXL for cinematic keyframes
+- Optional LTX 2B FP8 keyframe-to-video backend for Story mode
+- Wan 2.1 retained for standalone/legacy video tools, not accepted as the finished Story-mode fallback
+- Edge TTS for no-key character/narrator voices
+- FFmpeg through `imageio-ffmpeg`
+- ASS captions using actual TTS word timings
+- locally generated procedural SFX for whoosh/impact/alert/glitch/reward cues
 
 ## Windows setup
 
-### 1. Clone the repository
+From the repository:
 
 ```bat
-git clone https://github.com/Toxic6967/yt-vid-creator.git
-cd yt-vid-creator
-```
-
-### 2. Install Python dependencies
-
-You can double-click `setup_windows.bat`, or run:
-
-```bat
-py -m venv .venv
-.venv\Scripts\activate
-py -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-Python 3.13 is supported by the main dependencies used here.
-
-### 3. Install Ollama and the local model
-
-Install Ollama for Windows, then in Command Prompt:
-
-```bat
+setup_windows.bat
 ollama pull qwen3:8b
 ```
 
-Keep Ollama running. The app talks only to the local Ollama endpoint by default: `http://127.0.0.1:11434`.
-
-### 4. Start Shorts Studio
+Start ComfyUI, then:
 
 ```bat
 py run.py
 ```
 
-It opens:
+Open `http://127.0.0.1:8765`.
 
-`http://127.0.0.1:8765`
+## Cinematic Story video backend
 
-## First run
-
-1. Enter a channel name and niche.
-2. Leave Topic blank if you want automatic topic discovery.
-3. Choose a voice and a 20-45 second target length.
-4. Click **GENERATE SHORT**.
-5. Watch the job progress in the review queue.
-6. Review the MP4, sources, rights manifest, title, description, and hashtags.
-7. Click Approve or Regenerate.
-
-Exports are stored under:
-
-`data/outputs/<job-id>/`
-
-Each job includes `final.mp4` and `manifest.json`.
-
-## Music and SFX
-
-To keep licensing under your control, V1 does **not** scrape random music. Put music you own or are licensed to monetize in:
-
-`data/assets/music/`
-
-If a supported file is present, Shorts Studio mixes one track quietly under narration. If the folder is empty, it exports narration without background music.
-
-The `data/assets/sfx/` folder is reserved for the next pass of sound-design automation.
-
-## Local model choices
-
-Default:
+For the higher-quality Story mode, run:
 
 ```bat
-ollama pull qwen3:8b
+install_story_video_models.bat
 ```
 
-Change the model with an environment variable:
+The installer finds the real Comfy Desktop backend/model folder and installs the local LTX story-video files. These are large downloads.
+
+After installation:
+
+1. Completely close ComfyUI.
+2. Reopen ComfyUI.
+3. Restart Shorts Studio with `py run.py`.
+4. Open Video Studio and check the engine status.
+
+When detected, the UI reports:
+
+`ComfyUI connected • cinematic keyframe→video engine ready (LTX 2B FP8)`
+
+The RTX 3060 Ti 8GB is at the low end for this backend, so generation can be slow and memory-sensitive. Shorts Studio unloads Qwen before ComfyUI media generation to avoid both systems competing for VRAM.
+
+## Story quality rules
+
+A Story-mode export is not considered finished simply because an MP4 exists. The quality gate requires a passing story/retention score, no placeholder storyboard visuals, appropriate runtime, a real output file, and several completed cinematic keyframe-to-video shots.
+
+If the cinematic backend is unavailable or too few quality motion shots finish, Story mode stops instead of silently substituting the old low-quality text-to-video look.
+
+## Captions
+
+Story captions use real word-boundary timing, short 2–4 word chunks, currently-spoken-word highlighting, word pop/scale animation, stronger hook/reveal/payoff treatment, compact two-line layouts, and placement intended to avoid character faces.
+
+## Audio
+
+Story characters can receive separate neural voices. Character dialogue uses gentler rate/pitch settings than the narrator so it sounds more conversational.
+
+Put licensed music in `data/assets/music/` if you want background music. Built-in original procedural SFX are generated locally for supported scene cues, so the app does not need to scrape copyrighted sound packs.
+
+## Outputs
+
+Each job is stored under `data/outputs/<job-id>/`. A successful job includes `final.mp4` and `manifest.json`, with story, characters, shot plan, generation details and quality checks.
+
+## Privacy / costs
+
+- Local dashboard only.
+- Ollama inference is local.
+- ComfyUI generation is local.
+- No OpenAI, Anthropic, ElevenLabs or Runway API is required.
+- Edge TTS and web discovery still require internet access.
+- No automatic YouTube publishing.
+
+## Development sanity check
 
 ```bat
-set SHORTS_STUDIO_MODEL=qwen3:4b
-py run.py
+py -m compileall shorts_studio run.py
 ```
-
-The 8B Q4 model is the recommended quality/speed starting point for an RTX 3060 Ti 8GB. The 4B model uses less VRAM if needed.
-
-## Privacy / keys
-
-- Dashboard binds to `127.0.0.1`, not your LAN.
-- No OpenAI, Anthropic, ElevenLabs, Runway, or paid API key is required.
-- Do not commit secrets into this repository.
-- Edge TTS and web research require internet access.
-- Research queries and TTS text therefore leave your PC to those respective services; the local LLM inference itself stays on your machine.
-
-## V1 limitations / next upgrades
-
-V1 is deliberately conservative. It uses still images with camera motion instead of ripping copyrighted clips. Strong next upgrades are:
-
-- optional local ComfyUI image/video generation backend
-- better per-word caption highlighting and design presets
-- local Piper/Kokoro narration backend for fully local TTS
-- optional Pexels/Pixabay providers with explicit API keys and license logs
-- YouTube analytics import for learning what hooks/topics work
-- niche/channel profiles and reusable visual styles
-- thumbnail/cover-frame designer
-- manual YouTube upload helper after review (still no automatic publishing by default)
 
 ## Troubleshooting
 
-**Dashboard says Ollama not running**
+If the dashboard says Ollama is unavailable, test `ollama list`.
 
-Open Ollama, then test:
+If Story mode says the cinematic backend is missing, run `install_story_video_models.bat`, then restart ComfyUI and Shorts Studio.
 
-```bat
-ollama list
-```
-
-**Dashboard says model is missing**
-
-```bat
-ollama pull qwen3:8b
-```
-
-**A job fails during narration**
-
-Edge TTS needs internet access. Regenerate after connectivity is restored.
-
-**A job says Review needed**
-
-Open its manifest. The quality gate will show whether the issue was duration, source count, source citations, rights metadata, or the final output file.
+If a Story job fails its quality gate, check the Review Queue/manifest. The app is intentionally designed to reject weak media instead of calling it upload-ready.
