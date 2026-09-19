@@ -30,10 +30,15 @@ def _safe_search(query: str, max_results: int = 12) -> list[dict]:
         return []
 
 
-def discover_topic(niche: str, requested_topic: str | None = None) -> dict:
+def discover_topic(
+    niche: str,
+    requested_topic: str | None = None,
+    requested_content_type: str = "auto",
+) -> dict:
     if requested_topic:
         return {
             "topic": requested_topic,
+            "content_type": requested_content_type if requested_content_type != "auto" else "trend",
             "reason": "Topic was supplied manually.",
             "candidates": [],
         }
@@ -169,7 +174,15 @@ def research_topic(topic: str) -> dict:
     }
 
 
-def write_fact_checked_script(topic: str, niche: str, research: dict, target_seconds: int) -> dict:
+def write_fact_checked_script(
+    topic: str,
+    niche: str,
+    research: dict,
+    target_seconds: int,
+    *,
+    audience: str = "General Roblox audience",
+    tone: str = "Fast gaming documentary",
+) -> dict:
     sources = research.get("sources", [])
     if len(sources) < 2:
         raise RuntimeError("Not enough independent source material was found to make a fact-checked Short.")
@@ -181,30 +194,46 @@ def write_fact_checked_script(topic: str, niche: str, research: dict, target_sec
     target_words = max(58, min(108, round(target_seconds * 2.45)))
     prompt = f"""
 NICHE: {niche}
+AUDIENCE: {audience}
+TONE: {tone}
 TOPIC: {topic}
 TARGET LENGTH: {target_seconds} seconds, about {target_words} spoken words.
 
 SOURCE PACK:
 {source_text}
 
-Create an original Short using only claims that are supported by the source pack. Do not copy source wording.
-Every factual scene must cite one or more SOURCE numbers. If a claim is uncertain, omit it rather than bluffing.
-Use 5-8 scenes. The first spoken line must be a strong but truthful hook. The ending should land the idea instead of begging for engagement.
-Keep the narration natural, fast, and specific. Do not use "you won't believe", fake urgency, or generic AI filler.
+Create an original Short using only claims supported by the source pack. Do not copy source wording.
+Every factual scene must cite one or more SOURCE numbers. If a claim is uncertain, omit it.
 
-Return JSON exactly in this shape:
+Use 9-14 SHORT beats so the visual can change roughly every 1.5-3.5 seconds.
+The opening line must be a strong truthful hook of roughly 4-18 spoken words.
+Write for the stated audience: energetic, clear and easy to follow, but never babyish or patronizing.
+Every beat must add new information or change what the viewer understands.
+End with a payoff that resolves the hook.
+No "hey guys", "today we're", "in this video", "you won't believe", fake urgency, or generic AI filler.
+
+Return JSON exactly:
 {{
   "topic": "...",
   "hook": "...",
   "scenes": [
-    {{"narration":"...", "visual_query":"short visual search phrase", "on_screen_emphasis":"2-5 words", "source_ids":[1,2]}}
+    {{
+      "role":"hook|setup|build|reveal|payoff",
+      "narration":"short natural spoken beat",
+      "visual_query":"specific thing the viewer should SEE in this beat",
+      "on_screen_emphasis":"1-5 punchy words",
+      "source_ids":[1,2],
+      "edit_instruction":"short edit direction",
+      "pattern_interrupt":"optional visual interruption",
+      "sfx_cue":"optional subtle sound cue"
+    }}
   ],
   "claims": [{{"claim":"...", "source_ids":[1,2], "confidence":"high|medium"}}],
   "warnings": []
 }}
 """
     draft = chat_json(
-        "You are a meticulous YouTube Shorts writer. Accuracy and originality matter more than virality. Return JSON only.",
+        "You are a meticulous high-retention YouTube Shorts writer. Accuracy and natural spoken language matter. Return JSON only.",
         prompt,
         temperature=0.45,
     )
@@ -212,30 +241,118 @@ Return JSON exactly in this shape:
     script = chat_json(
         "You are a skeptical fact-check editor. Return corrected JSON only.",
         "Audit the draft against the supplied source pack. Remove or rewrite every factual claim that is not clearly supported. "
-        "Do not add new facts. Preserve the hook/setup/build/reveal/payoff structure, short-scene pacing, edit fields, and JSON shape. "
-        "Each scene must list the SOURCE numbers that support it. If two sources disagree, use cautious wording or omit the claim.\n\n"
+        "Do not add new facts. Preserve the hook/setup/build/reveal/payoff structure, short pacing and visual/edit fields. "
+        "Each factual scene must list the SOURCE numbers that support it.\n\n"
         f"SOURCE PACK:\n{source_text}\n\nDRAFT JSON:\n{draft}",
         temperature=0.15,
     )
+    return _clean_script(script, topic, require_sources=True)
+
+
+def write_relatable_script(
+    topic: str,
+    niche: str,
+    target_seconds: int,
+    *,
+    audience: str,
+    tone: str,
+) -> dict:
+    target_words = max(55, min(105, round(target_seconds * 2.35)))
+    prompt = f"""
+NICHE: {niche}
+AUDIENCE: {audience}
+TONE: {tone}
+RELATABLE IDEA: {topic}
+TARGET: {target_seconds} seconds, about {target_words} spoken words.
+
+Write a highly relatable Roblox Short based on a familiar player situation.
+
+This is NOT a news explainer.
+Do not invent statistics, dates, update claims, developer quotes, or pretend the scenario happens to literally every player.
+
+STYLE:
+- 8-13 fast beats.
+- Hook should instantly recreate the painful/funny situation.
+- Use "when...", "POV...", "you finally...", short reactions and escalating beats when natural.
+- The viewer should recognise the feeling within the first 2 seconds.
+- Escalate the scenario, then give a funny/satisfying payoff.
+- Natural Roblox-player wording, but do not force slang every sentence.
+- Energetic for young players, not babyish.
+- Each beat needs a concrete scene that could be shown visually.
+- Keep narration concise enough for a human-sounding voiceover.
+- No generic "like and subscribe" ending.
+
+Return JSON exactly:
+{{
+  "topic":"...",
+  "hook":"...",
+  "scenes":[
+    {{
+      "role":"hook|setup|build|reveal|payoff",
+      "narration":"...",
+      "visual_query":"exact Roblox-inspired situation to show",
+      "on_screen_emphasis":"1-5 words",
+      "source_ids":[],
+      "edit_instruction":"short edit direction",
+      "pattern_interrupt":"optional visual interruption",
+      "sfx_cue":"optional subtle sound cue"
+    }}
+  ],
+  "claims":[],
+  "warnings":[]
+}}
+"""
+    script = chat_json(
+        "You write genuinely relatable, fast Roblox Shorts for young players. Do not sound like corporate marketing or generic AI. Return JSON only.",
+        prompt,
+        temperature=0.58,
+    )
+    return _clean_script(script, topic, require_sources=False)
+
+
+def _clean_script(script: dict, topic: str, *, require_sources: bool) -> dict:
     scenes = script.get("scenes") or []
     if not scenes:
         raise RuntimeError("The local model did not produce any script scenes.")
-    for scene in scenes:
-        scene["role"] = _clean(scene.get("role", ""), 20).lower()
-        scene["narration"] = _clean(scene.get("narration", ""), 500)
-        scene["visual_query"] = _clean(scene.get("visual_query", topic), 140)
-        scene["on_screen_emphasis"] = _clean(scene.get("on_screen_emphasis", ""), 80)
+
+    allowed_roles = {"hook", "setup", "build", "reveal", "payoff"}
+    for idx, scene in enumerate(scenes):
+        role = _clean(scene.get("role", ""), 20).lower()
+        if role not in allowed_roles:
+            if idx == 0:
+                role = "hook"
+            elif idx == len(scenes) - 1:
+                role = "payoff"
+            elif idx <= 2:
+                role = "setup"
+            elif idx >= len(scenes) - 3:
+                role = "reveal"
+            else:
+                role = "build"
+
+        scene["role"] = role
+        scene["narration"] = _clean(scene.get("narration", ""), 420)
+        scene["visual_query"] = _clean(scene.get("visual_query", topic), 180)
+        scene["on_screen_emphasis"] = _clean(scene.get("on_screen_emphasis", ""), 70)
         scene["source_ids"] = [int(x) for x in scene.get("source_ids", []) if str(x).isdigit()]
-        scene["edit_instruction"] = _clean(scene.get("edit_instruction", "hard cut, subtle push-in"), 120)
+        scene["edit_instruction"] = _clean(scene.get("edit_instruction", "hard cut + subtle push-in"), 120)
         scene["pattern_interrupt"] = _clean(scene.get("pattern_interrupt", ""), 100)
         scene["sfx_cue"] = _clean(scene.get("sfx_cue", ""), 80)
+
         if not scene["narration"]:
             raise RuntimeError("A generated scene had no narration.")
-        if not scene["source_ids"]:
-            script.setdefault("warnings", []).append("A scene has no explicit source citation.")
+        if require_sources and not scene["source_ids"]:
+            script.setdefault("warnings", []).append("A factual scene has no explicit source citation.")
+
+    if scenes:
+        scenes[0]["role"] = "hook"
+        scenes[-1]["role"] = "payoff"
+
     full_text = " ".join(scene["narration"] for scene in scenes)
+    script["hook"] = scenes[0]["narration"] if scenes else _clean(script.get("hook", ""), 240)
     script["word_count"] = len(re.findall(r"\b[\w'-]+\b", full_text))
     script["narration"] = full_text
+    script["scenes"] = scenes
     return script
 
 
