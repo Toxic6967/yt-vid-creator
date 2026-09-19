@@ -15,6 +15,7 @@ from .research import (
     write_relatable_script,
 )
 from .retention import optimize_retention
+from .story_engine import create_story
 from .ollama_client import unload_model
 from .tts import render_scene
 from .visuals import prepare_visual
@@ -50,21 +51,65 @@ def run_pipeline(job_id: str) -> None:
     }
 
     try:
-        _stage(job_id, "Discovering topic", 8)
-        topic_pick = discover_topic(
-            job["niche"],
-            job.get("requested_topic"),
-            job.get("content_type", "auto"),
-        )
-        selected_topic = topic_pick["topic"]
-        content_type = topic_pick.get("content_type") or job.get("content_type", "trend")
-        if content_type == "auto":
-            content_type = "trend"
+        requested_type = job.get("content_type", "auto")
+        if requested_type == "story":
+            selected_topic = job.get("requested_topic") or "Auto-generated relatable Roblox mini-movie"
+            content_type = "story"
+            topic_pick = {
+                "topic": selected_topic,
+                "content_type": "story",
+                "reason": "Cinematic story mode selected.",
+                "candidates": [],
+            }
+        else:
+            _stage(job_id, "Discovering topic", 8)
+            topic_pick = discover_topic(
+                job["niche"],
+                job.get("requested_topic"),
+                requested_type,
+            )
+            selected_topic = topic_pick["topic"]
+            content_type = topic_pick.get("content_type") or requested_type or "trend"
+            if content_type == "auto":
+                content_type = "trend"
+
         manifest["topic_discovery"] = topic_pick
         manifest["content_type"] = content_type
         update_job(job_id, selected_topic=selected_topic, content_type=content_type)
 
-        if content_type == "relatable":
+        if content_type == "story":
+            _stage(job_id, "Writing cinematic Roblox story", 25)
+            research = {
+                "topic": selected_topic,
+                "sources": [],
+                "evidence_score": 0,
+                "source_domains": [],
+                "note": "Fictional Roblox mini-movie. No factual research required.",
+            }
+            script = create_story(
+                None if selected_topic.startswith("Auto-generated") else selected_topic,
+                audience=audience,
+                tone=tone,
+                target_seconds=int(job["target_seconds"]),
+            )
+            selected_topic = script.get("title") or selected_topic
+            update_job(job_id, selected_topic=selected_topic)
+            story_score = script.get("story_score") or {}
+            story_scores = story_score.get("scores") or {}
+            script["retention"] = {
+                "passed": bool(story_score.get("passed")),
+                "total": story_score.get("total"),
+                "scores": {
+                    "hook": story_scores.get("hook"),
+                    "relatability": story_scores.get("relatability"),
+                    "payoff": story_scores.get("payoff"),
+                    "naturalness": story_scores.get("dialogue"),
+                    "visual_pacing": story_scores.get("movie_clarity"),
+                },
+                "issues": story_score.get("problems") or [],
+            }
+            require_citations = False
+        elif content_type == "relatable":
             _stage(job_id, "Planning relatable scenario", 20)
             research = {
                 "topic": selected_topic,
@@ -98,18 +143,19 @@ def run_pipeline(job_id: str) -> None:
 
         manifest["research"] = research
 
-        _stage(job_id, "Optimizing hook + retention", 45)
-        script = optimize_retention(
-            script,
-            selected_topic,
-            job["niche"],
-            research,
-            int(job["target_seconds"]),
-            audience=audience,
-            tone=tone,
-            content_type=content_type,
-            require_citations=require_citations,
-        )
+        if content_type != "story":
+            _stage(job_id, "Optimizing hook + retention", 45)
+            script = optimize_retention(
+                script,
+                selected_topic,
+                job["niche"],
+                research,
+                int(job["target_seconds"]),
+                audience=audience,
+                tone=tone,
+                content_type=content_type,
+                require_citations=require_citations,
+            )
         manifest["script"] = script
         manifest["retention"] = script.get("retention", {})
 
@@ -124,13 +170,21 @@ def run_pipeline(job_id: str) -> None:
         audio_dir = job_dir / "audio"
         audio_dir.mkdir(exist_ok=True)
         scene_audio = []
+        character_voices = {
+            c.get("id"): c.get("voice_profile")
+            for c in script.get("characters", [])
+            if c.get("id") and c.get("voice_profile")
+        }
         for idx, scene in enumerate(script["scenes"], start=1):
+            speaker = str(scene.get("speaker") or "narrator").lower()
+            scene_voice = character_voices.get(speaker, job["voice"])
             audio = render_scene(
                 scene["narration"],
-                job["voice"],
+                scene_voice,
                 audio_dir / f"scene_{idx:02d}.mp3",
                 role=scene.get("role", ""),
             )
+            audio["speaker"] = speaker
             scene_audio.append(audio)
         manifest["audio"] = scene_audio
 
@@ -161,7 +215,7 @@ def run_pipeline(job_id: str) -> None:
         manifest["visuals"] = visuals
 
         _stage(job_id, "Editing video + captions", 85)
-        render_info = render(job_dir, scene_audio, visuals)
+        render_info = render(job_dir, scene_audio, visuals, scenes=script.get("scenes"))
         manifest["render"] = render_info
 
         _stage(job_id, "Running quality checks", 96)
