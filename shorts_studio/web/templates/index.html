@@ -115,12 +115,25 @@
           <section class="panel">
             <div class="eyebrow">GENUINE AI VIDEO</div>
             <h2>AI Video Generator</h2>
-            <p class="sub">Prompt-to-video clips are being wired to a local ComfyUI/Wan provider. This is separate from the full Short creator.</p>
-            <div class="media-engine pending">
-              <b>Local media engine</b>
-              <span>ComfyUI + lightweight Wan video model</span>
-              <span>No paid API planned.</span>
-            </div>
+            <p class="sub">Create a brand-new prompt-to-video clip locally through ComfyUI/Wan. This is separate from the full Short creator.</p>
+            <div id="video-engine-status" class="notice">Checking ComfyUI…</div>
+            <form id="ai-video-form">
+              <label>Prompt<input name="prompt" placeholder="A dramatic Roblox-style neon city, cinematic camera move, energetic gaming atmosphere" required></label>
+              <label>Negative prompt<input name="negative_prompt" value="blurry, low quality, distorted motion, watermark"></label>
+              <div class="split">
+                <label>Aspect<select name="aspect">
+                  <option value="9:16">9:16 vertical</option>
+                  <option value="16:9">16:9 landscape</option>
+                </select></label>
+                <label>Length<select name="seconds">
+                  <option value="5">5 seconds</option>
+                  <option value="8">8 seconds</option>
+                  <option value="10">10 seconds</option>
+                </select></label>
+              </div>
+              <button id="ai-video-button" class="primary" type="submit">GENERATE AI VIDEO</button>
+            </form>
+            <div id="ai-video-jobs" class="media-jobs"></div>
           </section>
         </div>
       </section>
@@ -130,12 +143,26 @@
           <section class="panel">
             <div class="eyebrow">GENUINE AI IMAGE</div>
             <h2>AI Image Studio</h2>
-            <p class="sub">The local AI-image provider will generate actual new images. The quick graphic generator below already works now.</p>
-            <div class="media-engine pending">
-              <b>Local image engine</b>
-              <span>ComfyUI provider slot ready for a local image model.</span>
-              <span>No paid image API planned.</span>
-            </div>
+            <p class="sub">Generate a genuinely new image locally with an installed ComfyUI checkpoint.</p>
+            <div id="image-engine-status" class="notice">Checking ComfyUI…</div>
+            <form id="ai-image-form">
+              <label>Prompt<input name="prompt" placeholder="Roblox-inspired futuristic city, cinematic lighting, energetic gaming visual, no text" required></label>
+              <label>Negative prompt<input name="negative_prompt" value="blurry, low quality, watermark, text artifacts"></label>
+              <div class="split">
+                <label>Aspect<select name="aspect">
+                  <option value="9:16">9:16 vertical</option>
+                  <option value="16:9">16:9 landscape</option>
+                  <option value="1:1">1:1 square</option>
+                </select></label>
+                <label>Quality / steps<select name="steps">
+                  <option value="16">16 — faster</option>
+                  <option value="24" selected>24 — balanced</option>
+                  <option value="32">32 — higher</option>
+                </select></label>
+              </div>
+              <button id="ai-image-button" class="primary" type="submit">GENERATE AI IMAGE</button>
+            </form>
+            <div id="ai-image-jobs" class="media-jobs"></div>
             <hr>
             <div class="eyebrow">QUICK GRAPHICS</div>
             <h3>Graphic / Thumbnail Creator</h3>
@@ -155,7 +182,7 @@
               <div><div class="eyebrow">LIBRARY</div><h2>Generated Images</h2></div>
               <button id="refresh-images" class="ghost">Refresh</button>
             </div>
-            <div id="image-grid" class="image-grid"></div>
+            <div id="graphic-grid" class="image-grid"></div>
           </section>
         </div>
       </section>
