@@ -81,6 +81,7 @@ document.querySelector('#video-form').addEventListener('submit', async e=>{
     channel_name: profile.channel_name,
     niche: profile.niche,
     topic: fd.get('topic'),
+    content_type: fd.get('content_type') || 'auto',
     voice: fd.get('voice'),
     target_seconds: Number(fd.get('target_seconds')),
   };
@@ -100,13 +101,14 @@ function topicCard(t){
   el.innerHTML =
     `<div class="score-ring">${Math.round(t.score)}</div>
      <div class="topic-copy">
-       <div class="topic-subject">${esc(t.subject)}</div>
+       <div class="topic-subject">${esc((evidence.content_type || 'trend').toUpperCase())} • ${esc(t.subject)}</div>
        <h3>${esc(t.title)}</h3>
        <p>${esc(t.reason)}</p>
        <div class="score-row">
          <span>YouTube ${Math.round(t.youtube_score)}</span>
          <span>Recency ${Math.round(t.recency_score)}</span>
          <span>Curiosity ${Math.round(t.curiosity_score)}</span>
+         ${evidence.relatability_score ? `<span>Relatable ${Math.round(evidence.relatability_score)}</span>` : ''}
          <span>Duplicate risk ${Math.round(t.duplicate_risk)}%</span>
        </div>
        <div class="sample">Best observed sample: ${best ? best.toLocaleString()+' views' : 'view count unavailable'}</div>
@@ -346,7 +348,7 @@ function updateJobCard(node, job){
     const q=manifest.quality||{};
     details.innerHTML=`<b>${esc(manifest.metadata.title)}</b><br>${esc(manifest.metadata.description)}<br>`+
       `${(manifest.metadata.hashtags||[]).map(esc).join(' ')}<br>`+
-      `<span class="rights">${q.source_count||0} research sources • ${q.external_visual_count||0} licensed visual(s) • ${q.duration_seconds||'?'} sec</span>`;
+      `<span class="rights">${esc(manifest.content_type||job.content_type||'auto')} • retention ${q.retention_score??'?'} • AI visuals ${q.ai_visual_count||0} • fallback visuals ${q.fallback_visual_count||0} • ${q.duration_seconds||'?'} sec</span>`;
   }
 
   const actions=node.querySelector('.actions');
