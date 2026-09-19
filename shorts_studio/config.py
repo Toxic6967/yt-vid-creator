@@ -29,7 +29,7 @@ class Settings:
     comfyui_base_url: str = os.getenv("COMFYUI_BASE_URL", "http://127.0.0.1:8188")
     comfyui_image_checkpoint: str = os.getenv("COMFYUI_IMAGE_CHECKPOINT", "")
     comfyui_video_workflow: str = os.getenv("COMFYUI_VIDEO_WORKFLOW", str(WORKFLOW_DIR / "video_api.json"))
-    max_source_chars: int = int(os.getenv("SHORTS_STUDIO_MAX_SOURCE_CHARS", "4200"))
+    max_source_chars: int = int(os.getenv("SHORTS_STUDIO_MAX_SOURCE_CHARS", "2400"))
     user_agent: str = os.getenv(
         "SHORTS_STUDIO_USER_AGENT",
         "ShortsStudioV1/1.0 (local personal creator tool; contact: local-user)",
