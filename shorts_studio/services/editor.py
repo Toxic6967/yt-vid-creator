@@ -43,41 +43,127 @@ def _ass_escape(text: str) -> str:
     return text.replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}").replace("\n", " ")
 
 
-def build_captions(scene_audio: list[dict], caption_path: Path) -> None:
+def _caption_chunks(words: list[dict], max_words: int = 4) -> list[list[dict]]:
+    chunks: list[list[dict]] = []
+    current: list[dict] = []
+    for word in words:
+        current.append(word)
+        text = str(word.get("text", ""))
+        ends_phrase = text.endswith((".", "!", "?", ",", ":", ";"))
+        if len(current) >= max_words or (ends_phrase and len(current) >= 2):
+            chunks.append(current)
+            current = []
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _caption_phrase(chunk: list[dict], active_index: int, role: str, emphasis: str) -> str:
+    active_colour = "&H0000D7FF&"
+    if role in {"reveal", "payoff"}:
+        active_colour = "&H006B7CFF&"
+    elif role == "hook":
+        active_colour = "&H00FFF27A&"
+
+    emphasis_words = {
+        token.strip(".,!?;:'\\\"").lower()
+        for token in str(emphasis or "").split()
+        if token.strip()
+    }
+
+    rendered: list[str] = []
+    for i, item in enumerate(chunk):
+        raw = str(item.get("text", "")).strip()
+        clean = raw.strip(".,!?;:'\\\"").lower()
+        text = _ass_escape(raw)
+        if i == active_index:
+            scale = 124 if (clean in emphasis_words or role in {"hook", "reveal", "payoff"}) else 114
+            rendered.append(
+                r"{\c" + active_colour
+                + r"\fscx" + str(scale)
+                + r"\fscy" + str(scale)
+                + r"\bord7\shad2}"
+                + text
+                + r"{\rMain}"
+            )
+        else:
+            rendered.append(text)
+
+    if len(rendered) == 4:
+        return " ".join(rendered[:2]) + r"\N" + " ".join(rendered[2:])
+    return " ".join(rendered)
+
+
+def build_captions(
+    scene_audio: list[dict],
+    caption_path: Path,
+    scenes: list[dict] | None = None,
+) -> None:
     header = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
 PlayResY: 1920
 ScaledBorderAndShadow: yes
+WrapStyle: 2
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Main,Arial,72,&H00FFFFFF,&H0000D7FF,&H00101010,&H90000000,-1,0,0,0,100,100,0,0,1,6,1,2,90,90,340,1
+Style: Main,Arial,76,&H00FFFFFF,&H00FFFFFF,&H00101010,&H78000000,-1,0,0,0,100,100,0,0,1,7,2,2,92,92,315,1
+Style: Hook,Arial,84,&H00FFFFFF,&H00FFFFFF,&H00101010,&H84000000,-1,0,0,0,100,100,0,0,1,8,2,2,86,86,325,1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
 """
     lines = [header]
     timeline = 0.0
-    for scene in scene_audio:
-        words = [w for w in scene.get("words", []) if w.get("text")]
+
+    for scene_index, audio in enumerate(scene_audio):
+        scene = (scenes or [])[scene_index] if scenes and scene_index < len(scenes) else {}
+        role = str(scene.get("role") or audio.get("role") or "").lower()
+        emphasis = str(scene.get("on_screen_emphasis") or "")
+        style = "Hook" if role in {"hook", "reveal", "payoff"} else "Main"
+
+        words = [w for w in audio.get("words", []) if str(w.get("text", "")).strip()]
         if not words:
-            timeline += scene["duration"]
+            timeline += float(audio.get("duration", 0))
             continue
-        for start_idx in range(0, len(words), 4):
-            chunk = words[start_idx:start_idx + 4]
-            start = timeline + chunk[0]["start"]
-            end = timeline + chunk[-1]["start"] + max(0.18, chunk[-1]["duration"])
-            phrase = " ".join(w["text"] for w in chunk)
-            effect = r"{\fad(45,70)\fscx92\fscy92\t(0,120,\fscx100\fscy100)}"
-            lines.append(
-                f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Main,,0,0,0,,{effect}{_ass_escape(phrase)}\n"
+
+        for chunk in _caption_chunks(words, max_words=4):
+            chunk_end = (
+                timeline
+                + float(chunk[-1].get("start", 0))
+                + max(0.16, float(chunk[-1].get("duration", 0)))
             )
-        timeline += scene["duration"]
+            for active_index, word in enumerate(chunk):
+                start = timeline + float(word.get("start", 0))
+                if active_index + 1 < len(chunk):
+                    end = timeline + float(chunk[active_index + 1].get("start", 0))
+                else:
+                    end = chunk_end
+                end = max(start + 0.11, end)
+
+                phrase = _caption_phrase(chunk, active_index, role, emphasis)
+                entrance = (
+                    r"{\fad(20,25)\fscx90\fscy90\t(0,85,\fscx100\fscy100)}"
+                    if active_index == 0
+                    else ""
+                )
+                lines.append(
+                    f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},{style},,0,0,0,,"
+                    f"{entrance}{phrase}\n"
+                )
+
+        timeline += float(audio.get("duration", 0))
+
     caption_path.write_text("".join(lines), encoding="utf-8-sig")
 
 
-def render(job_dir: Path, scene_audio: list[dict], visuals: list[dict]) -> dict:
+def render(
+    job_dir: Path,
+    scene_audio: list[dict],
+    visuals: list[dict],
+    scenes: list[dict] | None = None,
+) -> dict:
     render_dir = job_dir / "render"
     render_dir.mkdir(parents=True, exist_ok=True)
     visual_clips = []
@@ -131,7 +217,7 @@ def render(job_dir: Path, scene_audio: list[dict], visuals: list[dict]) -> dict:
     _run(["-f", "concat", "-safe", "0", "-i", str(audio_list), "-c:a", "aac", "-b:a", "192k", str(narration)])
 
     captions = render_dir / "captions.ass"
-    build_captions(scene_audio, captions)
+    build_captions(scene_audio, captions, scenes=scenes)
     final_path = job_dir / "final.mp4"
 
     music_files = [p for p in MUSIC_DIR.glob("*.*") if p.suffix.lower() in {".mp3", ".wav", ".m4a", ".ogg"}]
