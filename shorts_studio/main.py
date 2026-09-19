@@ -11,11 +11,26 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .config import OUTPUT_DIR, ROOT_DIR, settings
-from .db import create_job, get_job, init_db, list_jobs, update_job
-from .models import GenerateRequest, RegenerateRequest
+from .db import (
+    create_job,
+    get_channel_profile,
+    get_job,
+    get_topic,
+    init_db,
+    latest_radar_run,
+    list_generated_images,
+    list_jobs,
+    list_topics,
+    save_channel_profile,
+    start_radar_run,
+    update_job,
+)
+from .models import ChannelProfileRequest, GenerateRequest, ImageRequest, RegenerateRequest
 from .services.editor import ffmpeg_health
+from .services.image_studio import create_graphic
 from .services.ollama_client import health as ollama_health
 from .services.pipeline import run_pipeline
+from .services.topic_radar import run_radar_job
 
 app = FastAPI(title=settings.app_name, docs_url="/docs", redoc_url=None)
 WEB_DIR = ROOT_DIR / "shorts_studio" / "web"
@@ -42,6 +57,75 @@ def api_health() -> dict:
     }
 
 
+def _queue_short(channel_name: str, niche: str, topic: str | None, voice: str, target_seconds: int) -> dict:
+    job_id = uuid.uuid4().hex[:12]
+    create_job(
+        {
+            "id": job_id,
+            "channel_name": channel_name.strip(),
+            "niche": niche.strip(),
+            "requested_topic": topic,
+            "voice": voice,
+            "target_seconds": target_seconds,
+        }
+    )
+    threading.Thread(target=run_pipeline, args=(job_id,), daemon=True).start()
+    return {"id": job_id, "status": "queued"}
+
+
+@app.get("/api/profile")
+def profile() -> dict:
+    return get_channel_profile()
+
+
+@app.put("/api/profile")
+def update_profile(payload: ChannelProfileRequest) -> dict:
+    return save_channel_profile(payload.model_dump())
+
+
+@app.post("/api/auto-generate", status_code=202)
+def auto_generate() -> dict:
+    profile = get_channel_profile()
+    return _queue_short(
+        profile["channel_name"],
+        profile["niche"],
+        None,
+        profile["voice"],
+        int(profile["target_seconds"]),
+    )
+
+
+@app.get("/api/radar")
+def radar_state() -> dict:
+    return {"run": latest_radar_run(), "topics": list_topics(20)}
+
+
+@app.post("/api/radar/scan", status_code=202)
+def scan_radar() -> dict:
+    current = latest_radar_run()
+    if current and current["status"] == "running":
+        return {"id": current["id"], "status": "running"}
+    run_id = uuid.uuid4().hex[:12]
+    start_radar_run(run_id)
+    threading.Thread(target=run_radar_job, args=(run_id,), daemon=True).start()
+    return {"id": run_id, "status": "running"}
+
+
+@app.post("/api/topics/{topic_id}/make-short", status_code=202)
+def make_topic_short(topic_id: str) -> dict:
+    topic = get_topic(topic_id)
+    if not topic:
+        raise HTTPException(404, "Topic not found")
+    profile = get_channel_profile()
+    return _queue_short(
+        profile["channel_name"],
+        profile["niche"],
+        topic["title"],
+        profile["voice"],
+        int(profile["target_seconds"]),
+    )
+
+
 @app.get("/api/jobs")
 def api_jobs() -> list[dict]:
     return list_jobs(60)
@@ -57,19 +141,13 @@ def api_job(job_id: str) -> dict:
 
 @app.post("/api/jobs", status_code=202)
 def api_generate(payload: GenerateRequest) -> dict:
-    job_id = uuid.uuid4().hex[:12]
-    create_job(
-        {
-            "id": job_id,
-            "channel_name": payload.channel_name.strip(),
-            "niche": payload.niche.strip(),
-            "requested_topic": payload.topic,
-            "voice": payload.voice,
-            "target_seconds": payload.target_seconds,
-        }
+    return _queue_short(
+        payload.channel_name,
+        payload.niche,
+        payload.topic,
+        payload.voice,
+        payload.target_seconds,
     )
-    threading.Thread(target=run_pipeline, args=(job_id,), daemon=True).start()
-    return {"id": job_id, "status": "queued"}
 
 
 @app.post("/api/jobs/{job_id}/approve")
@@ -88,19 +166,13 @@ def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
     old = get_job(job_id)
     if not old:
         raise HTTPException(404, "Job not found")
-    new_id = uuid.uuid4().hex[:12]
-    create_job(
-        {
-            "id": new_id,
-            "channel_name": old["channel_name"],
-            "niche": old["niche"],
-            "requested_topic": payload.topic or old.get("selected_topic") or old.get("requested_topic"),
-            "voice": old["voice"],
-            "target_seconds": old["target_seconds"],
-        }
+    return _queue_short(
+        old["channel_name"],
+        old["niche"],
+        payload.topic or old.get("selected_topic") or old.get("requested_topic"),
+        old["voice"],
+        old["target_seconds"],
     )
-    threading.Thread(target=run_pipeline, args=(new_id,), daemon=True).start()
-    return {"id": new_id, "status": "queued"}
 
 
 @app.delete("/api/jobs/{job_id}")
@@ -132,3 +204,24 @@ def job_manifest(job_id: str):
     if not job:
         raise HTTPException(404, "Job not found")
     return job.get("manifest") or {}
+
+
+@app.post("/api/images")
+def create_image(payload: ImageRequest) -> dict:
+    return create_graphic(payload.prompt, payload.headline, payload.aspect)
+
+
+@app.get("/api/images")
+def images() -> list[dict]:
+    return list_generated_images(30)
+
+
+@app.get("/api/images/{image_id}/file")
+def image_file(image_id: str):
+    image = next((item for item in list_generated_images(100) if item["id"] == image_id), None)
+    if not image:
+        raise HTTPException(404, "Image not found")
+    path = Path(image["output_path"])
+    if not path.exists():
+        raise HTTPException(404, "Image file is missing")
+    return FileResponse(path, media_type="image/jpeg", filename=f"shorts-studio-{image_id}.jpg")
