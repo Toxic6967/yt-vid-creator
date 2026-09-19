@@ -203,16 +203,24 @@ def run_pipeline(job_id: str) -> None:
 
         _stage(job_id, "Generating cinematic story scenes", 69)
         visuals = []
+        continuity_reference = None
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
-            visuals.append(
-                prepare_visual(
-                    scene,
-                    job_dir,
-                    idx,
-                    selected_topic,
-                    duration=float(audio["duration"]),
-                )
+            visual = prepare_visual(
+                scene,
+                job_dir,
+                idx,
+                selected_topic,
+                duration=float(audio["duration"]),
+                reference_image=continuity_reference if content_type == "story" else None,
             )
+            visuals.append(visual)
+
+            if content_type == "story":
+                candidate_reference = visual.get("keyframe_path")
+                if not candidate_reference and visual.get("kind") == "ai_generated_scene":
+                    candidate_reference = visual.get("path")
+                if candidate_reference:
+                    continuity_reference = candidate_reference
 
         real_video_count = sum(1 for v in visuals if v.get("kind") == "ai_generated_video")
         ltx_video_count = sum(
