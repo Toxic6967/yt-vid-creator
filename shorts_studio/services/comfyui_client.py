@@ -90,7 +90,7 @@ def health() -> dict[str, Any]:
         "story_video_workflow": settings.comfyui_story_video_workflow,
         "story_video_models": {
             "checkpoint": "ltxv-2b-0.9.8-distilled-fp8.safetensors",
-            "text_encoder": "t5xxl_fp16.safetensors",
+            "text_encoder": "t5xxl_fp8_e4m3fn_scaled.safetensors",
         },
         "story_video_models_resolved": {},
         "missing_story_video_models": [],
