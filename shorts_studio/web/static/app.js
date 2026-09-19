@@ -44,7 +44,7 @@ async function loadProfile(){
   vf.elements.voice.value = profile.voice;
   vf.elements.target_seconds.value = profile.target_seconds;
   document.querySelector('#profile-summary').innerHTML =
-    `<b>${esc(profile.channel_name)}</b><span>${esc(profile.niche)}</span><span>${esc(profile.tone)} • ~${profile.target_seconds}s</span>`;
+    `<b>${esc(profile.channel_name)}</b><span>${esc(profile.niche)}</span><span>${esc(profile.audience)}</span><span>${esc(profile.tone)} • ~${profile.target_seconds}s</span>`;
 }
 
 document.querySelector('#profile-form').addEventListener('submit', async e=>{
