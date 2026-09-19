@@ -106,6 +106,18 @@ def init_db() -> None:
                 output_path TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS media_jobs (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                prompt TEXT NOT NULL,
+                status TEXT NOT NULL,
+                progress INTEGER NOT NULL DEFAULT 0,
+                error TEXT,
+                output_path TEXT
+            );
+
             CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
             CREATE INDEX IF NOT EXISTS idx_topics_score ON topics(score DESC);
@@ -287,6 +299,42 @@ def list_generated_images(limit: int = 30) -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute(
             "SELECT * FROM generated_images ORDER BY created_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def create_media_job(job_id: str, kind: str, prompt: str) -> None:
+    now = utc_now()
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO media_jobs (id, created_at, updated_at, kind, prompt, status, progress) VALUES (?, ?, ?, ?, ?, 'queued', 0)",
+            (job_id, now, now, kind, prompt),
+        )
+
+
+def update_media_job(job_id: str, **fields: Any) -> None:
+    if not fields:
+        return
+    fields["updated_at"] = utc_now()
+    assignments = ", ".join(f"{key}=?" for key in fields)
+    with connect() as conn:
+        conn.execute(
+            f"UPDATE media_jobs SET {assignments} WHERE id=?",
+            [*fields.values(), job_id],
+        )
+
+
+def get_media_job(job_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM media_jobs WHERE id=?", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_media_jobs(limit: int = 30) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM media_jobs WHERE status != 'deleted' ORDER BY created_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
     return [dict(row) for row in rows]
 
