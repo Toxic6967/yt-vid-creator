@@ -71,6 +71,37 @@ async def _voices() -> list[dict[str, Any]]:
 
 
 async def _resolve_voice(requested: str) -> str:
+    character_profiles = {
+        "character-male-1": MALE_PREFERENCES,
+        "character-male-2": (
+            "en-US-BrianMultilingualNeural",
+            "en-AU-WilliamNeural",
+            "en-US-GuyNeural",
+            "en-US-AndrewMultilingualNeural",
+        ),
+        "character-male-3": (
+            "en-US-GuyNeural",
+            "en-US-AndrewMultilingualNeural",
+            "en-AU-WilliamNeural",
+            "en-US-BrianMultilingualNeural",
+        ),
+        "character-female-1": FEMALE_PREFERENCES,
+        "character-female-2": (
+            "en-US-EmmaMultilingualNeural",
+            "en-AU-NatashaNeural",
+            "en-US-JennyNeural",
+            "en-US-AvaMultilingualNeural",
+        ),
+    }
+    if requested in character_profiles:
+        preferred = character_profiles[requested]
+        available = await _voices()
+        names = {str(v.get("ShortName", "")) for v in available}
+        for name in preferred:
+            if name in names:
+                return name
+        return preferred[0]
+
     if not requested.startswith("auto-youthful-"):
         return requested
 
