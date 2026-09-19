@@ -3,6 +3,7 @@ const health = document.querySelector('#health');
 const template = document.querySelector('#job-template');
 let profile = null;
 let radarPoll = null;
+let mediaRenderSignature = '';
 
 const esc = (s='') => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -21,6 +22,14 @@ function showTab(name){
   if(name==='review') loadJobs();
 }
 document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>showTab(btn.dataset.tab));
+document.querySelectorAll('[data-video-mode]').forEach(btn=>{
+  btn.onclick=()=>{
+    const mode=btn.dataset.videoMode;
+    document.querySelectorAll('[data-video-mode]').forEach(x=>x.classList.toggle('active',x===btn));
+    document.querySelectorAll('#tab-video .mode-pane').forEach(x=>x.classList.toggle('active',x.id===`video-mode-${mode}`));
+  };
+});
+document.querySelectorAll('[data-refresh-media]').forEach(btn=>btn.onclick=()=>loadMediaJobs(true));
 
 async function loadHealth(){
   try{
@@ -215,7 +224,8 @@ document.querySelector('#ai-image-form').addEventListener('submit', async e=>{
   btn.disabled=true;btn.textContent='QUEUING AI IMAGE…';
   try{
     await jsonFetch('/api/media/image',{method:'POST',body:JSON.stringify(data)});
-    await loadMediaJobs();
+    mediaRenderSignature='';
+    await loadMediaJobs(true);
   }catch(err){alert(err.message)}
   finally{btn.textContent='GENERATE AI IMAGE';await loadMediaHealth();}
 });
@@ -233,14 +243,15 @@ document.querySelector('#ai-video-form').addEventListener('submit', async e=>{
   btn.disabled=true;btn.textContent='QUEUING AI VIDEO…';
   try{
     await jsonFetch('/api/media/video',{method:'POST',body:JSON.stringify(data)});
-    await loadMediaJobs();
+    mediaRenderSignature='';
+    await loadMediaJobs(true);
   }catch(err){alert(err.message)}
   finally{btn.textContent='GENERATE AI VIDEO';await loadMediaHealth();}
 });
 
 function mediaJobCard(job){
   const el=document.createElement('article');
-  el.className='media-job';
+  el.className='generation-card '+job.kind;
   let preview='';
   if(job.output_path && job.kind==='image'){
     preview=`<img src="/api/media/jobs/${job.id}/file" loading="lazy">`;
@@ -249,7 +260,7 @@ function mediaJobCard(job){
   }
   el.innerHTML=`
     ${preview}
-    <div class="media-job-copy">
+    <div class="media-job-copy generation-copy">
       <b>${esc(job.prompt)}</b>
       <span>${esc(job.kind)} • ${esc(job.status)} • ${job.progress||0}%</span>
       ${job.error?`<span class="error">${esc(job.error)}</span>`:''}
@@ -266,28 +277,37 @@ function mediaJobCard(job){
   del.onclick=async()=>{
     if(!confirm('Delete this generated media file?')) return;
     await jsonFetch(`/api/media/jobs/${job.id}`,{method:'DELETE'});
-    await loadMediaJobs();
+    mediaRenderSignature='';
+    await loadMediaJobs(true);
   };
   actions.appendChild(del);
   return el;
 }
 
-async function loadMediaJobs(){
+async function loadMediaJobs(force=false){
   try{
     const jobs=await jsonFetch('/api/media/jobs');
-    const imageBox=document.querySelector('#ai-image-jobs');
-    const videoBox=document.querySelector('#ai-video-jobs');
+    const signature=JSON.stringify(jobs.map(j=>[j.id,j.status,j.progress,j.output_path,j.error]));
+    if(!force && signature===mediaRenderSignature) return;
+    mediaRenderSignature=signature;
+
+    const imageBox=document.querySelector('#ai-image-gallery');
+    const videoBox=document.querySelector('#ai-video-gallery');
     if(imageBox) imageBox.innerHTML='';
     if(videoBox) videoBox.innerHTML='';
+
     for(const job of jobs){
       const box=job.kind==='image'?imageBox:videoBox;
       if(box) box.appendChild(mediaJobCard(job));
     }
-    if(imageBox && !imageBox.children.length) imageBox.innerHTML='<div class="small">No AI images generated yet.</div>';
-    if(videoBox && !videoBox.children.length) videoBox.innerHTML='<div class="small">No AI video clips generated yet.</div>';
-  }catch(err){
-    console.error(err);
-  }
+
+    if(imageBox && !imageBox.children.length){
+      imageBox.innerHTML='<div class="studio-empty"><b>Your images will appear here</b><span>Describe a scene on the left and generate it locally.</span></div>';
+    }
+    if(videoBox && !videoBox.children.length){
+      videoBox.innerHTML='<div class="studio-empty"><b>Your video clips will appear here</b><span>Create hooks, B-roll, reveals and reusable shots.</span></div>';
+    }
+  }catch(err){ console.error(err); }
 }
 
 
