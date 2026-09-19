@@ -355,15 +355,10 @@ def prepare_visual(
                     keyframe["kind"] = "ai_generated_scene"
                     return keyframe
 
-            if wants_video and state.get("video_ready"):
-                # Legacy Wan fallback only for the most important motion beats.
-                # We keep the high-quality keyframe for all other story beats.
-                if role in {"hook", "reveal", "payoff"} or priority == "high":
-                    video = _try_ai_video_scene(scene, job_dir, index, topic, duration)
-                    if video and video.get("kind") == "ai_generated_video":
-                        video["keyframe_path"] = keyframe["path"]
-                        return video
-
+            # Do not fall back to the old text-to-video model in Story mode.
+            # Its character/visual quality is below the bar for the mini-movie format.
+            # If cinematic I2V is unavailable, keep the polished keyframe and let the
+            # pipeline's story quality gate explain what is missing.
             return keyframe
 
         wants_video = role in {"hook", "reveal", "payoff"} or index % 4 == 0
