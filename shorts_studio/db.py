@@ -205,6 +205,20 @@ def list_jobs(limit: int = 50) -> list[dict[str, Any]]:
     return [_row_to_dict(row) for row in rows]
 
 
+def get_recent_content_types(limit: int = 6) -> list[str]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT content_type
+            FROM jobs
+            WHERE status != 'deleted' AND content_type IS NOT NULL
+            ORDER BY created_at DESC LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [str(row["content_type"]) for row in rows if row["content_type"]]
+
+
 def get_recent_generated_topics(limit: int = 80) -> list[str]:
     with connect() as conn:
         rows = conn.execute(
