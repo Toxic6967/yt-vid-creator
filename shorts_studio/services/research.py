@@ -38,6 +38,13 @@ def discover_topic(niche: str, requested_topic: str | None = None) -> dict:
             "candidates": [],
         }
 
+    if "roblox" in niche.lower():
+        try:
+            from .topic_radar import pick_best_roblox_topic
+            return pick_best_roblox_topic()
+        except Exception:
+            pass
+
     year = datetime.now(timezone.utc).year
     raw = []
     for query in (
