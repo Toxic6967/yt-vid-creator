@@ -191,16 +191,18 @@ async function loadMediaHealth(){
         ? `ComfyUI connected • image checkpoint ready (${state.checkpoints[0] || 'detected'})`
         : 'ComfyUI connected, but no image checkpoint is installed yet.';
       imageStatus.className='notice '+(state.image_ready?'ok':'');
-      if(state.video_ready){
-        videoStatus.textContent='ComfyUI connected • Wan 2.1 video engine ready';
+      if(state.story_video_ready){
+        videoStatus.textContent='ComfyUI connected • cinematic keyframe→video engine ready (LTX 2B FP8)';
+      }else if(state.video_ready){
+        videoStatus.textContent='ComfyUI connected • Wan motion fallback ready • cinematic I2V upgrade not installed yet';
       }else if((state.missing_video_models||[]).length){
-        videoStatus.textContent='ComfyUI connected • Wan models not detected: '+state.missing_video_models.join(', ');
+        videoStatus.textContent='ComfyUI connected • video models not detected: '+state.missing_video_models.join(', ');
       }else{
-        videoStatus.textContent='ComfyUI connected, but the Wan video workflow is not ready yet.';
+        videoStatus.textContent='ComfyUI connected, but the local video workflow is not ready yet.';
       }
-      videoStatus.className='notice '+(state.video_ready?'ok':'');
+      videoStatus.className='notice '+((state.story_video_ready||state.video_ready)?'ok':'');
       imageButton.disabled=!state.image_ready;
-      videoButton.disabled=!state.video_ready;
+      videoButton.disabled=!(state.story_video_ready||state.video_ready);
     }else{
       imageStatus.textContent='ComfyUI is not running yet. AI image generation is unavailable until we install/start it.';
       videoStatus.textContent='ComfyUI is not running yet. AI video generation is unavailable until we install/start it.';
@@ -352,7 +354,7 @@ function updateJobCard(node, job){
     const q=manifest.quality||{};
     details.innerHTML=`<b>${esc(manifest.metadata.title)}</b><br>${esc(manifest.metadata.description)}<br>`+
       `${(manifest.metadata.hashtags||[]).map(esc).join(' ')}<br>`+
-      `<span class="rights">${esc(manifest.content_type||job.content_type||'auto')} • retention ${q.retention_score??'?'} • AI visuals ${q.ai_visual_count||0} • fallback visuals ${q.fallback_visual_count||0} • ${q.duration_seconds||'?'} sec</span>`;
+      `<span class="rights">${esc(manifest.content_type||job.content_type||'auto')} • story/retention ${q.retention_score??'?'} • motion clips ${q.ai_video_count||0} • cinematic stills ${q.ai_visual_count||0} • ${q.duration_seconds||'?'} sec</span>`;
   }
 
   const actions=node.querySelector('.actions');
