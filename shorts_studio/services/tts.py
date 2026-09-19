@@ -147,6 +147,21 @@ async def _render_async(
     spoken_text = _naturalize_text(text, role)
     rate = _rate_for_role(role)
     pitch = _pitch_for_role(role)
+    if voice.startswith("character-"):
+        rate = {
+            "hook": "+6%",
+            "setup": "+1%",
+            "build": "+3%",
+            "reveal": "+2%",
+            "payoff": "+0%",
+        }.get((role or "").lower(), "+2%")
+        pitch = {
+            "hook": "+2Hz",
+            "setup": "+0Hz",
+            "build": "+1Hz",
+            "reveal": "+1Hz",
+            "payoff": "+0Hz",
+        }.get((role or "").lower(), "+0Hz")
 
     communicate = edge_tts.Communicate(
         text=spoken_text,
