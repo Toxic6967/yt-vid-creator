@@ -10,9 +10,9 @@ from .config import DB_PATH
 
 
 DEFAULT_PROFILE = {
-    "channel_name": "Roblox Radar",
-    "niche": "Roblox trends, updates, secrets and viral games",
-    "tone": "Fast, exciting Roblox gaming documentary",
+    "channel_name": "Roblox Stories",
+    "niche": "Cinematic Roblox mini-movies, relatable gameplay situations, mysteries, horror, funny twists and player stories",
+    "tone": "Cinematic, fast and relatable Roblox mini-movies; engaging but never babyish or cringe",
     "audience": "Kids / young Roblox players (roughly 8-14); energetic, clear, exciting, never babyish",
     "voice": "auto-youthful-male",
     "target_seconds": 32,
@@ -158,6 +158,17 @@ def init_db() -> None:
         conn.execute(
             "UPDATE channel_profile SET voice=? WHERE id=1 AND voice=?",
             ("auto-youthful-male", "en-AU-WilliamNeural"),
+        )
+        conn.execute(
+            """
+            UPDATE channel_profile
+            SET channel_name='Roblox Stories',
+                niche='Cinematic Roblox mini-movies, relatable gameplay situations, mysteries, horror, funny twists and player stories',
+                tone='Cinematic, fast and relatable Roblox mini-movies; engaging but never babyish or cringe'
+            WHERE id=1
+              AND channel_name='Roblox Radar'
+              AND niche='Roblox trends, updates, secrets and viral games'
+            """
         )
 
 
