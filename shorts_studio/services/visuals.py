@@ -10,8 +10,8 @@ import httpx
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from ..config import settings
-from .comfyui_client import generate_ai_image, health as comfyui_health
-from .media_director import enhance_image_prompt, scene_image_prompt
+from .comfyui_client import generate_ai_image, generate_ai_video, health as comfyui_health
+from .media_director import enhance_image_prompt, enhance_video_prompt, scene_image_prompt
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 ALLOWED_LICENSE_MARKERS = ("cc by", "cc-by", "cc by-sa", "cc-by-sa", "cc0", "public domain", "pd-")
@@ -197,42 +197,109 @@ def _try_ai_scene(scene: dict, destination: Path, index: int, topic: str) -> dic
         return None
 
 
-def prepare_visual(scene: dict, job_dir: Path, index: int, topic: str) -> dict:
+def _try_ai_video_scene(
+    scene: dict,
+    job_dir: Path,
+    index: int,
+    topic: str,
+    duration: float,
+) -> dict[str, Any] | None:
+    state = comfyui_health()
+    if not state.get("video_ready"):
+        return None
+
+    role = str(scene.get("role", "")).lower()
+    direction = enhance_video_prompt(
+        scene_image_prompt(scene, topic),
+        style="roblox_bright",
+        camera="push_in" if role == "hook" else "auto",
+        purpose="hook" if role == "hook" else ("reveal" if role in {"reveal", "payoff"} else "b_roll"),
+        seconds=max(3, min(5, round(duration))),
+    )
+    try:
+        result = generate_ai_video(
+            prompt=direction["prompt"],
+            negative_prompt=direction["negative_prompt"],
+            aspect="9:16",
+            seconds=max(3, min(5, round(duration))),
+            motion_strength=1.0,
+            seed=None,
+            job_id=f"shortvideo_{index}_{random.randint(1000,9999)}",
+        )
+    except Exception as exc:
+        return {
+            "kind": "ai_video_failed",
+            "error": str(exc),
+            "query": scene.get("visual_query") or topic,
+        }
+
+    return {
+        "path": result["path"],
+        "kind": "ai_generated_video",
+        "query": scene.get("visual_query") or topic,
+        "attribution": None,
+        "prompt": direction["prompt"],
+        "seed": result.get("seed"),
+    }
+
+
+def prepare_visual(
+    scene: dict,
+    job_dir: Path,
+    index: int,
+    topic: str,
+    *,
+    duration: float = 3.0,
+) -> dict:
     visual_dir = job_dir / "visuals"
     visual_dir.mkdir(parents=True, exist_ok=True)
     destination = visual_dir / f"scene_{index:02d}.jpg"
     query = scene.get("visual_query") or topic
-
-    # For Roblox, prefer a genuinely generated scene that illustrates the exact spoken beat.
     is_roblox = "roblox" in f"{topic} {query}".lower()
+
     if is_roblox:
+        role = str(scene.get("role", "")).lower()
+        wants_video = role in {"hook", "reveal", "payoff"} or index % 4 == 0
+        if wants_video:
+            video = _try_ai_video_scene(scene, job_dir, index, topic, duration)
+            if video and video.get("kind") == "ai_generated_video":
+                return video
+
         generated = _try_ai_scene(scene, destination, index, topic)
         if generated:
             return generated
 
+        state = comfyui_health()
+        missing = ", ".join(state.get("missing_video_models") or [])
+        details = ""
+        if wants_video and missing:
+            details = f" Missing Wan video models: {missing}."
+        raise RuntimeError(
+            "Could not create a real Roblox visual for this scene."
+            + details
+            + " Shorts Studio will not use the old blocky placeholder visuals anymore."
+        )
+
     attribution = search_commons(query)
     if attribution and attribution.get("download_url"):
-        try:
-            raw = visual_dir / f"scene_{index:02d}_raw"
-            _download(attribution["download_url"], raw)
-            image = Image.open(raw).convert("RGB")
-            image.thumbnail((1800, 1800))
-            image.save(destination, quality=92)
-            raw.unlink(missing_ok=True)
-            return {
-                "path": str(destination),
-                "kind": "wikimedia_commons",
-                "query": query,
-                "attribution": attribution,
-            }
-        except Exception:
-            pass
+        raw = visual_dir / f"scene_{index:02d}_raw"
+        _download(attribution["download_url"], raw)
+        image = Image.open(raw).convert("RGB")
+        image.thumbnail((1800, 1800))
+        image.save(destination, quality=92)
+        raw.unlink(missing_ok=True)
+        return {
+            "path": str(destination),
+            "kind": "wikimedia_commons",
+            "query": query,
+            "attribution": attribution,
+        }
 
-    # Last-resort storyboard is scene-specific and gets flagged in quality checks.
-    _make_storyboard_visual(destination, topic, scene, index * 991)
-    return {
-        "path": str(destination),
-        "kind": "storyboard_fallback",
-        "query": query,
-        "attribution": None,
-    }
+    generated = _try_ai_scene(scene, destination, index, topic)
+    if generated:
+        return generated
+
+    raise RuntimeError(
+        "No usable real visual could be generated for this scene. "
+        "Placeholder storyboard rendering is disabled."
+    )
