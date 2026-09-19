@@ -212,7 +212,7 @@ Return JSON exactly in this shape:
     script = chat_json(
         "You are a skeptical fact-check editor. Return corrected JSON only.",
         "Audit the draft against the supplied source pack. Remove or rewrite every factual claim that is not clearly supported. "
-        "Do not add new facts. Keep the result within the same 20-45 second style and preserve the JSON shape. "
+        "Do not add new facts. Preserve the hook/setup/build/reveal/payoff structure, short-scene pacing, edit fields, and JSON shape. "
         "Each scene must list the SOURCE numbers that support it. If two sources disagree, use cautious wording or omit the claim.\n\n"
         f"SOURCE PACK:\n{source_text}\n\nDRAFT JSON:\n{draft}",
         temperature=0.15,
@@ -221,10 +221,14 @@ Return JSON exactly in this shape:
     if not scenes:
         raise RuntimeError("The local model did not produce any script scenes.")
     for scene in scenes:
+        scene["role"] = _clean(scene.get("role", ""), 20).lower()
         scene["narration"] = _clean(scene.get("narration", ""), 500)
-        scene["visual_query"] = _clean(scene.get("visual_query", topic), 120)
+        scene["visual_query"] = _clean(scene.get("visual_query", topic), 140)
         scene["on_screen_emphasis"] = _clean(scene.get("on_screen_emphasis", ""), 80)
         scene["source_ids"] = [int(x) for x in scene.get("source_ids", []) if str(x).isdigit()]
+        scene["edit_instruction"] = _clean(scene.get("edit_instruction", "hard cut, subtle push-in"), 120)
+        scene["pattern_interrupt"] = _clean(scene.get("pattern_interrupt", ""), 100)
+        scene["sfx_cue"] = _clean(scene.get("sfx_cue", ""), 80)
         if not scene["narration"]:
             raise RuntimeError("A generated scene had no narration.")
         if not scene["source_ids"]:
