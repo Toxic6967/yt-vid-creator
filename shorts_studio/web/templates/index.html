@@ -95,14 +95,78 @@
       </section>
 
       <section class="tab-page" id="tab-video">
-        <div class="hero-grid">
-          <section class="panel">
-            <div class="eyebrow">SHORT CREATOR</div>
+        <div class="studio-titlebar">
+          <div>
+            <div class="eyebrow">VIDEO CREATION</div>
             <h2>Video Studio</h2>
-            <p class="sub">Choose the exact topic yourself. Everything after that is still automated.</p>
-            <form id="video-form">
-              <label>Topic<input name="topic" placeholder="e.g. Why this Roblox game suddenly exploded" required></label>
-              <div class="split">
+            <p class="sub">Build a complete Short, or generate individual AI clips for scenes, hooks and B-roll.</p>
+          </div>
+          <div id="video-engine-status" class="engine-chip">Checking AI video engine…</div>
+        </div>
+
+        <div class="studio-workspace">
+          <aside class="studio-controls">
+            <div class="mode-switch">
+              <button class="mode-btn active" type="button" data-video-mode="clip">AI Clip</button>
+              <button class="mode-btn" type="button" data-video-mode="short">Full Short</button>
+            </div>
+
+            <div id="video-mode-clip" class="mode-pane active">
+              <form id="ai-video-form" class="creator-form">
+                <label class="prompt-label">Describe the shot
+                  <textarea name="prompt" rows="6" placeholder="A Roblox player opens a hidden vault and golden light bursts out while the camera quickly pushes toward the door" required></textarea>
+                </label>
+                <div class="control-block">
+                  <div class="control-title">Look</div>
+                  <div class="split">
+                    <label>Style<select name="style">
+                      <option value="roblox_bright">Bright Roblox</option>
+                      <option value="gameplay">Gameplay-like</option>
+                      <option value="roblox_cinematic">Cinematic</option>
+                      <option value="reveal">Big reveal</option>
+                    </select></label>
+                    <label>Purpose<select name="purpose">
+                      <option value="b_roll">Shorts B-roll</option>
+                      <option value="hook">Hook shot</option>
+                      <option value="reveal">Reveal / payoff</option>
+                      <option value="transition">Transition</option>
+                    </select></label>
+                  </div>
+                  <label>Camera<select name="camera">
+                    <option value="auto">Auto-direct</option>
+                    <option value="push_in">Fast push-in</option>
+                    <option value="follow">Gameplay follow</option>
+                    <option value="pan">Reveal pan</option>
+                    <option value="orbit">Small orbit</option>
+                    <option value="static">Mostly static</option>
+                  </select></label>
+                </div>
+                <div class="control-block">
+                  <div class="control-title">Output</div>
+                  <div class="split thirds">
+                    <label>Ratio<select name="aspect"><option value="9:16">9:16</option><option value="16:9">16:9</option></select></label>
+                    <label>Length<select name="seconds"><option value="5">5 sec</option><option value="8">8 sec</option><option value="10">10 sec</option></select></label>
+                    <label>Motion<select name="motion_strength"><option value="0.7">Low</option><option value="1.0" selected>Normal</option><option value="1.35">High</option></select></label>
+                  </div>
+                  <div class="split">
+                    <label>Variations<select name="variations"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+                    <label>Seed<input name="seed" type="number" min="0" max="2147483647" placeholder="Random"></label>
+                  </div>
+                </div>
+                <details class="advanced-box">
+                  <summary>Advanced</summary>
+                  <label>Negative prompt<input name="negative_prompt" placeholder="Optional things to avoid"></label>
+                  <label class="check"><input name="enhance_prompt" type="checkbox" checked> <span>Director Mode — rewrite my idea into a proper shot for the channel audience</span></label>
+                </details>
+                <button id="ai-video-button" class="primary generate-wide" type="submit">GENERATE VIDEO</button>
+              </form>
+            </div>
+
+            <div id="video-mode-short" class="mode-pane">
+              <form id="video-form" class="creator-form">
+                <label class="prompt-label">Short topic
+                  <textarea name="topic" rows="5" placeholder="Why this Roblox game suddenly exploded" required></textarea>
+                </label>
                 <label>Voice<select name="voice">
                   <option value="auto-youthful-male">Human youthful male — recommended</option>
                   <option value="auto-youthful-female">Human youthful female</option>
@@ -112,152 +176,105 @@
                   <option value="en-US-JennyNeural">US female — Jenny</option>
                 </select></label>
                 <label>Target length<select name="target_seconds">
-                  <option value="25">~25 sec</option>
-                  <option value="32">~32 sec</option>
-                  <option value="40">~40 sec</option>
-                  <option value="45">~45 sec</option>
+                  <option value="25">~25 sec</option><option value="32">~32 sec</option><option value="40">~40 sec</option><option value="45">~45 sec</option>
                 </select></label>
-              </div>
-              <button class="primary" type="submit">CREATE FULL VIDEO</button>
-            </form>
-          </section>
-          <section class="panel">
-            <div class="eyebrow">GENUINE AI VIDEO</div>
-            <h2>AI Video Generator</h2>
-            <p class="sub">Create a brand-new prompt-to-video clip locally through ComfyUI/Wan. This is separate from the full Short creator.</p>
-            <div id="video-engine-status" class="notice">Checking ComfyUI…</div>
-            <form id="ai-video-form">
-              <label>What should happen?<input name="prompt" placeholder="A Roblox player opens a hidden vault and golden light bursts out" required></label>
-              <div class="split">
-                <label>Style<select name="style">
-                  <option value="roblox_bright">Bright Roblox — recommended</option>
-                  <option value="gameplay">Gameplay-like</option>
-                  <option value="roblox_cinematic">Cinematic</option>
-                  <option value="reveal">Big reveal</option>
-                </select></label>
-                <label>Purpose<select name="purpose">
-                  <option value="b_roll">Shorts B-roll</option>
-                  <option value="hook">Hook shot</option>
-                  <option value="reveal">Reveal/payoff</option>
-                  <option value="transition">Transition shot</option>
-                </select></label>
-              </div>
-              <div class="split">
-                <label>Camera<select name="camera">
-                  <option value="auto">Auto-direct camera</option>
-                  <option value="push_in">Fast push-in</option>
-                  <option value="follow">Gameplay follow</option>
-                  <option value="pan">Reveal pan</option>
-                  <option value="orbit">Small orbit</option>
-                  <option value="static">Mostly static</option>
-                </select></label>
-                <label>Aspect<select name="aspect">
-                  <option value="9:16">9:16 vertical</option>
-                  <option value="16:9">16:9 landscape</option>
-                </select></label>
-              </div>
-              <div class="split thirds">
-                <label>Length<select name="seconds">
-                  <option value="5">5 sec</option>
-                  <option value="8">8 sec</option>
-                  <option value="10">10 sec</option>
-                </select></label>
-                <label>Motion<select name="motion_strength">
-                  <option value="0.7">Low</option>
-                  <option value="1.0" selected>Normal</option>
-                  <option value="1.35">High</option>
-                </select></label>
-                <label>Variations<select name="variations">
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                </select></label>
-              </div>
-              <label>Seed <span>(blank = random)</span><input name="seed" type="number" min="0" max="2147483647" placeholder="Random"></label>
-              <label>Extra negative prompt <span>(optional)</span><input name="negative_prompt" placeholder="Anything you specifically do not want"></label>
-              <label class="check"><input name="enhance_prompt" type="checkbox" checked> <span>Director Mode — automatically turn my idea into a proper Roblox shot for the channel audience</span></label>
-              <button id="ai-video-button" class="primary" type="submit">GENERATE AI VIDEO</button>
-            </form>
-            <div id="ai-video-jobs" class="media-jobs"></div>
+                <div class="director-note">Uses the saved audience, hook/retention system, research, narration, captions and scene visuals.</div>
+                <button class="primary generate-wide" type="submit">CREATE FULL SHORT</button>
+              </form>
+            </div>
+          </aside>
+
+          <section class="studio-stage">
+            <div class="stage-toolbar">
+              <div><b>Video generations</b><span>Local library</span></div>
+              <button class="ghost compact" type="button" data-refresh-media>Refresh</button>
+            </div>
+            <div id="ai-video-gallery" class="creation-gallery"></div>
           </section>
         </div>
       </section>
 
       <section class="tab-page" id="tab-image">
-        <div class="hero-grid">
-          <section class="panel">
-            <div class="eyebrow">GENUINE AI IMAGE</div>
-            <h2>AI Image Studio</h2>
-            <p class="sub">Generate a genuinely new image locally with an installed ComfyUI checkpoint.</p>
-            <div id="image-engine-status" class="notice">Checking ComfyUI…</div>
-            <form id="ai-image-form">
-              <label>What should the image show?<input name="prompt" placeholder="A Roblox player discovers a secret glowing room behind a fake wall" required></label>
-              <div class="split">
-                <label>Style<select name="style">
-                  <option value="roblox_bright">Bright Roblox — recommended</option>
-                  <option value="gameplay">Gameplay-like</option>
-                  <option value="roblox_cinematic">Cinematic</option>
-                  <option value="thumbnail">Gaming thumbnail</option>
-                  <option value="clean_3d">Clean 3D</option>
-                </select></label>
-                <label>Purpose<select name="purpose">
-                  <option value="scene_visual">Short scene visual</option>
-                  <option value="hook">Hook visual</option>
-                  <option value="thumbnail">Thumbnail</option>
-                  <option value="background">Background</option>
-                </select></label>
+        <div class="studio-titlebar">
+          <div>
+            <div class="eyebrow">IMAGE CREATION</div>
+            <h2>Image Studio</h2>
+            <p class="sub">Generate scene visuals, hook images, thumbnails and standalone Roblox artwork.</p>
+          </div>
+          <div id="image-engine-status" class="engine-chip">Checking AI image engine…</div>
+        </div>
+
+        <div class="studio-workspace">
+          <aside class="studio-controls">
+            <form id="ai-image-form" class="creator-form">
+              <label class="prompt-label">Describe the image
+                <textarea name="prompt" rows="7" placeholder="A Roblox player discovers a secret glowing room behind a fake wall, colourful game environment, clear focal subject" required></textarea>
+              </label>
+
+              <div class="control-block">
+                <div class="control-title">Creation type</div>
+                <div class="split">
+                  <label>Style<select name="style">
+                    <option value="roblox_bright">Bright Roblox</option>
+                    <option value="gameplay">Gameplay-like</option>
+                    <option value="roblox_cinematic">Cinematic</option>
+                    <option value="thumbnail">Gaming thumbnail</option>
+                    <option value="clean_3d">Clean 3D</option>
+                  </select></label>
+                  <label>Purpose<select name="purpose">
+                    <option value="scene_visual">Short scene</option>
+                    <option value="hook">Hook visual</option>
+                    <option value="thumbnail">Thumbnail</option>
+                    <option value="background">Background</option>
+                  </select></label>
+                </div>
               </div>
-              <div class="split thirds">
-                <label>Aspect<select name="aspect">
-                  <option value="9:16">9:16 vertical</option>
-                  <option value="16:9">16:9 landscape</option>
-                  <option value="1:1">1:1 square</option>
-                </select></label>
-                <label>Quality<select name="steps">
-                  <option value="16">Fast</option>
-                  <option value="24" selected>Balanced</option>
-                  <option value="32">Higher</option>
-                </select></label>
-                <label>Variations<select name="variations">
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                </select></label>
+
+              <div class="control-block">
+                <div class="control-title">Output</div>
+                <div class="ratio-picker" data-ratio-picker>
+                  <label><input type="radio" name="aspect" value="9:16" checked><span><b>9:16</b><small>Short</small></span></label>
+                  <label><input type="radio" name="aspect" value="16:9"><span><b>16:9</b><small>Wide</small></span></label>
+                  <label><input type="radio" name="aspect" value="1:1"><span><b>1:1</b><small>Square</small></span></label>
+                </div>
+                <div class="split thirds">
+                  <label>Quality<select name="steps"><option value="16">Fast</option><option value="24" selected>Balanced</option><option value="32">Higher</option></select></label>
+                  <label>Guidance<select name="cfg"><option value="5.5">Creative</option><option value="6.5" selected>Balanced</option><option value="7.5">Strict</option></select></label>
+                  <label>Images<select name="variations"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></label>
+                </div>
               </div>
-              <div class="split">
-                <label>Guidance<select name="cfg">
-                  <option value="5.5">Creative</option>
-                  <option value="6.5" selected>Balanced</option>
-                  <option value="7.5">Follow prompt closely</option>
-                </select></label>
-                <label>Seed <span>(blank = random)</span><input name="seed" type="number" min="0" max="2147483647" placeholder="Random"></label>
-              </div>
-              <label>Extra negative prompt <span>(optional)</span><input name="negative_prompt" placeholder="Anything you specifically do not want"></label>
-              <label class="check"><input name="enhance_prompt" type="checkbox" checked> <span>Director Mode — automatically turn my idea into a proper Roblox visual for the channel audience</span></label>
-              <button id="ai-image-button" class="primary" type="submit">GENERATE AI IMAGE</button>
+
+              <details class="advanced-box">
+                <summary>Advanced</summary>
+                <label>Seed<input name="seed" type="number" min="0" max="2147483647" placeholder="Random"></label>
+                <label>Negative prompt<input name="negative_prompt" placeholder="Optional things to avoid"></label>
+                <label class="check"><input name="enhance_prompt" type="checkbox" checked> <span>Director Mode — optimize composition and prompt for our Roblox audience</span></label>
+              </details>
+
+              <button id="ai-image-button" class="primary generate-wide" type="submit">GENERATE IMAGE</button>
             </form>
-            <div id="ai-image-jobs" class="media-jobs"></div>
-            <hr>
-            <div class="eyebrow">QUICK GRAPHICS</div>
-            <h3>Graphic / Thumbnail Creator</h3>
-            <form id="image-form">
-              <label>Visual prompt<input name="prompt" placeholder="Roblox neon city, fast gaming documentary visual" required></label>
-              <label>Headline <span>(optional)</span><input name="headline" placeholder="THIS GAME JUST EXPLODED"></label>
-              <label>Aspect ratio<select name="aspect">
-                <option value="9:16">9:16 — Short / Story</option>
-                <option value="16:9">16:9 — Thumbnail</option>
-                <option value="1:1">1:1 — Square</option>
-              </select></label>
-              <button class="ghost" type="submit">CREATE QUICK GRAPHIC</button>
-            </form>
-          </section>
-          <section class="panel">
-            <div class="section-head">
-              <div><div class="eyebrow">LIBRARY</div><h2>Generated Images</h2></div>
-              <button id="refresh-images" class="ghost">Refresh</button>
+
+            <details class="utility-drawer">
+              <summary>Quick graphic / text card</summary>
+              <form id="image-form">
+                <label>Visual prompt<input name="prompt" placeholder="Roblox update graphic" required></label>
+                <label>Headline<input name="headline" placeholder="NEW UPDATE"></label>
+                <label>Ratio<select name="aspect"><option value="9:16">9:16</option><option value="16:9">16:9</option><option value="1:1">1:1</option></select></label>
+                <button class="ghost" type="submit">Create quick graphic</button>
+              </form>
+            </details>
+          </aside>
+
+          <section class="studio-stage">
+            <div class="stage-toolbar">
+              <div><b>Image generations</b><span>Local library</span></div>
+              <button class="ghost compact" id="refresh-images" type="button">Refresh</button>
             </div>
-            <div id="graphic-grid" class="image-grid"></div>
+            <div id="ai-image-gallery" class="creation-gallery image-mode"></div>
+            <div class="utility-results">
+              <div class="utility-title">Quick graphics</div>
+              <div id="graphic-grid" class="image-grid compact-grid"></div>
+            </div>
           </section>
         </div>
       </section>
