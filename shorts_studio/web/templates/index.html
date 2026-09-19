@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">PRIVATE LOCAL CREATOR</div>
+        <h1>Shorts Studio <span>V1</span></h1>
+        <p>Research → script → narration → legal visuals → edit → review.</p>
+      </div>
+      <div id="health" class="health">Checking local AI…</div>
+    </header>
+
+    <main class="grid">
+      <section class="panel composer">
+        <div class="section-head">
+          <div><div class="eyebrow">CREATE</div><h2>Generate a Short</h2></div>
+          <span class="pill">No auto-publishing</span>
+        </div>
+        <form id="generate-form">
+          <label>Channel name<input name="channel_name" value="My Shorts Channel" required></label>
+          <label>Niche<input name="niche" placeholder="e.g. space discoveries, engineering, strange history" required></label>
+          <label>Specific topic <span>(optional)</span><input name="topic" placeholder="Leave blank for automatic topic discovery"></label>
+          <div class="split">
+            <label>Voice<select name="voice">
+              <option value="en-AU-WilliamNeural">Australian male — William</option>
+              <option value="en-AU-NatashaNeural">Australian female — Natasha</option>
+              <option value="en-US-GuyNeural">US male — Guy</option>
+              <option value="en-US-JennyNeural">US female — Jenny</option>
+            </select></label>
+            <label>Target length<select name="target_seconds">
+              <option value="25">~25 sec</option>
+              <option value="32" selected>~32 sec</option>
+              <option value="40">~40 sec</option>
+              <option value="45">~45 sec</option>
+            </select></label>
+          </div>
+          <button class="primary" type="submit">GENERATE SHORT</button>
+          <p class="small">The app only produces a review copy. You decide what gets uploaded.</p>
+        </form>
+      </section>
+
+      <section class="panel queue-panel">
+        <div class="section-head">
+          <div><div class="eyebrow">REVIEW</div><h2>Shorts Queue</h2></div>
+          <button id="refresh" class="ghost">Refresh</button>
+        </div>
+        <div id="queue" class="queue"></div>
+      </section>
+    </main>
+  </div>
+
+  <template id="job-template">
+    <article class="job-card">
+      <div class="job-top">
+        <div><div class="job-topic"></div><div class="job-meta"></div></div>
+        <div class="status"></div>
+      </div>
+      <div class="progress"><div></div></div>
+      <div class="stage"></div>
+      <div class="video-wrap"></div>
+      <div class="job-details"></div>
+      <div class="actions"></div>
+    </article>
+  </template>
+  <script src="/static/app.js"></script>
+</body>
+</html>
