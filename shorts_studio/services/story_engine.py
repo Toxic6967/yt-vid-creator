@@ -213,6 +213,8 @@ moment, server moment, obby moment or friendship moment they can recognise.
 NON-NEGOTIABLE:
 - Hook in the FIRST 1-2 seconds. Start inside the problem; no introduction.
 - One simple story. Maximum 3 characters.
+- Keep the story mostly inside ONE continuous game session/location so the movie is visually coherent.
+  Change rooms/areas only when the plot actually requires it; prefer new camera angles over teleporting worlds.
 - Conflict must escalate every few seconds.
 - The ending must pay off the opening: twist, funny reversal, satisfying win, scary reveal,
   or relatable punchline.
@@ -224,6 +226,7 @@ NON-NEGOTIABLE:
 - Every scene must be easy to understand visually with no explanation.
 - Keep violence game-like/non-graphic and appropriate for the audience.
 - Characters must keep EXACTLY the same clothing/hair/colours in every scene.
+- Reuse the same important props and environmental details when the story returns to a location.
 
 Return JSON exactly:
 {{
