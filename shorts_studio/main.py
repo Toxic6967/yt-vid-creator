@@ -118,7 +118,7 @@ def auto_generate() -> dict:
         None,
         profile["voice"],
         int(profile["target_seconds"]),
-        "auto",
+        "story",
     )
 
 
