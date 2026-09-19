@@ -105,6 +105,90 @@ def _character_map(characters: list[dict[str, str]]) -> dict[str, dict[str, str]
     return result
 
 
+
+
+def _select_story_idea(audience: str, tone: str) -> dict[str, Any]:
+    raw = chat_json(
+        "You create high-retention Roblox mini-movie concepts for Shorts. Return JSON only.",
+        f"""
+AUDIENCE: {audience}
+CHANNEL TONE: {tone}
+
+Create 8 DIFFERENT Roblox mini-movie ideas aimed at this audience.
+
+Base them on recognisable Roblox-player feelings/situations, such as:
+- entering a horror game with a friend and getting separated
+- grinding for a rare item while someone else gets lucky instantly
+- being underestimated as the noob
+- a teammate betraying the group at the worst time
+- lag/disconnect ruining an almost-win
+- joining a strange empty server
+- one player being left alive in a survival round
+- an obby shortcut that seems too good to be true
+- spending Robux and immediately regretting it
+- a friend saying "one more game"
+
+Do NOT copy these literally every time. Use them as the level of relatability.
+Avoid fake inspirational morals, random lore dumps, generic "evil hacker" stories,
+death/tragedy bait, and plots that only work because characters act stupid.
+
+For each idea return:
+- premise: one sentence
+- genre
+- opening: what happens in the first 1-2 seconds
+- escalation: what makes it worse/more interesting
+- payoff: the ending/twist/punchline
+
+Return {{"ideas":[{{"premise":"...","genre":"...","opening":"...","escalation":"...","payoff":"..."}}]}}
+""",
+        temperature=0.72,
+    )
+    ideas = raw.get("ideas") if isinstance(raw.get("ideas"), list) else []
+    ideas = [item for item in ideas if isinstance(item, dict)][:8]
+    if not ideas:
+        return {
+            "premise": "Two friends enter a Roblox horror game and one vanishes just before the exit opens.",
+            "genre": "horror",
+            "opening": "The exit opens, but only one player's name is still in the server list.",
+            "escalation": "The missing friend keeps triggering doors from rooms they supposedly left.",
+            "payoff": "The survivor reaches the exit and sees the friend waiting outside, asking why they took so long.",
+        }
+
+    judged = chat_json(
+        "You are a ruthless Roblox Shorts commissioning editor. Return JSON only.",
+        f"""
+AUDIENCE: {audience}
+CANDIDATES:
+{json.dumps(ideas, ensure_ascii=False)}
+
+Score each 0-100 for:
+- immediate_hook
+- relatability_to_real_players
+- visual_movie_potential
+- escalation
+- payoff
+- originality
+- cringe_avoidance (100 = not cringe)
+
+Pick the best idea for a 20-45 second cinematic Roblox Short.
+Do not reward random shock value. The best idea should be simple enough to understand
+instantly but strong enough to make someone stay for the ending.
+
+Return:
+{{"best_index":0,"reason":"...","scores":[{{"index":0,"hook":0,"relatability":0,"visual":0,"escalation":0,"payoff":0,"originality":0,"cringe_avoidance":0}}]}}
+""",
+        temperature=0.16,
+    )
+    try:
+        index = int(judged.get("best_index", 0))
+    except Exception:
+        index = 0
+    index = max(0, min(index, len(ideas) - 1))
+    selected = dict(ideas[index])
+    selected["selection_reason"] = _clean(judged.get("reason"), 240)
+    selected["candidate_scores"] = judged.get("scores") or []
+    return selected
+
 def _story_prompt(
     idea: str | None,
     audience: str,
@@ -112,7 +196,7 @@ def _story_prompt(
     target_seconds: int,
     genre: str,
 ) -> str:
-    requested = idea.strip() if idea else "Invent the strongest relatable Roblox mini-movie idea yourself."
+    requested = idea.strip() if idea else "Use the selected premise supplied by the commissioning editor."
     return f"""
 AUDIENCE: {audience}
 CHANNEL TONE: {tone}
@@ -416,12 +500,25 @@ def create_story(
     target_seconds: int,
     genre: str = "auto",
 ) -> dict:
+    selected_idea = None
+    if not idea:
+        selected_idea = _select_story_idea(audience, tone)
+        idea = (
+            f"Premise: {selected_idea.get('premise','')}. "
+            f"Opening: {selected_idea.get('opening','')}. "
+            f"Escalation: {selected_idea.get('escalation','')}. "
+            f"Payoff: {selected_idea.get('payoff','')}."
+        )
+        genre = str(selected_idea.get("genre") or genre)
+
     draft = chat_json(
         "You are a sharp Roblox mini-movie writer/director. You write for young players without writing down to them. Return JSON only.",
         _story_prompt(idea, audience, tone, target_seconds, genre),
         temperature=0.62,
     )
     story = _normalise_story(draft, target_seconds)
+    if selected_idea:
+        story["idea_selection"] = selected_idea
 
     for _ in range(2):
         score = _score_story(story, audience, target_seconds)
@@ -450,7 +547,10 @@ Return the exact same story JSON shape.
 """,
             temperature=0.48,
         )
+        retained_idea = story.get("idea_selection")
         story = _normalise_story(rewritten, target_seconds)
+        if retained_idea:
+            story["idea_selection"] = retained_idea
 
     story["story_score"] = _score_story(story, audience, target_seconds)
     return story
