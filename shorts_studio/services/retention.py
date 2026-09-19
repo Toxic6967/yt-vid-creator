@@ -197,14 +197,14 @@ Return:
             scores[key] = 0.0
 
     weighted = (
-        scores["hook"] * 0.22
-        + scores["curiosity"] * 0.16
-        + scores["progression"] * 0.16
-        + scores["payoff"] * 0.16
-        + scores["naturalness"] * 0.09
-        + scores["relatability"] * 0.10
+        scores["hook"] * 0.20
+        + scores["curiosity"] * 0.14
+        + scores["progression"] * 0.14
+        + scores["payoff"] * 0.14
+        + scores["naturalness"] * 0.10
+        + scores["relatability"] * 0.12
         + scores["visual_pacing"] * 0.10
-        + scores["clarity"] * 0.07
+        + scores["clarity"] * 0.06
     )
 
     mechanical_penalty = 0.0
