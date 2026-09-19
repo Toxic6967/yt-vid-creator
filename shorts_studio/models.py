@@ -43,13 +43,26 @@ class ImageRequest(BaseModel):
 
 class AIImageRequest(BaseModel):
     prompt: str = Field(min_length=2, max_length=1200)
-    negative_prompt: str = Field(default="blurry, low quality, watermark, text artifacts", max_length=800)
+    negative_prompt: str = Field(default="", max_length=800)
     aspect: str = Field(default="9:16", pattern=r"^(9:16|16:9|1:1)$")
+    style: str = Field(default="roblox_bright", max_length=40)
+    purpose: str = Field(default="scene_visual", max_length=40)
     steps: int = Field(default=24, ge=8, le=60)
+    cfg: float = Field(default=6.5, ge=1.0, le=12.0)
+    seed: int | None = Field(default=None, ge=0, le=2147483647)
+    variations: int = Field(default=1, ge=1, le=4)
+    enhance_prompt: bool = True
 
 
 class AIVideoRequest(BaseModel):
     prompt: str = Field(min_length=2, max_length=1600)
-    negative_prompt: str = Field(default="blurry, low quality, distorted motion, watermark", max_length=800)
+    negative_prompt: str = Field(default="", max_length=800)
     aspect: str = Field(default="9:16", pattern=r"^(9:16|16:9)$")
+    style: str = Field(default="roblox_bright", max_length=40)
+    camera: str = Field(default="auto", max_length=40)
+    purpose: str = Field(default="b_roll", max_length=40)
     seconds: int = Field(default=5, ge=3, le=10)
+    motion_strength: float = Field(default=1.0, ge=0.25, le=2.0)
+    seed: int | None = Field(default=None, ge=0, le=2147483647)
+    variations: int = Field(default=1, ge=1, le=3)
+    enhance_prompt: bool = True
