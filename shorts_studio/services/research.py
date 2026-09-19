@@ -383,13 +383,38 @@ def _clean_script(script: dict, topic: str, *, require_sources: bool) -> dict:
 
 
 def create_metadata(topic: str, script: dict) -> dict:
-    result = chat_json(
-        "You are a YouTube metadata editor. Be specific, readable, and non-spammy. Return JSON only.",
-        f"TOPIC: {topic}\nSCRIPT: {script.get('narration','')}\n"
-        "Return {\"title\": string under 70 chars, \"description\": string under 350 chars, "
-        "\"hashtags\": [3 to 5 short hashtags without spaces]}. Avoid misleading clickbait.",
-        temperature=0.35,
-    )
+    is_story = bool(script.get("characters") and script.get("genre"))
+    if is_story:
+        result = chat_json(
+            "You are the packaging editor for a successful Roblox Shorts story channel. Return JSON only.",
+            f"""
+STORY TITLE/PREMISE: {topic}
+GENRE: {script.get('genre','')}
+HOOK: {script.get('hook','')}
+STORY:
+{script.get('narration','')}
+
+Create YouTube Shorts metadata for a cinematic Roblox mini-movie.
+- Title under 65 characters.
+- Make the situation immediately interesting without spoiling the final payoff.
+- No fake claims such as "this actually happened" unless it really did.
+- No ALL CAPS spam, no "YOU WON'T BELIEVE", no babyish wording.
+- Description under 300 characters.
+- 3-5 relevant hashtags.
+
+Return {{"title":"...","description":"...","hashtags":["#Roblox","#RobloxShorts"]}}
+""",
+            temperature=0.34,
+        )
+    else:
+        result = chat_json(
+            "You are a YouTube metadata editor. Be specific, readable, and non-spammy. Return JSON only.",
+            f"TOPIC: {topic}\nSCRIPT: {script.get('narration','')}\n"
+            "Return {\"title\": string under 70 chars, \"description\": string under 350 chars, "
+            "\"hashtags\": [3 to 5 short hashtags without spaces]}. Avoid misleading clickbait.",
+            temperature=0.35,
+        )
+
     hashtags = []
     for tag in result.get("hashtags", []):
         tag = str(tag).strip().replace(" ", "")
@@ -403,3 +428,4 @@ def create_metadata(topic: str, script: dict) -> dict:
         "description": _clean(result.get("description", ""), 350),
         "hashtags": hashtags[:5],
     }
+
