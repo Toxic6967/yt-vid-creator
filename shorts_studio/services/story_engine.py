@@ -271,7 +271,41 @@ def _normalise_story(raw: dict, target_seconds: int) -> dict:
     }
 
 
-def _score_story(story: dict, audience: str) -> dict[str, Any]:
+
+
+def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, Any]:
+    scenes = story.get("scenes") or []
+    narration = str(story.get("narration") or "")
+    lower = narration.lower()
+    scene_word_counts = [
+        len(re.findall(r"\b[\w'-]+\b", str(scene.get("narration") or "")))
+        for scene in scenes
+    ]
+    spoken_character_lines = sum(
+        1 for scene in scenes
+        if str(scene.get("speaker") or "narrator").lower() != "narrator"
+    )
+    max_words = max(scene_word_counts, default=0)
+    total_words = len(re.findall(r"\b[\w'-]+\b", narration))
+    expected_min = max(42, round(target_seconds * 1.7))
+    expected_max = min(120, round(target_seconds * 2.8))
+    banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
+
+    return {
+        "scene_count_ok": 6 <= len(scenes) <= 13,
+        "short_lines_ok": max_words <= 18,
+        "word_count_ok": expected_min <= total_words <= expected_max,
+        "dialogue_ratio_ok": spoken_character_lines >= max(2, len(scenes) // 3),
+        "banned_phrase_ok": not banned_hits,
+        "banned_hits": banned_hits,
+        "max_scene_words": max_words,
+        "word_count": total_words,
+        "expected_word_range": [expected_min, expected_max],
+        "character_line_count": spoken_character_lines,
+    }
+
+def _score_story(story: dict, audience: str, target_seconds: int) -> dict[str, Any]:
+    mechanical = _deterministic_story_checks(story, target_seconds)
     result = chat_json(
         "You are a ruthless short-form story editor for a successful Roblox channel. Return JSON only.",
         f"""
@@ -329,18 +363,48 @@ Return:
         + scores["cringe_avoidance"] * 0.08,
         1,
     )
+    problems = list(result.get("problems") or [])
+    rewrite_instructions = list(result.get("rewrite_instructions") or [])
+    if not mechanical["short_lines_ok"]:
+        problems.append(f"Some spoken beats are too long ({mechanical['max_scene_words']} words).")
+        rewrite_instructions.append("Keep every spoken beat at 18 words or fewer.")
+    if not mechanical["dialogue_ratio_ok"]:
+        problems.append("Too much narrator exposition and not enough character dialogue.")
+        rewrite_instructions.append("Move more of the story into short character dialogue and visible action.")
+    if not mechanical["word_count_ok"]:
+        problems.append(
+            f"Spoken word count {mechanical['word_count']} is outside the target range "
+            f"{mechanical['expected_word_range'][0]}-{mechanical['expected_word_range'][1]}."
+        )
+        rewrite_instructions.append("Adjust spoken length to fit the requested runtime without filler.")
+    if mechanical["banned_hits"]:
+        problems.append("Banned cringe/filler phrasing: " + ", ".join(mechanical["banned_hits"]))
+        rewrite_instructions.append("Remove canned creator phrases, forced morals and generic AI filler.")
+
+    passed = (
+        total >= 82
+        and scores["hook"] >= 84
+        and scores["relatability"] >= 80
+        and scores["payoff"] >= 80
+        and scores["cringe_avoidance"] >= 85
+        and all(
+            mechanical[key]
+            for key in (
+                "scene_count_ok",
+                "short_lines_ok",
+                "word_count_ok",
+                "dialogue_ratio_ok",
+                "banned_phrase_ok",
+            )
+        )
+    )
     return {
         "scores": scores,
+        "mechanical": mechanical,
         "total": total,
-        "problems": result.get("problems") or [],
-        "rewrite_instructions": result.get("rewrite_instructions") or [],
-        "passed": (
-            total >= 82
-            and scores["hook"] >= 84
-            and scores["relatability"] >= 80
-            and scores["payoff"] >= 80
-            and scores["cringe_avoidance"] >= 85
-        ),
+        "problems": problems,
+        "rewrite_instructions": rewrite_instructions,
+        "passed": passed,
     }
 
 
@@ -360,7 +424,7 @@ def create_story(
     story = _normalise_story(draft, target_seconds)
 
     for _ in range(2):
-        score = _score_story(story, audience)
+        score = _score_story(story, audience, target_seconds)
         if score["passed"]:
             story["story_score"] = score
             return story
@@ -388,5 +452,5 @@ Return the exact same story JSON shape.
         )
         story = _normalise_story(rewritten, target_seconds)
 
-    story["story_score"] = _score_story(story, audience)
+    story["story_score"] = _score_story(story, audience, target_seconds)
     return story
