@@ -226,6 +226,8 @@ def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
     old = get_job(job_id)
     if not old:
         raise HTTPException(404, "Job not found")
+    if old.get("content_type") == "story":
+        _ensure_story_backend_ready()
     return _queue_short(
         old["channel_name"],
         old["niche"],
