@@ -127,19 +127,55 @@
             <p class="sub">Create a brand-new prompt-to-video clip locally through ComfyUI/Wan. This is separate from the full Short creator.</p>
             <div id="video-engine-status" class="notice">Checking ComfyUI…</div>
             <form id="ai-video-form">
-              <label>Prompt<input name="prompt" placeholder="A dramatic Roblox-style neon city, cinematic camera move, energetic gaming atmosphere" required></label>
-              <label>Negative prompt<input name="negative_prompt" value="blurry, low quality, distorted motion, watermark"></label>
+              <label>What should happen?<input name="prompt" placeholder="A Roblox player opens a hidden vault and golden light bursts out" required></label>
               <div class="split">
+                <label>Style<select name="style">
+                  <option value="roblox_bright">Bright Roblox — recommended</option>
+                  <option value="gameplay">Gameplay-like</option>
+                  <option value="roblox_cinematic">Cinematic</option>
+                  <option value="reveal">Big reveal</option>
+                </select></label>
+                <label>Purpose<select name="purpose">
+                  <option value="b_roll">Shorts B-roll</option>
+                  <option value="hook">Hook shot</option>
+                  <option value="reveal">Reveal/payoff</option>
+                  <option value="transition">Transition shot</option>
+                </select></label>
+              </div>
+              <div class="split">
+                <label>Camera<select name="camera">
+                  <option value="auto">Auto-direct camera</option>
+                  <option value="push_in">Fast push-in</option>
+                  <option value="follow">Gameplay follow</option>
+                  <option value="pan">Reveal pan</option>
+                  <option value="orbit">Small orbit</option>
+                  <option value="static">Mostly static</option>
+                </select></label>
                 <label>Aspect<select name="aspect">
                   <option value="9:16">9:16 vertical</option>
                   <option value="16:9">16:9 landscape</option>
                 </select></label>
+              </div>
+              <div class="split thirds">
                 <label>Length<select name="seconds">
-                  <option value="5">5 seconds</option>
-                  <option value="8">8 seconds</option>
-                  <option value="10">10 seconds</option>
+                  <option value="5">5 sec</option>
+                  <option value="8">8 sec</option>
+                  <option value="10">10 sec</option>
+                </select></label>
+                <label>Motion<select name="motion_strength">
+                  <option value="0.7">Low</option>
+                  <option value="1.0" selected>Normal</option>
+                  <option value="1.35">High</option>
+                </select></label>
+                <label>Variations<select name="variations">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
                 </select></label>
               </div>
+              <label>Seed <span>(blank = random)</span><input name="seed" type="number" min="0" max="2147483647" placeholder="Random"></label>
+              <label>Extra negative prompt <span>(optional)</span><input name="negative_prompt" placeholder="Anything you specifically do not want"></label>
+              <label class="check"><input name="enhance_prompt" type="checkbox" checked> <span>Director Mode — automatically turn my idea into a proper Roblox shot for the channel audience</span></label>
               <button id="ai-video-button" class="primary" type="submit">GENERATE AI VIDEO</button>
             </form>
             <div id="ai-video-jobs" class="media-jobs"></div>
@@ -155,20 +191,50 @@
             <p class="sub">Generate a genuinely new image locally with an installed ComfyUI checkpoint.</p>
             <div id="image-engine-status" class="notice">Checking ComfyUI…</div>
             <form id="ai-image-form">
-              <label>Prompt<input name="prompt" placeholder="Roblox-inspired futuristic city, cinematic lighting, energetic gaming visual, no text" required></label>
-              <label>Negative prompt<input name="negative_prompt" value="blurry, low quality, watermark, text artifacts"></label>
+              <label>What should the image show?<input name="prompt" placeholder="A Roblox player discovers a secret glowing room behind a fake wall" required></label>
               <div class="split">
+                <label>Style<select name="style">
+                  <option value="roblox_bright">Bright Roblox — recommended</option>
+                  <option value="gameplay">Gameplay-like</option>
+                  <option value="roblox_cinematic">Cinematic</option>
+                  <option value="thumbnail">Gaming thumbnail</option>
+                  <option value="clean_3d">Clean 3D</option>
+                </select></label>
+                <label>Purpose<select name="purpose">
+                  <option value="scene_visual">Short scene visual</option>
+                  <option value="hook">Hook visual</option>
+                  <option value="thumbnail">Thumbnail</option>
+                  <option value="background">Background</option>
+                </select></label>
+              </div>
+              <div class="split thirds">
                 <label>Aspect<select name="aspect">
                   <option value="9:16">9:16 vertical</option>
                   <option value="16:9">16:9 landscape</option>
                   <option value="1:1">1:1 square</option>
                 </select></label>
-                <label>Quality / steps<select name="steps">
-                  <option value="16">16 — faster</option>
-                  <option value="24" selected>24 — balanced</option>
-                  <option value="32">32 — higher</option>
+                <label>Quality<select name="steps">
+                  <option value="16">Fast</option>
+                  <option value="24" selected>Balanced</option>
+                  <option value="32">Higher</option>
+                </select></label>
+                <label>Variations<select name="variations">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
                 </select></label>
               </div>
+              <div class="split">
+                <label>Guidance<select name="cfg">
+                  <option value="5.5">Creative</option>
+                  <option value="6.5" selected>Balanced</option>
+                  <option value="7.5">Follow prompt closely</option>
+                </select></label>
+                <label>Seed <span>(blank = random)</span><input name="seed" type="number" min="0" max="2147483647" placeholder="Random"></label>
+              </div>
+              <label>Extra negative prompt <span>(optional)</span><input name="negative_prompt" placeholder="Anything you specifically do not want"></label>
+              <label class="check"><input name="enhance_prompt" type="checkbox" checked> <span>Director Mode — automatically turn my idea into a proper Roblox visual for the channel audience</span></label>
               <button id="ai-image-button" class="primary" type="submit">GENERATE AI IMAGE</button>
             </form>
             <div id="ai-image-jobs" class="media-jobs"></div>
