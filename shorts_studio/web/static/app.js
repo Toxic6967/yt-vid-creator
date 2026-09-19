@@ -16,7 +16,8 @@ function showTab(name){
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
   document.querySelectorAll('.tab-page').forEach(p=>p.classList.toggle('active', p.id===`tab-${name}`));
   if(name==='radar') loadRadar();
-  if(name==='image') loadImages();
+  if(name==='image'){ loadImages(); loadMediaHealth(); loadMediaJobs(); }
+  if(name==='video'){ loadMediaHealth(); loadMediaJobs(); }
   if(name==='review') loadJobs();
 }
 document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>showTab(btn.dataset.tab));
@@ -151,7 +152,7 @@ document.querySelector('#image-form').addEventListener('submit', async e=>{
 });
 
 async function loadImages(){
-  const grid=document.querySelector('#image-grid');
+  const grid=document.querySelector('#graphic-grid');
   try{
     const items=await jsonFetch('/api/images');
     grid.innerHTML='';
@@ -164,6 +165,121 @@ async function loadImages(){
   }catch(err){grid.innerHTML=`<div class="empty error">${esc(err.message)}</div>`;}
 }
 document.querySelector('#refresh-images').onclick=loadImages;
+
+
+async function loadMediaHealth(){
+  try{
+    const state=await jsonFetch('/api/media/health');
+    const imageStatus=document.querySelector('#image-engine-status');
+    const videoStatus=document.querySelector('#video-engine-status');
+    const imageButton=document.querySelector('#ai-image-button');
+    const videoButton=document.querySelector('#ai-video-button');
+
+    if(state.ok){
+      imageStatus.textContent = state.image_ready
+        ? `ComfyUI connected • image checkpoint ready (${state.checkpoints[0] || 'detected'})`
+        : 'ComfyUI connected, but no image checkpoint is installed yet.';
+      imageStatus.className='notice '+(state.image_ready?'ok':'');
+      videoStatus.textContent = state.video_ready
+        ? 'ComfyUI connected • Wan/API video workflow ready'
+        : 'ComfyUI connected, but the video_api.json workflow is not installed yet.';
+      videoStatus.className='notice '+(state.video_ready?'ok':'');
+      imageButton.disabled=!state.image_ready;
+      videoButton.disabled=!state.video_ready;
+    }else{
+      imageStatus.textContent='ComfyUI is not running yet. AI image generation is unavailable until we install/start it.';
+      videoStatus.textContent='ComfyUI is not running yet. AI video generation is unavailable until we install/start it.';
+      imageStatus.className='notice error';
+      videoStatus.className='notice error';
+      imageButton.disabled=true;
+      videoButton.disabled=true;
+    }
+  }catch(err){
+    for(const id of ['#image-engine-status','#video-engine-status']){
+      const node=document.querySelector(id);
+      if(node){node.textContent=err.message;node.className='notice error';}
+    }
+  }
+}
+
+document.querySelector('#ai-image-form').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const data=Object.fromEntries(new FormData(e.currentTarget).entries());
+  data.steps=Number(data.steps);
+  const btn=document.querySelector('#ai-image-button');
+  btn.disabled=true;btn.textContent='QUEUING AI IMAGE…';
+  try{
+    await jsonFetch('/api/media/image',{method:'POST',body:JSON.stringify(data)});
+    await loadMediaJobs();
+  }catch(err){alert(err.message)}
+  finally{btn.textContent='GENERATE AI IMAGE';await loadMediaHealth();}
+});
+
+document.querySelector('#ai-video-form').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const data=Object.fromEntries(new FormData(e.currentTarget).entries());
+  data.seconds=Number(data.seconds);
+  const btn=document.querySelector('#ai-video-button');
+  btn.disabled=true;btn.textContent='QUEUING AI VIDEO…';
+  try{
+    await jsonFetch('/api/media/video',{method:'POST',body:JSON.stringify(data)});
+    await loadMediaJobs();
+  }catch(err){alert(err.message)}
+  finally{btn.textContent='GENERATE AI VIDEO';await loadMediaHealth();}
+});
+
+function mediaJobCard(job){
+  const el=document.createElement('article');
+  el.className='media-job';
+  let preview='';
+  if(job.output_path && job.kind==='image'){
+    preview=`<img src="/api/media/jobs/${job.id}/file" loading="lazy">`;
+  }else if(job.output_path && job.kind==='video'){
+    preview=`<video controls preload="metadata" src="/api/media/jobs/${job.id}/file"></video>`;
+  }
+  el.innerHTML=`
+    ${preview}
+    <div class="media-job-copy">
+      <b>${esc(job.prompt)}</b>
+      <span>${esc(job.kind)} • ${esc(job.status)} • ${job.progress||0}%</span>
+      ${job.error?`<span class="error">${esc(job.error)}</span>`:''}
+    </div>
+    <div class="actions"></div>`;
+  const actions=el.querySelector('.actions');
+  if(job.output_path){
+    const open=document.createElement('a');
+    open.className='action';open.href=`/api/media/jobs/${job.id}/file`;open.textContent='Open';
+    actions.appendChild(open);
+  }
+  const del=document.createElement('button');
+  del.className='action danger';del.textContent='Delete';
+  del.onclick=async()=>{
+    if(!confirm('Delete this generated media file?')) return;
+    await jsonFetch(`/api/media/jobs/${job.id}`,{method:'DELETE'});
+    await loadMediaJobs();
+  };
+  actions.appendChild(del);
+  return el;
+}
+
+async function loadMediaJobs(){
+  try{
+    const jobs=await jsonFetch('/api/media/jobs');
+    const imageBox=document.querySelector('#ai-image-jobs');
+    const videoBox=document.querySelector('#ai-video-jobs');
+    if(imageBox) imageBox.innerHTML='';
+    if(videoBox) videoBox.innerHTML='';
+    for(const job of jobs){
+      const box=job.kind==='image'?imageBox:videoBox;
+      if(box) box.appendChild(mediaJobCard(job));
+    }
+    if(imageBox && !imageBox.children.length) imageBox.innerHTML='<div class="small">No AI images generated yet.</div>';
+    if(videoBox && !videoBox.children.length) videoBox.innerHTML='<div class="small">No AI video clips generated yet.</div>';
+  }catch(err){
+    console.error(err);
+  }
+}
+
 
 function createJobCard(job){
   const node=template.content.firstElementChild.cloneNode(true);
@@ -259,6 +375,8 @@ async function loadJobs(){
 }
 document.querySelector('#refresh').onclick=loadJobs;
 
-Promise.all([loadHealth(),loadProfile(),loadJobs()]).catch(console.error);
+Promise.all([loadHealth(),loadProfile(),loadJobs(),loadMediaHealth(),loadMediaJobs()]).catch(console.error);
 setInterval(loadJobs, 3500);
+setInterval(loadMediaJobs, 5000);
 setInterval(loadHealth, 30000);
+setInterval(loadMediaHealth, 30000);
