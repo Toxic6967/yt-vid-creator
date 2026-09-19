@@ -173,7 +173,7 @@ Score each category from 0-100:
 Be especially harsh on generic openers, fake urgency, repeated information, weak endings, long sentences, or scenes that do not advance the story.
 
 Return:
-{
+{{
   "hook": 0,
   "curiosity": 0,
   "progression": 0,
@@ -184,7 +184,7 @@ Return:
   "clarity": 0,
   "issues": ["specific issue"],
   "rewrite_instructions": ["specific fix"]
-}
+}}
 """,
         temperature=0.12,
     )
@@ -305,11 +305,11 @@ NON-NEGOTIABLE STRUCTURE:
 - sfx_cue should be subtle and optional: e.g. "soft whoosh", "click", "impact". Empty is allowed.
 
 Return exactly:
-{
+{{
   "topic": "...",
   "hook": "...",
   "scenes": [
-    {
+    {{
       "role": "hook|setup|build|reveal|payoff",
       "narration": "...",
       "visual_query": "...",
@@ -318,11 +318,11 @@ Return exactly:
       "edit_instruction": "...",
       "pattern_interrupt": "...",
       "sfx_cue": "..."
-    }
+    }}
   ],
-  "claims": [{"claim":"...", "source_ids":[1,2], "confidence":"high|medium"}],
+  "claims": [{{"claim":"...", "source_ids":[1,2], "confidence":"high|medium"}}],
   "warnings": []
-}
+}}
 """,
         temperature=0.38,
     )
