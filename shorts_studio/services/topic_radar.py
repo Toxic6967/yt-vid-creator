@@ -155,10 +155,79 @@ def _discover_subjects(profile: dict[str, Any]) -> list[str]:
     return subjects[:8]
 
 
+def _discover_relatable_ideas(profile: dict[str, Any]) -> list[str]:
+    pool = []
+    for query in (
+        "Roblox relatable moments",
+        "Roblox POV relatable",
+        "Roblox things every player does",
+        "Roblox funny player moments",
+    ):
+        pool.extend(_youtube_search(query, 8))
+
+    lines = []
+    seen = set()
+    for item in sorted(pool, key=lambda x: x.get("views", 0), reverse=True):
+        title = item.get("title", "")
+        key = title.lower()
+        if not title or key in seen:
+            continue
+        seen.add(key)
+        lines.append(
+            f"- {title} | observed_views={item.get('views', 0)} | age_days={item.get('age_days')}"
+        )
+        if len(lines) >= 24:
+            break
+
+    prompt = f"""
+AUDIENCE: {profile.get('audience', 'young Roblox players')}
+CHANNEL: {profile.get('niche', 'Roblox')}
+
+RECENT RELATABLE ROBLOX VIDEO TITLES:
+{chr(10).join(lines)}
+
+Propose 4 specific, highly relatable Roblox Short scenarios.
+
+The idea should make a Roblox player think "that literally happens to me".
+Prefer universal platform/gameplay situations over obscure game-specific lore:
+lag at the worst moment, disconnects, grinding for one item, rare-drop pain,
+friends saying one more game, joining too late, getting targeted, spending Robux,
+inventory mistakes, server chaos, finally winning after repeated losses, etc.
+
+Do not copy the titles above. Do not make factual claims or pretend literally every
+Roblox player has experienced it. Keep each idea short and visual.
+
+Return {{"ideas":["...","...","...","..."]}}.
+"""
+    try:
+        result = chat_json(
+            "You are a Roblox Shorts ideation editor for a young gaming audience. Return JSON only.",
+            prompt,
+            temperature=0.5,
+        )
+        ideas = [_clean(x, 110) for x in result.get("ideas", []) if _clean(x, 110)]
+    except Exception:
+        ideas = []
+
+    fallbacks = [
+        "When lag hits exactly as you are about to win",
+        "Grinding forever for a rare item and your friend gets it first try",
+        "Your friend says one more game and suddenly it is an hour later",
+        "Joining the server right after the event you wanted ends",
+    ]
+    for item in fallbacks:
+        if item.lower() not in {x.lower() for x in ideas}:
+            ideas.append(item)
+        if len(ideas) >= 4:
+            break
+    return ideas[:4]
+
+
 def scan_roblox_topics(profile: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     profile = profile or get_channel_profile()
     old_topics = get_recent_generated_topics()
-    subjects = _discover_subjects(profile)
+    subjects = _discover_subjects(profile)[:6]
+    relatable_ideas = _discover_relatable_ideas(profile)
     raw = []
 
     for subject in subjects:
@@ -169,6 +238,7 @@ def scan_roblox_topics(profile: dict[str, Any] | None = None) -> list[dict[str, 
         raw.append(
             {
                 "subject": subject,
+                "content_type": "trend",
                 "youtube_score": yt_score,
                 "recency_score": recency,
                 "videos": videos[:6],
@@ -177,22 +247,37 @@ def scan_roblox_topics(profile: dict[str, Any] | None = None) -> list[dict[str, 
             }
         )
 
+    for idea in relatable_ideas:
+        videos = _youtube_search(f"Roblox relatable {idea}", 8)
+        raw.append(
+            {
+                "subject": idea,
+                "content_type": "relatable",
+                "youtube_score": _youtube_score(videos),
+                "recency_score": _recency_score(videos),
+                "videos": videos[:6],
+                "web": [],
+                "evidence_score": min(100.0, len(videos) * 10),
+            }
+        )
+
     evidence_lines = []
     for i, item in enumerate(raw, start=1):
         top_titles = "; ".join(v["title"] for v in item["videos"][:3])
         evidence_lines.append(
-            f"[{i}] {item['subject']} | youtube={item['youtube_score']} | recency={item['recency_score']} "
-            f"| evidence={item['evidence_score']} | examples={top_titles}"
+            f"[{i}] type={item['content_type']} | {item['subject']} | youtube={item['youtube_score']} "
+            f"| recency={item['recency_score']} | evidence={item['evidence_score']} | examples={top_titles}"
         )
 
     try:
         judged = chat_json(
             "You are an editor scoring Roblox Short ideas. Do not claim the evidence proves a global ranking. Return JSON only.",
-            "For every numbered subject, give curiosity and channel_fit scores from 0-100, then propose one specific truthful Short topic "
-            "and a one-sentence reason. Prefer topics that can be researched and visually explained, not generic gameplay uploads.\n"
-            f"CHANNEL: {profile['niche']}\nEVIDENCE:\n" + "\n".join(evidence_lines) +
+            "For every numbered idea, score curiosity, channel_fit and relatability from 0-100, then propose one specific Short title "
+            "and a one-sentence reason. For type=trend, stay factual and researchable. For type=relatable, make it a recognisable POV/scenario "
+            "for young Roblox players and do NOT turn it into a fake news claim. Avoid babyish wording.\n"
+            f"AUDIENCE: {profile.get('audience','young Roblox players')}\nCHANNEL: {profile['niche']}\nEVIDENCE:\n" + "\n".join(evidence_lines) +
             "\nReturn {\"items\":[{\"index\":1,\"title\":\"...\",\"reason\":\"...\","
-            "\"curiosity\":85,\"channel_fit\":95}]}",
+            "\"curiosity\":85,\"channel_fit\":95,\"relatability\":90}]}",
             temperature=0.25,
         )
         judgments = {int(x.get("index", 0)): x for x in judged.get("items", [])}
@@ -205,15 +290,28 @@ def scan_roblox_topics(profile: dict[str, Any] | None = None) -> list[dict[str, 
         title = _clean(judge.get("title") or f"Why {item['subject']} is trending on Roblox", 180)
         curiosity = float(judge.get("curiosity") or 70)
         channel_fit = float(judge.get("channel_fit") or 90)
+        relatability = float(judge.get("relatability") or (88 if item["content_type"] == "relatable" else 60))
         dup = _duplicate_risk(title, old_topics)
-        overall = (
-            item["youtube_score"] * 0.38 +
-            item["recency_score"] * 0.22 +
-            curiosity * 0.18 +
-            channel_fit * 0.14 +
-            item["evidence_score"] * 0.08 -
-            dup * 0.22
-        )
+        if item["content_type"] == "relatable":
+            overall = (
+                item["youtube_score"] * 0.22 +
+                item["recency_score"] * 0.08 +
+                curiosity * 0.20 +
+                channel_fit * 0.16 +
+                relatability * 0.28 +
+                item["evidence_score"] * 0.06 -
+                dup * 0.20
+            )
+        else:
+            overall = (
+                item["youtube_score"] * 0.36 +
+                item["recency_score"] * 0.20 +
+                curiosity * 0.17 +
+                channel_fit * 0.12 +
+                relatability * 0.07 +
+                item["evidence_score"] * 0.08 -
+                dup * 0.22
+            )
         topics.append(
             {
                 "id": uuid.uuid4().hex[:12],
@@ -227,9 +325,15 @@ def scan_roblox_topics(profile: dict[str, Any] | None = None) -> list[dict[str, 
                 "channel_fit_score": round(channel_fit, 1),
                 "duplicate_risk": dup,
                 "evidence": {
+                    "content_type": item["content_type"],
+                    "relatability_score": round(relatability, 1),
                     "youtube_samples": item["videos"],
                     "web_sources": item["web"],
-                    "note": "Scores use observed recent public search metadata and are not a claim of total YouTube-wide views.",
+                    "note": (
+                        "Relatable ideas are scenario concepts, not factual claims about every player."
+                        if item["content_type"] == "relatable"
+                        else "Scores use observed recent public search metadata and are not a claim of total YouTube-wide views."
+                    ),
                 },
             }
         )
@@ -256,6 +360,7 @@ def pick_best_roblox_topic() -> dict[str, Any]:
         best = results[0]
     return {
         "topic": best["title"],
+        "content_type": (best.get("evidence") or {}).get("content_type", "trend"),
         "reason": f"Roblox Trend Radar score {best['score']}/100. {best['reason']}",
         "candidates": [best],
     }
