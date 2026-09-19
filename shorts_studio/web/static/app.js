@@ -82,6 +82,7 @@ document.querySelector('#video-form').addEventListener('submit', async e=>{
     niche: profile.niche,
     topic: fd.get('topic'),
     content_type: fd.get('content_type') || 'story',
+    story_genre: fd.get('story_genre') || 'auto',
     voice: fd.get('voice'),
     target_seconds: Number(fd.get('target_seconds')),
   };
