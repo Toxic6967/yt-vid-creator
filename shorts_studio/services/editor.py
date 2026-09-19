@@ -8,6 +8,7 @@ from pathlib import Path
 import imageio_ffmpeg
 
 from ..config import MUSIC_DIR
+from .sfx import pick_sfx
 
 
 def ffmpeg_path() -> str:
@@ -217,10 +218,40 @@ def render(
     combined_video = render_dir / "video.mp4"
     _run(["-f", "concat", "-safe", "0", "-i", str(visual_list), "-c", "copy", str(combined_video)])
 
+    mixed_scene_audio: list[Path] = []
+    for idx, audio in enumerate(scene_audio):
+        source = Path(audio["path"])
+        scene = (scenes or [])[idx] if scenes and idx < len(scenes) else {}
+        sfx = pick_sfx(scene.get("sfx_cue"))
+        if not sfx:
+            mixed_scene_audio.append(source)
+            continue
+
+        mixed = render_dir / f"audio_scene_{idx + 1:02d}.m4a"
+        _run([
+            "-i", str(source),
+            "-i", str(sfx),
+            "-filter_complex",
+            "[0:a]volume=1.0[voice];"
+            "[1:a]volume=0.16,adelay=70|70[sfx];"
+            "[voice][sfx]amix=inputs=2:duration=first:dropout_transition=0[a]",
+            "-map", "[a]",
+            "-c:a", "aac", "-b:a", "192k",
+            str(mixed),
+        ])
+        mixed_scene_audio.append(mixed)
+
     audio_list = render_dir / "audio.txt"
-    audio_list.write_text("\n".join(f"file '{Path(a['path']).as_posix()}'" for a in scene_audio), encoding="utf-8")
+    audio_list.write_text(
+        "\n".join(f"file '{p.as_posix()}'" for p in mixed_scene_audio),
+        encoding="utf-8",
+    )
     narration = render_dir / "narration.m4a"
-    _run(["-f", "concat", "-safe", "0", "-i", str(audio_list), "-c:a", "aac", "-b:a", "192k", str(narration)])
+    _run([
+        "-f", "concat", "-safe", "0", "-i", str(audio_list),
+        "-c:a", "aac", "-b:a", "192k",
+        str(narration),
+    ])
 
     captions = render_dir / "captions.ass"
     build_captions(scene_audio, captions, scenes=scenes)
