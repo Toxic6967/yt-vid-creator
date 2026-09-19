@@ -82,6 +82,7 @@ def _queue_short(
     voice: str,
     target_seconds: int,
     content_type: str = "auto",
+    story_genre: str = "auto",
 ) -> dict:
     job_id = uuid.uuid4().hex[:12]
     create_job(
@@ -91,6 +92,7 @@ def _queue_short(
             "niche": niche.strip(),
             "requested_topic": topic,
             "content_type": content_type,
+            "story_genre": story_genre,
             "voice": voice,
             "target_seconds": target_seconds,
         }
@@ -119,6 +121,7 @@ def auto_generate() -> dict:
         profile["voice"],
         int(profile["target_seconds"]),
         "story",
+        "auto",
     )
 
 
@@ -151,6 +154,7 @@ def make_topic_short(topic_id: str) -> dict:
         profile["voice"],
         int(profile["target_seconds"]),
         (topic.get("evidence") or {}).get("content_type", "trend"),
+        "auto",
     )
 
 
@@ -176,6 +180,7 @@ def api_generate(payload: GenerateRequest) -> dict:
         payload.voice,
         payload.target_seconds,
         payload.content_type,
+        payload.story_genre,
     )
 
 
@@ -202,6 +207,7 @@ def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
         old["voice"],
         old["target_seconds"],
         old.get("content_type", "auto"),
+        old.get("story_genre", "auto"),
     )
 
 
