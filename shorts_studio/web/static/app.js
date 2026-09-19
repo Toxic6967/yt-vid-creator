@@ -188,7 +188,7 @@ async function loadMediaHealth(){
 
     if(state.ok){
       imageStatus.textContent = state.image_ready
-        ? `ComfyUI connected • image checkpoint ready (${state.checkpoints[0] || 'detected'})`
+        ? `ComfyUI connected • image checkpoint ready (${state.image_checkpoint || 'detected'})`
         : 'ComfyUI connected, but no image checkpoint is installed yet.';
       imageStatus.className='notice '+(state.image_ready?'ok':'');
       if(state.story_video_ready){
