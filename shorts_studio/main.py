@@ -75,6 +75,29 @@ def api_health() -> dict:
     }
 
 
+def _ensure_story_backend_ready() -> None:
+    state = comfyui_health()
+    if not state.get("ok"):
+        raise HTTPException(
+            409,
+            "Story Studio needs ComfyUI running before Full Auto can start.",
+        )
+    if not state.get("image_ready"):
+        raise HTTPException(
+            409,
+            "Story Studio needs the SDXL image checkpoint for cinematic keyframes.",
+        )
+    if not state.get("story_video_ready"):
+        missing = ", ".join(state.get("missing_story_video_models") or [])
+        message = (
+            "Cinematic Story video is not installed yet. "
+            "Run install_story_video_models.bat, restart ComfyUI, then try again."
+        )
+        if missing:
+            message += f" Missing: {missing}."
+        raise HTTPException(409, message)
+
+
 def _queue_short(
     channel_name: str,
     niche: str,
@@ -113,6 +136,7 @@ def update_profile(payload: ChannelProfileRequest) -> dict:
 
 @app.post("/api/auto-generate", status_code=202)
 def auto_generate() -> dict:
+    _ensure_story_backend_ready()
     profile = get_channel_profile()
     return _queue_short(
         profile["channel_name"],
@@ -173,6 +197,8 @@ def api_job(job_id: str) -> dict:
 
 @app.post("/api/jobs", status_code=202)
 def api_generate(payload: GenerateRequest) -> dict:
+    if payload.content_type == "story":
+        _ensure_story_backend_ready()
     return _queue_short(
         payload.channel_name,
         payload.niche,
