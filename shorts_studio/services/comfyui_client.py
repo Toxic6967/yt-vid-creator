@@ -44,6 +44,31 @@ def _match_model_choice(choices: list[str], expected: str) -> str | None:
     return None
 
 
+
+
+def _pick_image_checkpoint(choices: list[str], configured: str = "") -> str | None:
+    configured = (configured or "").strip()
+    if configured:
+        matched = _match_model_choice(choices, configured)
+        return matched or configured
+
+    preferred_names = (
+        "sd_xl_base_1.0.safetensors",
+        "juggernaut",
+        "dreamshaper",
+        "sdxl",
+    )
+    for preferred in preferred_names:
+        for choice in choices:
+            if preferred in choice.lower():
+                return choice
+
+    candidates = [
+        choice for choice in choices
+        if all(marker not in choice.lower() for marker in ("ltx", "wan", "video"))
+    ]
+    return candidates[0] if candidates else None
+
 def health() -> dict[str, Any]:
     result: dict[str, Any] = {
         "ok": False,
@@ -52,6 +77,7 @@ def health() -> dict[str, Any]:
         "video_ready": False,
         "video_workflow": settings.comfyui_video_workflow,
         "checkpoints": [],
+        "image_checkpoint": None,
         "video_models": {
             "diffusion": "wan2.1_t2v_1.3B_fp16.safetensors",
             "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
@@ -84,8 +110,13 @@ def health() -> dict[str, Any]:
                     required = ((node.get("input") or {}).get("required") or {})
                     spec = required.get("ckpt_name")
                     choices = _extract_choices(spec)
-                    result["checkpoints"] = choices[:40]
-                    result["image_ready"] = bool(choices)
+                    result["checkpoints"] = choices[:80]
+                    image_checkpoint = _pick_image_checkpoint(
+                        choices,
+                        settings.comfyui_image_checkpoint,
+                    )
+                    result["image_checkpoint"] = image_checkpoint
+                    result["image_ready"] = bool(image_checkpoint)
             except Exception:
                 pass
 
@@ -192,22 +223,13 @@ def _checkpoint_name() -> str:
             "Install an image checkpoint in ComfyUI/models/checkpoints."
         )
 
-    preferred_names = (
-        "sd_xl_base_1.0.safetensors",
-        "sdxl",
-        "juggernaut",
-        "dreamshaper",
-    )
-    for preferred in preferred_names:
-        for choice in available:
-            if preferred in choice.lower():
-                return choice
-
-    image_candidates = [
-        choice for choice in available
-        if all(marker not in choice.lower() for marker in ("ltx", "wan", "video"))
-    ]
-    return image_candidates[0] if image_candidates else available[0]
+    picked = _pick_image_checkpoint(available)
+    if not picked:
+        raise ComfyUIError(
+            "ComfyUI has checkpoints installed, but none look like a normal image checkpoint. "
+            "Install or restore SDXL in models/checkpoints."
+        )
+    return picked
 
 
 def _image_size(aspect: str) -> tuple[int, int]:
@@ -355,12 +377,19 @@ def _video_workflow(
 def _upload_input_image(image_path: Path) -> str:
     if not image_path.exists():
         raise ComfyUIError(f"Story keyframe image is missing: {image_path}")
-    filename = f"shorts_studio_{uuid.uuid4().hex[:10]}{image_path.suffix.lower() or '.png'}"
+    suffix = image_path.suffix.lower() or ".png"
+    filename = f"shorts_studio_{uuid.uuid4().hex[:10]}{suffix}"
+    mime = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".png": "image/png",
+    }.get(suffix, "application/octet-stream")
     try:
         with image_path.open("rb") as fh, httpx.Client(timeout=90) as client:
             response = client.post(
                 f"{settings.comfyui_base_url}/upload/image",
-                files={"image": (filename, fh, "image/png")},
+                files={"image": (filename, fh, mime)},
                 data={"type": "input", "overwrite": "true"},
             )
             response.raise_for_status()
