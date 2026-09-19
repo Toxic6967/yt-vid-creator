@@ -178,11 +178,25 @@ def _try_ai_scene(scene: dict, destination: Path, index: int, topic: str) -> dic
         if not state.get("ok") or not state.get("image_ready"):
             return None
         is_story = bool(scene.get("character_visuals") or scene.get("keyframe_prompt"))
-        direction = enhance_image_prompt(
-            scene_image_prompt(scene, topic),
-            style="roblox_cinematic" if is_story else "roblox_bright",
-            purpose="hook" if scene.get("role") == "hook" else "scene_visual",
-        )
+        base_prompt = scene_image_prompt(scene, topic)
+        if is_story:
+            direction = {
+                "prompt": (
+                    base_prompt
+                    + " Modern cinematic Roblox-style 3D render, polished PBR-like materials, "
+                    "clean global illumination, strong depth, expressive blocky poses, current-game visual quality."
+                ),
+                "negative_prompt": (
+                    "text, logo, watermark, old low-poly 2010s look, flat lighting, blurry, low detail, "
+                    "photoreal human anatomy, extra limbs, duplicate character, changed clothes, changed hair, "
+                    "deformed face, cluttered composition"
+                ),
+            }
+        else:
+            direction = {
+                "prompt": base_prompt + " Bright polished modern Roblox-style 3D scene, clean lighting, no text.",
+                "negative_prompt": "text, logo, watermark, blurry, low quality, clutter, broken anatomy",
+            }
         result = generate_ai_image(
             prompt=direction["prompt"],
             negative_prompt=direction["negative_prompt"],
@@ -221,23 +235,26 @@ def _try_ai_video_scene(
 
     role = str(scene.get("role", "")).lower()
     is_story = bool(scene.get("character_visuals") or scene.get("motion_prompt"))
-    camera_name = str(scene.get("camera") or "").lower()
-    camera_map = {
-        "follow": "follow",
-        "over-shoulder": "follow",
-        "close-up": "push_in",
-        "low-angle": "push_in",
-        "high-angle": "pan",
-        "wide": "pan",
-        "medium": "auto",
-    }
-    direction = enhance_video_prompt(
-        scene_video_prompt(scene, topic),
-        style="roblox_cinematic" if is_story else "roblox_bright",
-        camera=camera_map.get(camera_name, "push_in" if role == "hook" else "auto"),
-        purpose="hook" if role == "hook" else ("reveal" if role in {"reveal", "payoff"} else "b_roll"),
-        seconds=max(3, min(5, round(duration))),
-    )
+    base_prompt = scene_video_prompt(scene, topic)
+    if is_story:
+        direction = {
+            "prompt": (
+                base_prompt
+                + " One continuous cinematic shot. Modern Roblox-style 3D movie quality, polished lighting, "
+                "clean materials, believable blocky character movement, stable identity, stable outfit, "
+                "clear foreground/background separation, no sudden scene change."
+            ),
+            "negative_prompt": (
+                "text, subtitles, logo, watermark, 2010s low-poly look, flat lighting, flicker, morphing, "
+                "melting face, changed clothing, changed hair, duplicate character, extra limbs, camera teleport, "
+                "random objects appearing, blur, compression artifacts"
+            ),
+        }
+    else:
+        direction = {
+            "prompt": base_prompt + " Smooth modern game animation, one clear action, stable camera, no text.",
+            "negative_prompt": "text, logo, watermark, flicker, morphing, duplicate character, blur",
+        }
     try:
         result = generate_ai_video(
             prompt=direction["prompt"],
@@ -301,15 +318,18 @@ def prepare_visual(
 
             state = comfyui_health()
             if wants_video and state.get("story_video_ready"):
-                direction = enhance_video_prompt(
-                    scene_video_prompt(scene, topic),
-                    style="roblox_cinematic",
-                    camera="auto",
-                    purpose="hook" if role == "hook" else (
-                        "reveal" if role in {"reveal", "payoff"} else "b_roll"
+                direction = {
+                    "prompt": (
+                        scene_video_prompt(scene, topic)
+                        + " Animate from the supplied keyframe. Preserve the exact avatar face, hair, clothing, "
+                        "colours, body proportions and environment. One controlled cinematic camera move, "
+                        "natural blocky game-character motion, modern polished lighting."
                     ),
-                    seconds=max(2, min(4, round(duration))),
-                )
+                    "negative_prompt": (
+                        "text, subtitles, logo, watermark, identity drift, changed clothes, changed hair, "
+                        "face morphing, duplicate character, extra limbs, flicker, camera teleport, old low-poly look"
+                    ),
+                }
                 try:
                     animated = generate_story_video_from_image(
                         prompt=direction["prompt"],
