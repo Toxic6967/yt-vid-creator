@@ -12,8 +12,9 @@ from .config import DB_PATH
 DEFAULT_PROFILE = {
     "channel_name": "Roblox Radar",
     "niche": "Roblox trends, updates, secrets and viral games",
-    "tone": "Fast gaming documentary",
-    "voice": "en-AU-WilliamNeural",
+    "tone": "Fast, exciting Roblox gaming documentary",
+    "audience": "Kids / young Roblox players (roughly 8-14); energetic, clear, exciting, never babyish",
+    "voice": "auto-youthful-male",
     "target_seconds": 32,
     "trend_weight": 70,
     "evergreen_weight": 20,
@@ -65,6 +66,7 @@ def init_db() -> None:
                 channel_name TEXT NOT NULL,
                 niche TEXT NOT NULL,
                 tone TEXT NOT NULL,
+                audience TEXT NOT NULL DEFAULT 'Kids / young Roblox players (roughly 8-14); energetic, clear, exciting, never babyish',
                 voice TEXT NOT NULL,
                 target_seconds INTEGER NOT NULL,
                 trend_weight INTEGER NOT NULL,
@@ -123,20 +125,33 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_topics_score ON topics(score DESC);
             """
         )
+        profile_columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(channel_profile)").fetchall()
+        }
+        if "audience" not in profile_columns:
+            conn.execute(
+                "ALTER TABLE channel_profile ADD COLUMN audience TEXT NOT NULL DEFAULT "
+                "'Kids / young Roblox players (roughly 8-14); energetic, clear, exciting, never babyish'"
+            )
+
         if not conn.execute("SELECT id FROM channel_profile WHERE id = 1").fetchone():
             conn.execute(
                 """
                 INSERT INTO channel_profile (
-                    id, channel_name, niche, tone, voice, target_seconds,
+                    id, channel_name, niche, tone, audience, voice, target_seconds,
                     trend_weight, evergreen_weight, experiment_weight, updated_at
-                ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     DEFAULT_PROFILE["channel_name"], DEFAULT_PROFILE["niche"], DEFAULT_PROFILE["tone"],
-                    DEFAULT_PROFILE["voice"], DEFAULT_PROFILE["target_seconds"], DEFAULT_PROFILE["trend_weight"],
+                    DEFAULT_PROFILE["audience"], DEFAULT_PROFILE["voice"], DEFAULT_PROFILE["target_seconds"], DEFAULT_PROFILE["trend_weight"],
                     DEFAULT_PROFILE["evergreen_weight"], DEFAULT_PROFILE["experiment_weight"], now,
                 ),
             )
+        conn.execute(
+            "UPDATE channel_profile SET voice=? WHERE id=1 AND voice=?",
+            ("auto-youthful-male", "en-AU-WilliamNeural"),
+        )
 
 
 def create_job(job: dict[str, Any]) -> None:
@@ -208,17 +223,25 @@ def save_channel_profile(profile: dict[str, Any]) -> dict[str, Any]:
         conn.execute(
             """
             UPDATE channel_profile SET
-                channel_name=?, niche=?, tone=?, voice=?, target_seconds=?,
+                channel_name=?, niche=?, tone=?, audience=?, voice=?, target_seconds=?,
                 trend_weight=?, evergreen_weight=?, experiment_weight=?, updated_at=?
             WHERE id=1
             """,
             (
-                profile["channel_name"], profile["niche"], profile["tone"], profile["voice"],
+                profile["channel_name"], profile["niche"], profile["tone"], profile["audience"], profile["voice"],
                 profile["target_seconds"], profile["trend_weight"], profile["evergreen_weight"],
                 profile["experiment_weight"], utc_now(),
             ),
         )
     return get_channel_profile()
+
+
+def migrate_default_voice() -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE channel_profile SET voice=? WHERE id=1 AND voice=?",
+            ("auto-youthful-male", "en-AU-WilliamNeural"),
+        )
 
 
 def start_radar_run(run_id: str) -> None:
