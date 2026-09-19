@@ -83,10 +83,17 @@ def _normalise_characters(raw: Any) -> list[dict[str, str]]:
                     item.get("visual_identity") or fallback["visual_identity"], 320
                 ),
                 "personality": _clean(item.get("personality") or fallback["personality"], 180),
+                "voice_profile": (
+                    ("character-female-" + str(1 + sum(1 for c in out if c.get("gender") == "female")))
+                    if _clean(item.get("gender") or fallback["gender"], 12).lower() == "female"
+                    else ("character-male-" + str(1 + sum(1 for c in out if c.get("gender") == "male")))
+                ),
             }
         )
     while len(out) < 2:
-        out.append(_default_character(len(out)))
+        fallback = _default_character(len(out))
+        fallback["voice_profile"] = "character-female-1" if fallback["gender"] == "female" else f"character-male-{1 + sum(1 for c in out if c.get('gender') == 'male')}"
+        out.append(fallback)
     return out
 
 
