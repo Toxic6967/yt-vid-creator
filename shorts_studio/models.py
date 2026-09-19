@@ -8,6 +8,7 @@ class GenerateRequest(BaseModel):
     niche: str = Field(min_length=2, max_length=160)
     topic: str | None = Field(default=None, max_length=220)
     content_type: str = Field(default="auto", pattern=r"^(auto|story|trend|relatable|evergreen)$")
+    story_genre: str = Field(default="auto", pattern=r"^(auto|funny|horror|mystery|action|relatable|sad)$")
     voice: str = Field(default="auto-youthful-male", max_length=80)
     target_seconds: int = Field(default=32, ge=20, le=45)
 
