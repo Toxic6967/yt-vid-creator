@@ -38,7 +38,7 @@ def deterministic_checks(
     script: dict,
     target_seconds: int,
     *,
-    require_citations: bool = true,
+    require_citations: bool = True,
 ) -> dict[str, Any]:
     scenes = script.get("scenes") or []
     narration = " ".join(_clean(s.get("narration", ""), 500) for s in scenes)
