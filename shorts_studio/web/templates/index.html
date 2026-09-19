@@ -68,7 +68,7 @@
                 </select></label>
               </div>
               <div class="strategy">
-                <span>70% trending</span><span>20% evergreen</span><span>10% experiments</span>
+                <span>Trending games + updates</span><span>Relatable Roblox moments</span><span>Secrets + evergreen ideas</span>
               </div>
               <input type="hidden" name="trend_weight" value="70">
               <input type="hidden" name="evergreen_weight" value="20">
@@ -85,7 +85,7 @@
             <div>
               <div class="eyebrow">DISCOVERY</div>
               <h2>Roblox Trend Radar</h2>
-              <p class="sub">Checks recent public YouTube search metadata and web evidence, then scores ideas for this channel.</p>
+              <p class="sub">Finds current Roblox trends plus relatable player moments, then scores what fits this channel best.</p>
             </div>
             <button id="scan-radar" class="primary">SCAN ROBLOX NOW</button>
           </div>
@@ -167,6 +167,12 @@
                 <label class="prompt-label">Short topic
                   <textarea name="topic" rows="5" placeholder="Why this Roblox game suddenly exploded" required></textarea>
                 </label>
+                <label>Content style<select name="content_type">
+                  <option value="auto">Auto — choose best style</option>
+                  <option value="relatable">Relatable Roblox / POV</option>
+                  <option value="trend">Trend / update / explainer</option>
+                  <option value="evergreen">Evergreen Roblox topic</option>
+                </select></label>
                 <label>Voice<select name="voice">
                   <option value="auto-youthful-male">Human youthful male — recommended</option>
                   <option value="auto-youthful-female">Human youthful female</option>
