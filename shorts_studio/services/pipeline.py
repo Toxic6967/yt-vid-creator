@@ -47,7 +47,8 @@ def run_pipeline(job_id: str) -> None:
         "audience": audience,
         "tone": tone,
         "content_type": job.get("content_type", "auto"),
-        "pipeline_version": "1.2.0",
+        "story_genre": job.get("story_genre", "auto"),
+        "pipeline_version": "1.3.0",
     }
 
     try:
@@ -91,6 +92,7 @@ def run_pipeline(job_id: str) -> None:
                 audience=audience,
                 tone=tone,
                 target_seconds=int(job["target_seconds"]),
+                genre=job.get("story_genre", "auto"),
             )
             selected_topic = script.get("title") or selected_topic
             update_job(job_id, selected_topic=selected_topic)
