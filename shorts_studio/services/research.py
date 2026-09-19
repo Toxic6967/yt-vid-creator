@@ -18,8 +18,34 @@ def _domain(url: str) -> str:
     return urlparse(url).netloc.lower().removeprefix("www.")
 
 
-def _clean(text: str, limit: int = 600) -> str:
-    return re.sub(r"\s+", " ", text or "").strip()[:limit]
+def _clean(text: object, limit: int = 600) -> str:
+    """Normalize occasionally messy LLM/search values into safe display text."""
+    if text is None:
+        value = ""
+    elif isinstance(text, str):
+        value = text
+    elif isinstance(text, (list, tuple, set)):
+        value = " ".join(_clean(item, limit) for item in text if item is not None)
+    elif isinstance(text, dict):
+        # Prefer common text-bearing fields before falling back to values.
+        preferred = (
+            text.get("text")
+            or text.get("title")
+            or text.get("name")
+            or text.get("value")
+        )
+        if preferred is not None:
+            value = _clean(preferred, limit)
+        else:
+            value = " ".join(
+                _clean(item, limit)
+                for item in text.values()
+                if item is not None
+            )
+    else:
+        value = str(text)
+
+    return re.sub(r"\s+", " ", value).strip()[:limit]
 
 
 def _safe_search(query: str, max_results: int = 12) -> list[dict]:
