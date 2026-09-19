@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import random
 import re
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from ..config import settings
 from .comfyui_client import (
     generate_ai_image,
+    generate_ai_image_from_reference,
     generate_ai_video,
     generate_story_video_from_image,
     health as comfyui_health,
@@ -172,7 +174,13 @@ def _make_storyboard_visual(
     final.save(destination, quality=94)
 
 
-def _try_ai_scene(scene: dict, destination: Path, index: int, topic: str) -> dict[str, Any] | None:
+def _try_ai_scene(
+    scene: dict,
+    destination: Path,
+    index: int,
+    topic: str,
+    reference_image: str | Path | None = None,
+) -> dict[str, Any] | None:
     try:
         state = comfyui_health()
         if not state.get("ok") or not state.get("image_ready"):
@@ -197,15 +205,33 @@ def _try_ai_scene(scene: dict, destination: Path, index: int, topic: str) -> dic
                 "prompt": base_prompt + " Bright polished modern Roblox-style 3D scene, clean lighting, no text.",
                 "negative_prompt": "text, logo, watermark, blurry, low quality, clutter, broken anatomy",
             }
-        result = generate_ai_image(
-            prompt=direction["prompt"],
-            negative_prompt=direction["negative_prompt"],
-            aspect="9:16",
-            steps=28 if is_story else 20,
-            cfg=6.2 if is_story else 6.5,
-            seed=None,
-            job_id=f"shortscene_{index}_{random.randint(1000,9999)}",
-        )
+        character_key = "|".join(
+            str(x) for x in scene.get("character_visuals", []) if x
+        ) or topic
+        stable_seed = zlib.crc32(character_key.encode("utf-8")) & 0x7FFFFFFF
+
+        if is_story and reference_image and Path(reference_image).exists():
+            result = generate_ai_image_from_reference(
+                prompt=direction["prompt"],
+                negative_prompt=direction["negative_prompt"],
+                reference_path=reference_image,
+                aspect="9:16",
+                steps=26,
+                cfg=6.0,
+                denoise=0.64,
+                seed=stable_seed,
+                job_id=f"storyframe_{index}_{random.randint(1000,9999)}",
+            )
+        else:
+            result = generate_ai_image(
+                prompt=direction["prompt"],
+                negative_prompt=direction["negative_prompt"],
+                aspect="9:16",
+                steps=28 if is_story else 20,
+                cfg=6.2 if is_story else 6.5,
+                seed=stable_seed if is_story else None,
+                job_id=f"shortscene_{index}_{random.randint(1000,9999)}",
+            )
         source = Path(result["path"])
         image = Image.open(source).convert("RGB")
         image.save(destination, quality=94)
@@ -217,6 +243,8 @@ def _try_ai_scene(scene: dict, destination: Path, index: int, topic: str) -> dic
             "prompt": direction["prompt"],
             "seed": result.get("seed"),
             "checkpoint": result.get("checkpoint"),
+            "image_backend": result.get("backend", "sdxl_t2i"),
+            "continuity_reference": str(reference_image) if reference_image else None,
         }
     except Exception:
         return None
@@ -289,6 +317,7 @@ def prepare_visual(
     topic: str,
     *,
     duration: float = 3.0,
+    reference_image: str | Path | None = None,
 ) -> dict:
     visual_dir = job_dir / "visuals"
     visual_dir.mkdir(parents=True, exist_ok=True)
@@ -309,7 +338,13 @@ def prepare_visual(
 
             # Story mode is keyframe-first: create the exact character/shot first,
             # then animate that frame when the stronger I2V backend is installed.
-            keyframe = _try_ai_scene(scene, destination, index, topic)
+            keyframe = _try_ai_scene(
+                scene,
+                destination,
+                index,
+                topic,
+                reference_image=reference_image,
+            )
             if not keyframe:
                 raise RuntimeError(
                     "Could not create the cinematic story keyframe. "
