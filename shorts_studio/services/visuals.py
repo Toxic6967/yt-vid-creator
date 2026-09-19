@@ -11,7 +11,12 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from ..config import settings
 from .comfyui_client import generate_ai_image, generate_ai_video, health as comfyui_health
-from .media_director import enhance_image_prompt, enhance_video_prompt, scene_image_prompt
+from .media_director import (
+    enhance_image_prompt,
+    enhance_video_prompt,
+    scene_image_prompt,
+    scene_video_prompt,
+)
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 ALLOWED_LICENSE_MARKERS = ("cc by", "cc-by", "cc by-sa", "cc-by-sa", "cc0", "public domain", "pd-")
@@ -167,17 +172,18 @@ def _try_ai_scene(scene: dict, destination: Path, index: int, topic: str) -> dic
         state = comfyui_health()
         if not state.get("ok") or not state.get("image_ready"):
             return None
+        is_story = bool(scene.get("character_visuals") or scene.get("keyframe_prompt"))
         direction = enhance_image_prompt(
             scene_image_prompt(scene, topic),
-            style="roblox_bright",
+            style="roblox_cinematic" if is_story else "roblox_bright",
             purpose="hook" if scene.get("role") == "hook" else "scene_visual",
         )
         result = generate_ai_image(
             prompt=direction["prompt"],
             negative_prompt=direction["negative_prompt"],
             aspect="9:16",
-            steps=18,
-            cfg=6.5,
+            steps=28 if is_story else 20,
+            cfg=6.2 if is_story else 6.5,
             seed=None,
             job_id=f"shortscene_{index}_{random.randint(1000,9999)}",
         )
@@ -209,10 +215,21 @@ def _try_ai_video_scene(
         return None
 
     role = str(scene.get("role", "")).lower()
+    is_story = bool(scene.get("character_visuals") or scene.get("motion_prompt"))
+    camera_name = str(scene.get("camera") or "").lower()
+    camera_map = {
+        "follow": "follow",
+        "over-shoulder": "follow",
+        "close-up": "push_in",
+        "low-angle": "push_in",
+        "high-angle": "pan",
+        "wide": "pan",
+        "medium": "auto",
+    }
     direction = enhance_video_prompt(
-        scene_image_prompt(scene, topic),
-        style="roblox_bright",
-        camera="push_in" if role == "hook" else "auto",
+        scene_video_prompt(scene, topic),
+        style="roblox_cinematic" if is_story else "roblox_bright",
+        camera=camera_map.get(camera_name, "push_in" if role == "hook" else "auto"),
         purpose="hook" if role == "hook" else ("reveal" if role in {"reveal", "payoff"} else "b_roll"),
         seconds=max(3, min(5, round(duration))),
     )
@@ -259,7 +276,16 @@ def prepare_visual(
 
     if is_roblox:
         role = str(scene.get("role", "")).lower()
-        wants_video = role in {"hook", "reveal", "payoff"} or index % 4 == 0
+        priority = str(scene.get("motion_priority", "")).lower()
+        is_story = bool(scene.get("character_visuals") or scene.get("keyframe_prompt"))
+        if is_story:
+            wants_video = (
+                role in {"hook", "reveal", "payoff"}
+                or priority == "high"
+                or (priority == "medium" and index % 3 == 0)
+            )
+        else:
+            wants_video = role in {"hook", "reveal", "payoff"} or index % 4 == 0
         if wants_video:
             video = _try_ai_video_scene(scene, job_dir, index, topic, duration)
             if video and video.get("kind") == "ai_generated_video":
