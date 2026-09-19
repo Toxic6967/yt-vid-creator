@@ -523,6 +523,96 @@ def generate_ai_image(
     }
 
 
+
+def generate_ai_image_from_reference(
+    prompt: str,
+    negative_prompt: str,
+    reference_path: str | Path,
+    aspect: str,
+    steps: int,
+    cfg: float,
+    denoise: float,
+    job_id: str,
+    seed: int | None = None,
+) -> dict[str, Any]:
+    """SDXL img2img continuity pass for sequential story keyframes."""
+    seed = int(seed) if seed is not None else random.randint(0, 2_147_483_647)
+    ckpt = _checkpoint_name()
+    width, height = _image_size(aspect)
+    uploaded_name = _upload_input_image(Path(reference_path))
+
+    workflow = {
+        "3": {
+            "class_type": "KSampler",
+            "inputs": {
+                "seed": seed,
+                "steps": int(steps),
+                "cfg": float(cfg),
+                "sampler_name": "euler",
+                "scheduler": "normal",
+                "denoise": float(denoise),
+                "model": ["4", 0],
+                "positive": ["6", 0],
+                "negative": ["7", 0],
+                "latent_image": ["12", 0],
+            },
+        },
+        "4": {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {"ckpt_name": ckpt},
+        },
+        "6": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": prompt, "clip": ["4", 1]},
+        },
+        "7": {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": negative_prompt, "clip": ["4", 1]},
+        },
+        "10": {
+            "class_type": "LoadImage",
+            "inputs": {"image": uploaded_name},
+        },
+        "11": {
+            "class_type": "ImageScale",
+            "inputs": {
+                "image": ["10", 0],
+                "upscale_method": "lanczos",
+                "width": width,
+                "height": height,
+                "crop": "center",
+            },
+        },
+        "12": {
+            "class_type": "VAEEncode",
+            "inputs": {"pixels": ["11", 0], "vae": ["4", 2]},
+        },
+        "13": {
+            "class_type": "VAEDecode",
+            "inputs": {"samples": ["3", 0], "vae": ["4", 2]},
+        },
+        "14": {
+            "class_type": "SaveImage",
+            "inputs": {
+                "filename_prefix": "ShortsStudio/story_keyframe",
+                "images": ["13", 0],
+            },
+        },
+    }
+
+    prompt_id = _queue_workflow(workflow)
+    ref = _wait_for_artifact(prompt_id, timeout_seconds=900)
+    suffix = Path(ref["filename"]).suffix or ".png"
+    output = MEDIA_OUTPUT_DIR / f"{job_id}{suffix}"
+    _download_artifact(ref, output)
+    return {
+        "path": str(output),
+        "prompt_id": prompt_id,
+        "seed": seed,
+        "checkpoint": ckpt,
+        "backend": "sdxl_img2img_continuity",
+    }
+
 def generate_ai_video(
     prompt: str,
     negative_prompt: str,
