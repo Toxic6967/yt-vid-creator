@@ -12,46 +12,166 @@
       <div>
         <div class="eyebrow">PRIVATE LOCAL CREATOR</div>
         <h1>Shorts Studio <span>V1</span></h1>
-        <p>Research → script → narration → legal visuals → edit → review.</p>
+        <p>Full-auto Roblox Shorts, with separate tools when you want control.</p>
       </div>
       <div id="health" class="health">Checking local AI…</div>
     </header>
 
-    <main class="grid">
-      <section class="panel composer">
-        <div class="section-head">
-          <div><div class="eyebrow">CREATE</div><h2>Generate a Short</h2></div>
-          <span class="pill">No auto-publishing</span>
+    <nav class="tabs">
+      <button class="tab active" data-tab="auto">Auto Studio</button>
+      <button class="tab" data-tab="radar">Trend Radar</button>
+      <button class="tab" data-tab="video">Video Studio</button>
+      <button class="tab" data-tab="image">Image Studio</button>
+      <button class="tab" data-tab="review">Review Queue</button>
+    </nav>
+
+    <main>
+      <section class="tab-page active" id="tab-auto">
+        <div class="hero-grid">
+          <section class="panel hero-panel">
+            <div class="eyebrow">ONE CLICK</div>
+            <h2>Full Auto Short</h2>
+            <p class="lead">Find a Roblox trend, research it, fact-check it, write it, narrate it, source visuals, edit, caption and export.</p>
+            <div id="profile-summary" class="profile-summary"></div>
+            <button id="auto-generate" class="primary big">GENERATE FULL SHORT</button>
+            <p class="small">Nothing is published automatically. Finished videos go to Review Queue.</p>
+          </section>
+
+          <section class="panel">
+            <div class="section-head">
+              <div><div class="eyebrow">CHANNEL</div><h2>Roblox Profile</h2></div>
+              <span class="pill">Saved locally</span>
+            </div>
+            <form id="profile-form">
+              <label>Channel name<input name="channel_name" required></label>
+              <label>Niche<input name="niche" required></label>
+              <label>Tone<input name="tone" required></label>
+              <div class="split">
+                <label>Voice<select name="voice">
+                  <option value="en-AU-WilliamNeural">Australian male — William</option>
+                  <option value="en-AU-NatashaNeural">Australian female — Natasha</option>
+                  <option value="en-US-GuyNeural">US male — Guy</option>
+                  <option value="en-US-JennyNeural">US female — Jenny</option>
+                </select></label>
+                <label>Target length<select name="target_seconds">
+                  <option value="25">~25 sec</option>
+                  <option value="32">~32 sec</option>
+                  <option value="40">~40 sec</option>
+                  <option value="45">~45 sec</option>
+                </select></label>
+              </div>
+              <div class="strategy">
+                <span>70% trending</span><span>20% evergreen</span><span>10% experiments</span>
+              </div>
+              <input type="hidden" name="trend_weight" value="70">
+              <input type="hidden" name="evergreen_weight" value="20">
+              <input type="hidden" name="experiment_weight" value="10">
+              <button class="ghost" type="submit">Save Channel Profile</button>
+            </form>
+          </section>
         </div>
-        <form id="generate-form">
-          <label>Channel name<input name="channel_name" value="My Shorts Channel" required></label>
-          <label>Niche<input name="niche" placeholder="e.g. space discoveries, engineering, strange history" required></label>
-          <label>Specific topic <span>(optional)</span><input name="topic" placeholder="Leave blank for automatic topic discovery"></label>
-          <div class="split">
-            <label>Voice<select name="voice">
-              <option value="en-AU-WilliamNeural">Australian male — William</option>
-              <option value="en-AU-NatashaNeural">Australian female — Natasha</option>
-              <option value="en-US-GuyNeural">US male — Guy</option>
-              <option value="en-US-JennyNeural">US female — Jenny</option>
-            </select></label>
-            <label>Target length<select name="target_seconds">
-              <option value="25">~25 sec</option>
-              <option value="32" selected>~32 sec</option>
-              <option value="40">~40 sec</option>
-              <option value="45">~45 sec</option>
-            </select></label>
-          </div>
-          <button class="primary" type="submit">GENERATE SHORT</button>
-          <p class="small">The app only produces a review copy. You decide what gets uploaded.</p>
-        </form>
       </section>
 
-      <section class="panel queue-panel">
-        <div class="section-head">
-          <div><div class="eyebrow">REVIEW</div><h2>Shorts Queue</h2></div>
-          <button id="refresh" class="ghost">Refresh</button>
+      <section class="tab-page" id="tab-radar">
+        <section class="panel">
+          <div class="section-head radar-head">
+            <div>
+              <div class="eyebrow">DISCOVERY</div>
+              <h2>Roblox Trend Radar</h2>
+              <p class="sub">Checks recent public YouTube search metadata and web evidence, then scores ideas for this channel.</p>
+            </div>
+            <button id="scan-radar" class="primary">SCAN ROBLOX NOW</button>
+          </div>
+          <div id="radar-status" class="notice">No scan run yet.</div>
+          <div id="topic-grid" class="topic-grid"></div>
+        </section>
+      </section>
+
+      <section class="tab-page" id="tab-video">
+        <div class="hero-grid">
+          <section class="panel">
+            <div class="eyebrow">SHORT CREATOR</div>
+            <h2>Video Studio</h2>
+            <p class="sub">Choose the exact topic yourself. Everything after that is still automated.</p>
+            <form id="video-form">
+              <label>Topic<input name="topic" placeholder="e.g. Why this Roblox game suddenly exploded" required></label>
+              <div class="split">
+                <label>Voice<select name="voice">
+                  <option value="en-AU-WilliamNeural">Australian male — William</option>
+                  <option value="en-AU-NatashaNeural">Australian female — Natasha</option>
+                  <option value="en-US-GuyNeural">US male — Guy</option>
+                  <option value="en-US-JennyNeural">US female — Jenny</option>
+                </select></label>
+                <label>Target length<select name="target_seconds">
+                  <option value="25">~25 sec</option>
+                  <option value="32">~32 sec</option>
+                  <option value="40">~40 sec</option>
+                  <option value="45">~45 sec</option>
+                </select></label>
+              </div>
+              <button class="primary" type="submit">CREATE FULL VIDEO</button>
+            </form>
+          </section>
+          <section class="panel">
+            <div class="eyebrow">GENUINE AI VIDEO</div>
+            <h2>AI Video Generator</h2>
+            <p class="sub">Prompt-to-video clips are being wired to a local ComfyUI/Wan provider. This is separate from the full Short creator.</p>
+            <div class="media-engine pending">
+              <b>Local media engine</b>
+              <span>ComfyUI + lightweight Wan video model</span>
+              <span>No paid API planned.</span>
+            </div>
+          </section>
         </div>
-        <div id="queue" class="queue"></div>
+      </section>
+
+      <section class="tab-page" id="tab-image">
+        <div class="hero-grid">
+          <section class="panel">
+            <div class="eyebrow">GENUINE AI IMAGE</div>
+            <h2>AI Image Studio</h2>
+            <p class="sub">The local AI-image provider will generate actual new images. The quick graphic generator below already works now.</p>
+            <div class="media-engine pending">
+              <b>Local image engine</b>
+              <span>ComfyUI provider slot ready for a local image model.</span>
+              <span>No paid image API planned.</span>
+            </div>
+            <hr>
+            <div class="eyebrow">QUICK GRAPHICS</div>
+            <h3>Graphic / Thumbnail Creator</h3>
+            <form id="image-form">
+              <label>Visual prompt<input name="prompt" placeholder="Roblox neon city, fast gaming documentary visual" required></label>
+              <label>Headline <span>(optional)</span><input name="headline" placeholder="THIS GAME JUST EXPLODED"></label>
+              <label>Aspect ratio<select name="aspect">
+                <option value="9:16">9:16 — Short / Story</option>
+                <option value="16:9">16:9 — Thumbnail</option>
+                <option value="1:1">1:1 — Square</option>
+              </select></label>
+              <button class="ghost" type="submit">CREATE QUICK GRAPHIC</button>
+            </form>
+          </section>
+          <section class="panel">
+            <div class="section-head">
+              <div><div class="eyebrow">LIBRARY</div><h2>Generated Images</h2></div>
+              <button id="refresh-images" class="ghost">Refresh</button>
+            </div>
+            <div id="image-grid" class="image-grid"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-page" id="tab-review">
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <div class="eyebrow">REVIEW</div>
+              <h2>Shorts Queue</h2>
+              <p class="sub">Players stay loaded while job progress refreshes, so videos no longer restart every few seconds.</p>
+            </div>
+            <button id="refresh" class="ghost">Refresh</button>
+          </div>
+          <div id="queue" class="queue"></div>
+        </section>
       </section>
     </main>
   </div>
@@ -69,6 +189,7 @@
       <div class="actions"></div>
     </article>
   </template>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
