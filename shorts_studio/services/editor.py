@@ -179,6 +179,8 @@ def render(
             vf = (
                 "scale=1080:1920:force_original_aspect_ratio=increase,"
                 "crop=1080:1920,"
+                "eq=contrast=1.05:saturation=1.08:gamma=0.99,"
+                "unsharp=5:5:0.42:5:5:0.0,"
                 "fps=30,format=yuv420p"
             )
             _run([
@@ -190,10 +192,14 @@ def render(
                 str(clip),
             ])
         else:
+            zoom_speed = 0.0010 if idx % 2 else 0.00135
+            zoom_cap = 1.09 if idx % 2 else 1.12
             vf = (
                 "scale=1080:1920:force_original_aspect_ratio=increase,"
                 "crop=1080:1920,"
-                f"zoompan=z='min(zoom+0.0012,1.10)':d={frames}:s=1080x1920:fps=30,"
+                f"zoompan=z='min(zoom+{zoom_speed:.5f},{zoom_cap:.2f})':d={frames}:s=1080x1920:fps=30,"
+                "eq=contrast=1.04:saturation=1.07:gamma=0.99,"
+                "unsharp=5:5:0.34:5:5:0.0,"
                 "format=yuv420p"
             )
             _run([
