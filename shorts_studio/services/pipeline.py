@@ -15,6 +15,7 @@ from .research import (
     write_relatable_script,
 )
 from .retention import optimize_retention
+from .ollama_client import unload_model
 from .tts import render_scene
 from .visuals import prepare_visual
 
@@ -112,7 +113,14 @@ def run_pipeline(job_id: str) -> None:
         manifest["script"] = script
         manifest["retention"] = script.get("retention", {})
 
-        _stage(job_id, "Generating human-style narration", 55)
+        _stage(job_id, "Creating metadata", 50)
+        metadata = create_metadata(selected_topic, script)
+        manifest["metadata"] = metadata
+
+        # Writing is complete. Free Qwen before ComfyUI/Wan takes the GPU.
+        unload_model()
+
+        _stage(job_id, "Generating human-style narration", 57)
         audio_dir = job_dir / "audio"
         audio_dir.mkdir(exist_ok=True)
         scene_audio = []
@@ -126,7 +134,7 @@ def run_pipeline(job_id: str) -> None:
             scene_audio.append(audio)
         manifest["audio"] = scene_audio
 
-        _stage(job_id, "Generating real scene media", 67)
+        _stage(job_id, "Generating real scene media", 69)
         visuals = []
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
             visuals.append(
@@ -152,13 +160,9 @@ def run_pipeline(job_id: str) -> None:
 
         manifest["visuals"] = visuals
 
-        _stage(job_id, "Editing video + captions", 81)
+        _stage(job_id, "Editing video + captions", 85)
         render_info = render(job_dir, scene_audio, visuals)
         manifest["render"] = render_info
-
-        _stage(job_id, "Creating metadata", 92)
-        metadata = create_metadata(selected_topic, script)
-        manifest["metadata"] = metadata
 
         _stage(job_id, "Running quality checks", 96)
         duration = float(render_info["duration"])
