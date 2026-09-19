@@ -150,6 +150,8 @@ def run_pipeline(job_id: str) -> None:
         )
         external_visuals = [v for v in visuals if v["kind"] == "wikimedia_commons"]
         missing_attribution = sum(1 for v in external_visuals if not v.get("attribution"))
+        fallback_visuals = [v for v in visuals if v["kind"] == "storyboard_fallback"]
+        ai_visuals = [v for v in visuals if v["kind"] == "ai_generated_scene"]
         quality = {
             "duration_ok": 20 <= duration <= 45,
             "duration_seconds": duration,
@@ -159,6 +161,9 @@ def run_pipeline(job_id: str) -> None:
             "missing_scene_citations": missing_citations,
             "visual_rights_ok": missing_attribution == 0,
             "external_visual_count": len(external_visuals),
+            "ai_visual_count": len(ai_visuals),
+            "fallback_visual_count": len(fallback_visuals),
+            "visual_content_ok": len(fallback_visuals) == 0,
             "retention_ok": bool((script.get("retention") or {}).get("passed")),
             "retention_score": (script.get("retention") or {}).get("total"),
             "hook_score": ((script.get("retention") or {}).get("scores") or {}).get("hook"),
@@ -174,6 +179,7 @@ def run_pipeline(job_id: str) -> None:
                 "sources_ok",
                 "scene_citations_ok",
                 "visual_rights_ok",
+                "visual_content_ok",
                 "retention_ok",
                 "output_exists",
             )
