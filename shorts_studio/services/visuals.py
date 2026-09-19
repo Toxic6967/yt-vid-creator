@@ -21,6 +21,15 @@ def _strip_html(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _license_allowed(name: str) -> bool:
+    key = re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+    if "public domain" in key or key.startswith("pd ") or key == "pd" or "cc0" in key:
+        return True
+    if "cc by" in key and all(blocked not in key for blocked in (" by sa", " nc", " nd")):
+        return True
+    return False
+
+
 def _font(size: int, bold: bool = False):
     candidates = [
         Path("C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf"),
@@ -62,8 +71,7 @@ def search_commons(query: str) -> dict[str, Any] | None:
             continue
         meta = info.get("extmetadata") or {}
         license_name = _strip_html((meta.get("LicenseShortName") or {}).get("value", ""))
-        license_key = license_name.lower()
-        if not any(marker in license_key for marker in ALLOWED_LICENSE_MARKERS):
+        if not _license_allowed(license_name):
             continue
         return {
             "title": page.get("title", ""),
