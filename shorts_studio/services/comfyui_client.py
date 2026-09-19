@@ -18,6 +18,32 @@ class ComfyUIError(RuntimeError):
     pass
 
 
+def _extract_choices(spec: Any) -> list[str]:
+    if not isinstance(spec, list) or not spec:
+        return []
+    first = spec[0]
+    if isinstance(first, list):
+        return [str(x) for x in first]
+    if all(isinstance(x, str) for x in spec):
+        return [str(x) for x in spec]
+    return []
+
+
+def _basename(value: str) -> str:
+    return str(value).replace("\\", "/").rsplit("/", 1)[-1].casefold()
+
+
+def _match_model_choice(choices: list[str], expected: str) -> str | None:
+    for choice in choices:
+        if choice.casefold() == expected.casefold():
+            return choice
+    expected_base = _basename(expected)
+    for choice in choices:
+        if _basename(choice) == expected_base:
+            return choice
+    return None
+
+
 def health() -> dict[str, Any]:
     result: dict[str, Any] = {
         "ok": False,
@@ -32,6 +58,8 @@ def health() -> dict[str, Any]:
             "vae": "wan_2.1_vae.safetensors",
         },
         "missing_video_models": [],
+        "video_models_resolved": {},
+        "video_model_choices": {},
     }
     try:
         with httpx.Client(timeout=4) as client:
@@ -47,12 +75,7 @@ def health() -> dict[str, Any]:
                     node = payload.get("CheckpointLoaderSimple", payload)
                     required = ((node.get("input") or {}).get("required") or {})
                     spec = required.get("ckpt_name")
-                    choices = []
-                    if isinstance(spec, list) and spec:
-                        if isinstance(spec[0], list):
-                            choices = spec[0]
-                        elif all(isinstance(x, str) for x in spec):
-                            choices = spec
+                    choices = _extract_choices(spec)
                     result["checkpoints"] = choices[:40]
                     result["image_ready"] = bool(choices)
             except Exception:
@@ -62,26 +85,29 @@ def health() -> dict[str, Any]:
             if workflow_exists:
                 try:
                     missing = []
+                    resolved = {}
+                    model_choices = {}
                     model_checks = (
-                        ("UNETLoader", "unet_name", result["video_models"]["diffusion"]),
-                        ("CLIPLoader", "clip_name", result["video_models"]["text_encoder"]),
-                        ("VAELoader", "vae_name", result["video_models"]["vae"]),
+                        ("diffusion", "UNETLoader", "unet_name", result["video_models"]["diffusion"]),
+                        ("text_encoder", "CLIPLoader", "clip_name", result["video_models"]["text_encoder"]),
+                        ("vae", "VAELoader", "vae_name", result["video_models"]["vae"]),
                     )
-                    for node_name, field_name, expected in model_checks:
+                    for key, node_name, field_name, expected in model_checks:
                         resp = client.get(f"{settings.comfyui_base_url}/object_info/{node_name}")
                         resp.raise_for_status()
                         payload = resp.json()
                         node = payload.get(node_name, payload)
                         required = ((node.get("input") or {}).get("required") or {})
-                        spec = required.get(field_name)
-                        choices = []
-                        if isinstance(spec, list) and spec:
-                            if isinstance(spec[0], list):
-                                choices = spec[0]
-                            elif all(isinstance(x, str) for x in spec):
-                                choices = spec
-                        if expected not in choices:
+                        choices = _extract_choices(required.get(field_name))
+                        model_choices[key] = choices[:80]
+                        matched = _match_model_choice(choices, expected)
+                        if matched:
+                            resolved[key] = matched
+                        else:
                             missing.append(expected)
+
+                    result["video_model_choices"] = model_choices
+                    result["video_models_resolved"] = resolved
                     result["missing_video_models"] = missing
                     result["video_ready"] = not missing
                 except Exception as exc:
@@ -213,6 +239,27 @@ def _video_workflow(
         workflow = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
         raise ComfyUIError(f"Could not read video workflow: {exc}") from exc
+
+    state = health()
+    if not state.get("video_ready"):
+        missing = ", ".join(state.get("missing_video_models") or [])
+        raise ComfyUIError(
+            "Local AI video is not ready."
+            + (f" Missing Wan model files: {missing}" if missing else "")
+        )
+
+    resolved = state.get("video_models_resolved") or {}
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        class_type = node.get("class_type")
+        inputs = node.get("inputs") or {}
+        if class_type == "UNETLoader" and resolved.get("diffusion"):
+            inputs["unet_name"] = resolved["diffusion"]
+        elif class_type == "CLIPLoader" and resolved.get("text_encoder"):
+            inputs["clip_name"] = resolved["text_encoder"]
+        elif class_type == "VAELoader" and resolved.get("vae"):
+            inputs["vae_name"] = resolved["vae"]
 
     width, height = ((480, 832) if aspect == "9:16" else (832, 480))
     # Keep 1.3B generations practical on an 8 GB GPU.
