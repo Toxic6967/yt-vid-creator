@@ -10,7 +10,12 @@ import httpx
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from ..config import settings
-from .comfyui_client import generate_ai_image, generate_ai_video, health as comfyui_health
+from .comfyui_client import (
+    generate_ai_image,
+    generate_ai_video,
+    generate_story_video_from_image,
+    health as comfyui_health,
+)
 from .media_director import (
     enhance_image_prompt,
     enhance_video_prompt,
@@ -284,8 +289,64 @@ def prepare_visual(
                 or priority == "high"
                 or (priority == "medium" and index % 3 == 0)
             )
-        else:
-            wants_video = role in {"hook", "reveal", "payoff"} or index % 4 == 0
+
+            # Story mode is keyframe-first: create the exact character/shot first,
+            # then animate that frame when the stronger I2V backend is installed.
+            keyframe = _try_ai_scene(scene, destination, index, topic)
+            if not keyframe:
+                raise RuntimeError(
+                    "Could not create the cinematic story keyframe. "
+                    "Story mode will not fall back to generic block characters."
+                )
+
+            state = comfyui_health()
+            if wants_video and state.get("story_video_ready"):
+                direction = enhance_video_prompt(
+                    scene_video_prompt(scene, topic),
+                    style="roblox_cinematic",
+                    camera="auto",
+                    purpose="hook" if role == "hook" else (
+                        "reveal" if role in {"reveal", "payoff"} else "b_roll"
+                    ),
+                    seconds=max(2, min(4, round(duration))),
+                )
+                try:
+                    animated = generate_story_video_from_image(
+                        prompt=direction["prompt"],
+                        negative_prompt=direction["negative_prompt"],
+                        image_path=keyframe["path"],
+                        seconds=max(2, min(4, round(duration))),
+                        job_id=f"storyi2v_{index}_{random.randint(1000,9999)}",
+                    )
+                    return {
+                        "path": animated["path"],
+                        "kind": "ai_generated_video",
+                        "backend": animated.get("backend", "ltx_i2v"),
+                        "query": scene.get("visual_query") or topic,
+                        "attribution": None,
+                        "prompt": direction["prompt"],
+                        "seed": animated.get("seed"),
+                        "keyframe_path": keyframe["path"],
+                        "keyframe_prompt": keyframe.get("prompt"),
+                    }
+                except Exception as exc:
+                    # Keep the polished keyframe instead of replacing it with a poor clip.
+                    keyframe["animation_error"] = str(exc)
+                    keyframe["kind"] = "ai_generated_scene"
+                    return keyframe
+
+            if wants_video and state.get("video_ready"):
+                # Legacy Wan fallback only for the most important motion beats.
+                # We keep the high-quality keyframe for all other story beats.
+                if role in {"hook", "reveal", "payoff"} or priority == "high":
+                    video = _try_ai_video_scene(scene, job_dir, index, topic, duration)
+                    if video and video.get("kind") == "ai_generated_video":
+                        video["keyframe_path"] = keyframe["path"]
+                        return video
+
+            return keyframe
+
+        wants_video = role in {"hook", "reveal", "payoff"} or index % 4 == 0
         if wants_video:
             video = _try_ai_video_scene(scene, job_dir, index, topic, duration)
             if video and video.get("kind") == "ai_generated_video":
