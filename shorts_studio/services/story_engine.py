@@ -68,21 +68,45 @@ def _default_character(idx: int) -> dict[str, str]:
 def _normalise_characters(raw: Any) -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     items = raw if isinstance(raw, list) else []
+    canonical = {
+        _default_character(i)["name"].lower(): _default_character(i)
+        for i in range(3)
+    }
+    canonical.update({
+        _default_character(i)["id"].lower(): _default_character(i)
+        for i in range(3)
+    })
+
     for idx, item in enumerate(items[:3]):
         if not isinstance(item, dict):
             continue
-        fallback = _default_character(idx)
-        cid = _clean(item.get("id") or item.get("name") or fallback["id"], 24).lower()
+
+        requested_name = _clean(item.get("name"), 30).lower()
+        requested_id = _clean(item.get("id"), 24).lower()
+        known = canonical.get(requested_id) or canonical.get(requested_name)
+        fallback = known or _default_character(idx)
+
+        cid = _clean(
+            fallback["id"] if known else (item.get("id") or item.get("name") or fallback["id"]),
+            24,
+        ).lower()
         cid = re.sub(r"[^a-z0-9_]+", "_", cid).strip("_") or fallback["id"]
+
         out.append(
             {
                 "id": cid,
-                "name": _clean(item.get("name") or fallback["name"], 30),
-                "gender": _clean(item.get("gender") or fallback["gender"], 12).lower(),
-                "visual_identity": _clean(
-                    item.get("visual_identity") or fallback["visual_identity"], 320
+                "name": fallback["name"] if known else _clean(item.get("name") or fallback["name"], 30),
+                "gender": fallback["gender"] if known else _clean(item.get("gender") or fallback["gender"], 12).lower(),
+                "visual_identity": (
+                    fallback["visual_identity"]
+                    if known
+                    else _clean(item.get("visual_identity") or fallback["visual_identity"], 320)
                 ),
-                "personality": _clean(item.get("personality") or fallback["personality"], 180),
+                "personality": (
+                    fallback["personality"]
+                    if known
+                    else _clean(item.get("personality") or fallback["personality"], 180)
+                ),
                 "voice_profile": (
                     ("character-female-" + str(1 + sum(1 for c in out if c.get("gender") == "female")))
                     if _clean(item.get("gender") or fallback["gender"], 12).lower() == "female"
@@ -197,6 +221,10 @@ def _story_prompt(
     genre: str,
 ) -> str:
     requested = idea.strip() if idea else "Use the selected premise supplied by the commissioning editor."
+    recurring_cast = "\n".join(
+        f"- {_default_character(i)['name']}: {_default_character(i)['visual_identity']}; personality: {_default_character(i)['personality']}"
+        for i in range(3)
+    )
     return f"""
 AUDIENCE: {audience}
 CHANNEL TONE: {tone}
@@ -204,7 +232,13 @@ TARGET LENGTH: {target_seconds} seconds
 GENRE: {genre}
 USER IDEA: {requested}
 
+RECURRING CHANNEL CAST:
+{recurring_cast}
+
 Create a short cinematic Roblox mini-movie for YouTube Shorts.
+Use 1-3 characters from the recurring cast whenever possible. Keep their names, exact
+hair/clothing/colours and core personalities unchanged. A one-off side character is allowed
+only when the plot genuinely needs one.
 
 The audience is real young Roblox players, not toddlers. It must feel like a situation,
 fear, joke, win, loss, betrayal, grind, teammate problem, rare-item moment, horror-game
