@@ -23,9 +23,15 @@ def health() -> dict[str, Any]:
         "ok": False,
         "base_url": settings.comfyui_base_url,
         "image_ready": False,
-        "video_ready": Path(settings.comfyui_video_workflow).exists(),
+        "video_ready": False,
         "video_workflow": settings.comfyui_video_workflow,
         "checkpoints": [],
+        "video_models": {
+            "diffusion": "wan2.1_t2v_1.3B_fp16.safetensors",
+            "text_encoder": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+            "vae": "wan_2.1_vae.safetensors",
+        },
+        "missing_video_models": [],
     }
     try:
         with httpx.Client(timeout=4) as client:
@@ -51,6 +57,35 @@ def health() -> dict[str, Any]:
                     result["image_ready"] = bool(choices)
             except Exception:
                 pass
+
+            workflow_exists = Path(settings.comfyui_video_workflow).exists()
+            if workflow_exists:
+                try:
+                    missing = []
+                    model_checks = (
+                        ("UNETLoader", "unet_name", result["video_models"]["diffusion"]),
+                        ("CLIPLoader", "clip_name", result["video_models"]["text_encoder"]),
+                        ("VAELoader", "vae_name", result["video_models"]["vae"]),
+                    )
+                    for node_name, field_name, expected in model_checks:
+                        resp = client.get(f"{settings.comfyui_base_url}/object_info/{node_name}")
+                        resp.raise_for_status()
+                        payload = resp.json()
+                        node = payload.get(node_name, payload)
+                        required = ((node.get("input") or {}).get("required") or {})
+                        spec = required.get(field_name)
+                        choices = []
+                        if isinstance(spec, list) and spec:
+                            if isinstance(spec[0], list):
+                                choices = spec[0]
+                            elif all(isinstance(x, str) for x in spec):
+                                choices = spec
+                        if expected not in choices:
+                            missing.append(expected)
+                    result["missing_video_models"] = missing
+                    result["video_ready"] = not missing
+                except Exception as exc:
+                    result["video_check_error"] = str(exc)
     except Exception as exc:
         result["error"] = str(exc)
     return result
@@ -180,8 +215,9 @@ def _video_workflow(
         raise ComfyUIError(f"Could not read video workflow: {exc}") from exc
 
     width, height = ((480, 832) if aspect == "9:16" else (832, 480))
-    # Wan 2.1 workflows commonly use 16 fps and 81 frames for ~5 seconds.
-    frames = max(49, min(161, int(seconds * 16) + 1))
+    # Keep 1.3B generations practical on an 8 GB GPU.
+    # 33-81 frames at 16 fps gives roughly 2-5 seconds of real motion.
+    frames = max(33, min(81, int(seconds * 16) + 1))
     return _replace_placeholders(
         workflow,
         {
@@ -312,6 +348,12 @@ def generate_ai_video(
     state = health()
     if not state.get("ok"):
         raise ComfyUIError("ComfyUI is not running.")
+    if not state.get("video_ready"):
+        missing = ", ".join(state.get("missing_video_models") or [])
+        raise ComfyUIError(
+            "Local AI video is not ready."
+            + (f" Missing Wan model files: {missing}" if missing else "")
+        )
     seed = int(seed) if seed is not None else random.randint(0, 2_147_483_647)
     workflow = _video_workflow(prompt, negative_prompt, aspect, seconds, motion_strength, seed)
     prompt_id = _queue_workflow(workflow)
