@@ -191,9 +191,13 @@ async function loadMediaHealth(){
         ? `ComfyUI connected • image checkpoint ready (${state.checkpoints[0] || 'detected'})`
         : 'ComfyUI connected, but no image checkpoint is installed yet.';
       imageStatus.className='notice '+(state.image_ready?'ok':'');
-      videoStatus.textContent = state.video_ready
-        ? 'ComfyUI connected • Wan/API video workflow ready'
-        : 'ComfyUI connected, but the video_api.json workflow is not installed yet.';
+      if(state.video_ready){
+        videoStatus.textContent='ComfyUI connected • Wan 2.1 video engine ready';
+      }else if((state.missing_video_models||[]).length){
+        videoStatus.textContent='ComfyUI connected • Wan models not detected: '+state.missing_video_models.join(', ');
+      }else{
+        videoStatus.textContent='ComfyUI connected, but the Wan video workflow is not ready yet.';
+      }
       videoStatus.className='notice '+(state.video_ready?'ok':'');
       imageButton.disabled=!state.image_ready;
       videoButton.disabled=!state.video_ready;
