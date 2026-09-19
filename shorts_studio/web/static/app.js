@@ -353,9 +353,18 @@ function updateJobCard(node, job){
   const details=node.querySelector('.job-details');
   if(manifest.metadata){
     const q=manifest.quality||{};
+    const script=manifest.script||{};
+    const chars=(script.characters||[]).map(c=>c.name).filter(Boolean).join(' • ');
+    const storyBits=[];
+    if(script.genre) storyBits.push(esc(script.genre));
+    if(chars) storyBits.push(esc(chars));
+    if(q.hook_score!=null) storyBits.push(`hook ${q.hook_score}`);
+    if(q.relatability_score!=null) storyBits.push(`relatable ${q.relatability_score}`);
+    if(q.payoff_score!=null) storyBits.push(`payoff ${q.payoff_score}`);
     details.innerHTML=`<b>${esc(manifest.metadata.title)}</b><br>${esc(manifest.metadata.description)}<br>`+
       `${(manifest.metadata.hashtags||[]).map(esc).join(' ')}<br>`+
-      `<span class="rights">${esc(manifest.content_type||job.content_type||'auto')} • story/retention ${q.retention_score??'?'} • motion clips ${q.ai_video_count||0} • cinematic stills ${q.ai_visual_count||0} • ${q.duration_seconds||'?'} sec</span>`;
+      (storyBits.length ? `<span class="rights">${storyBits.join(' • ')}</span><br>` : '')+
+      `<span class="rights">${esc(manifest.content_type||job.content_type||'auto')} • story/retention ${q.retention_score??'?'} • cinematic motion ${q.cinematic_i2v_count||0} • cinematic stills ${q.ai_visual_count||0} • ${q.duration_seconds||'?'} sec</span>`;
   }
 
   const actions=node.querySelector('.actions');
