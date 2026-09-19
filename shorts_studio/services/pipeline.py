@@ -188,7 +188,20 @@ def run_pipeline(job_id: str) -> None:
             scene_audio.append(audio)
         manifest["audio"] = scene_audio
 
-        _stage(job_id, "Generating real scene media", 69)
+        if content_type == "story":
+            from .comfyui_client import health as comfyui_health
+            story_media_state = comfyui_health()
+            if not story_media_state.get("story_video_ready"):
+                missing_story = ", ".join(
+                    story_media_state.get("missing_story_video_models") or []
+                )
+                raise RuntimeError(
+                    "Cinematic Story mode needs the keyframe-to-video backend before rendering. "
+                    "Run install_story_video_models.bat, restart ComfyUI, then regenerate."
+                    + (f" Missing: {missing_story}." if missing_story else "")
+                )
+
+        _stage(job_id, "Generating cinematic story scenes", 69)
         visuals = []
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
             visuals.append(
@@ -202,7 +215,16 @@ def run_pipeline(job_id: str) -> None:
             )
 
         real_video_count = sum(1 for v in visuals if v.get("kind") == "ai_generated_video")
-        if "roblox" in job["niche"].lower() and real_video_count < 3:
+        ltx_video_count = sum(
+            1 for v in visuals
+            if v.get("kind") == "ai_generated_video" and v.get("backend") == "ltx_i2v"
+        )
+        if content_type == "story" and ltx_video_count < 3:
+            raise RuntimeError(
+                "Story render stopped because fewer than 3 cinematic keyframe-to-video shots completed. "
+                "This prevents a weak slideshow or old-looking fallback video from being marked finished."
+            )
+        if content_type != "story" and "roblox" in job["niche"].lower() and real_video_count < 3:
             from .comfyui_client import health as comfyui_health
             media_state = comfyui_health()
             missing = ", ".join(media_state.get("missing_video_models") or [])
@@ -242,9 +264,17 @@ def run_pipeline(job_id: str) -> None:
             "external_visual_count": len(external_visuals),
             "ai_visual_count": len(ai_visuals),
             "ai_video_count": len(ai_videos),
+            "cinematic_i2v_count": sum(1 for v in ai_videos if v.get("backend") == "ltx_i2v"),
             "fallback_visual_count": len(fallback_visuals),
             "visual_content_ok": len(fallback_visuals) == 0 and (
-                "roblox" not in job["niche"].lower() or len(ai_videos) >= 3
+                (
+                    content_type == "story"
+                    and sum(1 for v in ai_videos if v.get("backend") == "ltx_i2v") >= 3
+                )
+                or (
+                    content_type != "story"
+                    and ("roblox" not in job["niche"].lower() or len(ai_videos) >= 3)
+                )
             ),
             "retention_ok": bool((script.get("retention") or {}).get("passed")),
             "retention_score": (script.get("retention") or {}).get("total"),
