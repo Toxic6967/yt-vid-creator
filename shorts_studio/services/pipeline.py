@@ -126,10 +126,30 @@ def run_pipeline(job_id: str) -> None:
             scene_audio.append(audio)
         manifest["audio"] = scene_audio
 
-        _stage(job_id, "Directing scene visuals", 67)
+        _stage(job_id, "Generating real scene media", 67)
         visuals = []
-        for idx, scene in enumerate(script["scenes"], start=1):
-            visuals.append(prepare_visual(scene, job_dir, idx, selected_topic))
+        for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
+            visuals.append(
+                prepare_visual(
+                    scene,
+                    job_dir,
+                    idx,
+                    selected_topic,
+                    duration=float(audio["duration"]),
+                )
+            )
+
+        real_video_count = sum(1 for v in visuals if v.get("kind") == "ai_generated_video")
+        if "roblox" in job["niche"].lower() and real_video_count < 3:
+            from .comfyui_client import health as comfyui_health
+            media_state = comfyui_health()
+            missing = ", ".join(media_state.get("missing_video_models") or [])
+            raise RuntimeError(
+                "This Short does not have enough genuine video clips yet. "
+                "Full Auto now requires at least 3 real AI video scenes for Roblox Shorts."
+                + (f" Missing Wan files: {missing}." if missing else "")
+            )
+
         manifest["visuals"] = visuals
 
         _stage(job_id, "Editing video + captions", 81)
@@ -150,8 +170,9 @@ def run_pipeline(job_id: str) -> None:
         )
         external_visuals = [v for v in visuals if v["kind"] == "wikimedia_commons"]
         missing_attribution = sum(1 for v in external_visuals if not v.get("attribution"))
-        fallback_visuals = [v for v in visuals if v["kind"] == "storyboard_fallback"]
-        ai_visuals = [v for v in visuals if v["kind"] == "ai_generated_scene"]
+        fallback_visuals = [v for v in visuals if v.get("kind") == "storyboard_fallback"]
+        ai_visuals = [v for v in visuals if v.get("kind") == "ai_generated_scene"]
+        ai_videos = [v for v in visuals if v.get("kind") == "ai_generated_video"]
         quality = {
             "duration_ok": 20 <= duration <= 45,
             "duration_seconds": duration,
@@ -162,8 +183,11 @@ def run_pipeline(job_id: str) -> None:
             "visual_rights_ok": missing_attribution == 0,
             "external_visual_count": len(external_visuals),
             "ai_visual_count": len(ai_visuals),
+            "ai_video_count": len(ai_videos),
             "fallback_visual_count": len(fallback_visuals),
-            "visual_content_ok": len(fallback_visuals) == 0,
+            "visual_content_ok": len(fallback_visuals) == 0 and (
+                "roblox" not in job["niche"].lower() or len(ai_videos) >= 3
+            ),
             "retention_ok": bool((script.get("retention") or {}).get("passed")),
             "retention_score": (script.get("retention") or {}).get("total"),
             "hook_score": ((script.get("retention") or {}).get("scores") or {}).get("hook"),
