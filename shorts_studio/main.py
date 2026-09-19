@@ -75,7 +75,14 @@ def api_health() -> dict:
     }
 
 
-def _queue_short(channel_name: str, niche: str, topic: str | None, voice: str, target_seconds: int) -> dict:
+def _queue_short(
+    channel_name: str,
+    niche: str,
+    topic: str | None,
+    voice: str,
+    target_seconds: int,
+    content_type: str = "auto",
+) -> dict:
     job_id = uuid.uuid4().hex[:12]
     create_job(
         {
@@ -83,6 +90,7 @@ def _queue_short(channel_name: str, niche: str, topic: str | None, voice: str, t
             "channel_name": channel_name.strip(),
             "niche": niche.strip(),
             "requested_topic": topic,
+            "content_type": content_type,
             "voice": voice,
             "target_seconds": target_seconds,
         }
@@ -110,6 +118,7 @@ def auto_generate() -> dict:
         None,
         profile["voice"],
         int(profile["target_seconds"]),
+        "auto",
     )
 
 
@@ -141,6 +150,7 @@ def make_topic_short(topic_id: str) -> dict:
         topic["title"],
         profile["voice"],
         int(profile["target_seconds"]),
+        (topic.get("evidence") or {}).get("content_type", "trend"),
     )
 
 
@@ -165,6 +175,7 @@ def api_generate(payload: GenerateRequest) -> dict:
         payload.topic,
         payload.voice,
         payload.target_seconds,
+        payload.content_type,
     )
 
 
@@ -190,6 +201,7 @@ def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
         payload.topic or old.get("selected_topic") or old.get("requested_topic"),
         old["voice"],
         old["target_seconds"],
+        old.get("content_type", "auto"),
     )
 
 
