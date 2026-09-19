@@ -60,6 +60,14 @@ def health() -> dict[str, Any]:
         "missing_video_models": [],
         "video_models_resolved": {},
         "video_model_choices": {},
+        "story_video_ready": False,
+        "story_video_workflow": settings.comfyui_story_video_workflow,
+        "story_video_models": {
+            "checkpoint": "ltxv-2b-0.9.8-distilled-fp8.safetensors",
+            "text_encoder": "t5xxl_fp16.safetensors",
+        },
+        "story_video_models_resolved": {},
+        "missing_story_video_models": [],
     }
     try:
         with httpx.Client(timeout=4) as client:
@@ -112,6 +120,52 @@ def health() -> dict[str, Any]:
                     result["video_ready"] = not missing
                 except Exception as exc:
                     result["video_check_error"] = str(exc)
+            story_workflow_exists = Path(settings.comfyui_story_video_workflow).exists()
+            if story_workflow_exists:
+                try:
+                    story_missing = []
+                    story_resolved = {}
+
+                    checkpoint_choices = result.get("checkpoints") or []
+                    expected_checkpoint = result["story_video_models"]["checkpoint"]
+                    matched_checkpoint = _match_model_choice(checkpoint_choices, expected_checkpoint)
+                    if matched_checkpoint:
+                        story_resolved["checkpoint"] = matched_checkpoint
+                    else:
+                        story_missing.append(expected_checkpoint)
+
+                    clip_resp = client.get(f"{settings.comfyui_base_url}/object_info/CLIPLoader")
+                    clip_resp.raise_for_status()
+                    clip_payload = clip_resp.json()
+                    clip_node = clip_payload.get("CLIPLoader", clip_payload)
+                    clip_required = ((clip_node.get("input") or {}).get("required") or {})
+                    clip_choices = _extract_choices(clip_required.get("clip_name"))
+                    expected_text = result["story_video_models"]["text_encoder"]
+                    matched_text = _match_model_choice(clip_choices, expected_text)
+                    if matched_text:
+                        story_resolved["text_encoder"] = matched_text
+                    else:
+                        story_missing.append(expected_text)
+
+                    required_story_nodes = (
+                        "LTXVImgToVideo",
+                        "LTXVConditioning",
+                        "LTXVScheduler",
+                        "SamplerCustom",
+                        "KSamplerSelect",
+                        "CreateVideo",
+                        "SaveVideo",
+                    )
+                    for node_name in required_story_nodes:
+                        node_resp = client.get(f"{settings.comfyui_base_url}/object_info/{node_name}")
+                        if not node_resp.is_success:
+                            story_missing.append(f"ComfyUI node: {node_name}")
+
+                    result["story_video_models_resolved"] = story_resolved
+                    result["missing_story_video_models"] = story_missing
+                    result["story_video_ready"] = not story_missing
+                except Exception as exc:
+                    result["story_video_check_error"] = str(exc)
     except Exception as exc:
         result["error"] = str(exc)
     return result
@@ -137,7 +191,23 @@ def _checkpoint_name() -> str:
             "ComfyUI is running but no image checkpoint is installed. "
             "Install an image checkpoint in ComfyUI/models/checkpoints."
         )
-    return available[0]
+
+    preferred_names = (
+        "sd_xl_base_1.0.safetensors",
+        "sdxl",
+        "juggernaut",
+        "dreamshaper",
+    )
+    for preferred in preferred_names:
+        for choice in available:
+            if preferred in choice.lower():
+                return choice
+
+    image_candidates = [
+        choice for choice in available
+        if all(marker not in choice.lower() for marker in ("ltx", "wan", "video"))
+    ]
+    return image_candidates[0] if image_candidates else available[0]
 
 
 def _image_size(aspect: str) -> tuple[int, int]:
@@ -280,6 +350,76 @@ def _video_workflow(
     )
 
 
+
+
+def _upload_input_image(image_path: Path) -> str:
+    if not image_path.exists():
+        raise ComfyUIError(f"Story keyframe image is missing: {image_path}")
+    filename = f"shorts_studio_{uuid.uuid4().hex[:10]}{image_path.suffix.lower() or '.png'}"
+    try:
+        with image_path.open("rb") as fh, httpx.Client(timeout=90) as client:
+            response = client.post(
+                f"{settings.comfyui_base_url}/upload/image",
+                files={"image": (filename, fh, "image/png")},
+                data={"type": "input", "overwrite": "true"},
+            )
+            response.raise_for_status()
+            body = response.json()
+    except Exception as exc:
+        raise ComfyUIError(f"Could not upload story keyframe to ComfyUI: {exc}") from exc
+    return str(body.get("name") or filename)
+
+
+def _story_i2v_workflow(
+    prompt: str,
+    negative_prompt: str,
+    image_path: Path,
+    seconds: int,
+    seed: int,
+) -> dict[str, Any]:
+    path = Path(settings.comfyui_story_video_workflow)
+    if not path.exists():
+        raise ComfyUIError(f"Story image-to-video workflow missing: {path}")
+
+    state = health()
+    if not state.get("story_video_ready"):
+        missing = ", ".join(state.get("missing_story_video_models") or [])
+        raise ComfyUIError(
+            "Cinematic story image-to-video is not ready."
+            + (f" Missing: {missing}" if missing else "")
+        )
+
+    try:
+        workflow = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ComfyUIError(f"Could not read story video workflow: {exc}") from exc
+
+    uploaded_name = _upload_input_image(image_path)
+    resolved = state.get("story_video_models_resolved") or {}
+
+    frames = max(49, min(97, (round(max(2.0, min(4.0, seconds)) * 24) // 8) * 8 + 1))
+    width, height = 512, 768
+
+    return _replace_placeholders(
+        workflow,
+        {
+            "__LTX_CHECKPOINT__": resolved.get(
+                "checkpoint", state["story_video_models"]["checkpoint"]
+            ),
+            "__LTX_TEXT_ENCODER__": resolved.get(
+                "text_encoder", state["story_video_models"]["text_encoder"]
+            ),
+            "__INPUT_IMAGE__": uploaded_name,
+            "__PROMPT__": prompt,
+            "__NEGATIVE__": negative_prompt,
+            "__SEED__": seed,
+            "__WIDTH__": width,
+            "__HEIGHT__": height,
+            "__FRAMES__": frames,
+            "__I2V_STRENGTH__": 0.88,
+        },
+    )
+
 def _queue_workflow(workflow: dict[str, Any]) -> str:
     payload = {"prompt": workflow, "client_id": str(uuid.uuid4())}
     try:
@@ -410,6 +550,35 @@ def generate_ai_video(
     _download_artifact(ref, output)
     return {"path": str(output), "prompt_id": prompt_id, "seed": seed}
 
+
+
+def generate_story_video_from_image(
+    prompt: str,
+    negative_prompt: str,
+    image_path: str | Path,
+    seconds: int,
+    job_id: str,
+    seed: int | None = None,
+) -> dict[str, Any]:
+    seed = int(seed) if seed is not None else random.randint(0, 2_147_483_647)
+    workflow = _story_i2v_workflow(
+        prompt,
+        negative_prompt,
+        Path(image_path),
+        seconds,
+        seed,
+    )
+    prompt_id = _queue_workflow(workflow)
+    ref = _wait_for_artifact(prompt_id, timeout_seconds=3600)
+    suffix = Path(ref["filename"]).suffix or ".mp4"
+    output = MEDIA_OUTPUT_DIR / f"{job_id}{suffix}"
+    _download_artifact(ref, output)
+    return {
+        "path": str(output),
+        "prompt_id": prompt_id,
+        "seed": seed,
+        "backend": "ltx_i2v",
+    }
 
 def run_image_job(job_id: str, request: dict[str, Any]) -> None:
     try:
