@@ -10,6 +10,8 @@ import httpx
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from ..config import settings
+from .comfyui_client import generate_ai_image, health as comfyui_health
+from .media_director import enhance_image_prompt, scene_image_prompt
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 ALLOWED_LICENSE_MARKERS = ("cc by", "cc-by", "cc by-sa", "cc-by-sa", "cc0", "public domain", "pd-")
@@ -93,45 +95,106 @@ def _download(url: str, destination: Path) -> None:
     destination.write_bytes(response.content)
 
 
-def _make_procedural_card(destination: Path, topic: str, emphasis: str, seed: int) -> None:
+def _make_storyboard_visual(
+    destination: Path,
+    topic: str,
+    scene: dict,
+    seed: int,
+) -> None:
     rng = random.Random(seed)
     width, height = 1080, 1920
-    base = Image.new("RGB", (width, height), (13, 18, 28))
+    base = Image.new("RGB", (width, height), (38, 82, 166))
     draw = ImageDraw.Draw(base)
-    for _ in range(14):
-        x = rng.randint(-250, width)
-        y = rng.randint(-250, height)
-        radius = rng.randint(120, 420)
-        shade = rng.randint(25, 80)
-        draw.ellipse((x, y, x + radius, y + radius), fill=(shade, shade + rng.randint(0, 25), shade + rng.randint(10, 55)))
-    base = base.filter(ImageFilter.GaussianBlur(42))
-    overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    odraw = ImageDraw.Draw(overlay)
-    odraw.rounded_rectangle((80, 620, 1000, 1280), radius=42, fill=(7, 10, 16, 190))
-    title_font = _font(82, bold=True)
-    small_font = _font(38, bold=False)
-    label = (emphasis or topic).strip().upper()[:55]
-    words = label.split()
-    lines = []
-    line = ""
-    for word in words:
-        test = f"{line} {word}".strip()
-        if odraw.textlength(test, font=title_font) > 800 and line:
-            lines.append(line)
-            line = word
-        else:
-            line = test
-    if line:
-        lines.append(line)
-    y = 760
-    for text in lines[:4]:
-        bbox = odraw.textbbox((0, 0), text, font=title_font)
-        tw = bbox[2] - bbox[0]
-        odraw.text(((width - tw) / 2, y), text, font=title_font, fill=(255, 255, 255, 255))
-        y += 104
-    odraw.text((90, 1170), "SHORTS STUDIO • GENERATED VISUAL", font=small_font, fill=(210, 215, 225, 220))
-    final = Image.alpha_composite(base.convert("RGBA"), overlay).convert("RGB")
+
+    # Bright game-like layered background instead of a branded text card.
+    for i in range(10):
+        y = int(height * (i / 10))
+        shade = 65 + i * 8
+        draw.rectangle((0, y, width, y + height // 10 + 2), fill=(35, min(180, shade + 55), min(235, shade + 95)))
+
+    # Simple blocky Roblox-inspired player silhouette.
+    cx = width // 2 + rng.randint(-80, 80)
+    ground = 1390
+    skin = (235, 188, 135)
+    shirt = (rng.randint(55, 110), rng.randint(110, 210), rng.randint(160, 240))
+    pants = (35, 48, 76)
+    draw.rounded_rectangle((cx - 120, ground - 520, cx + 120, ground - 300), radius=35, fill=skin)
+    draw.rectangle((cx - 150, ground - 295, cx + 150, ground + 40), fill=shirt)
+    draw.rectangle((cx - 145, ground + 40, cx - 15, ground + 360), fill=pants)
+    draw.rectangle((cx + 15, ground + 40, cx + 145, ground + 360), fill=pants)
+    draw.rectangle((cx - 250, ground - 260, cx - 150, ground + 20), fill=skin)
+    draw.rectangle((cx + 150, ground - 260, cx + 250, ground + 20), fill=skin)
+
+    # Scene-specific prop cues from the requested visual.
+    query = str(scene.get("visual_query") or topic).lower()
+    if any(k in query for k in ("door", "vault", "room", "secret")):
+        draw.rounded_rectangle((90, 500, 430, 1250), radius=20, fill=(40, 46, 66), outline=(255, 221, 74), width=18)
+        draw.ellipse((365, 850, 400, 885), fill=(255, 221, 74))
+    if any(k in query for k in ("coin", "robux", "money", "rare", "item", "drop")):
+        for x, y in ((190, 350), (830, 540), (220, 1450)):
+            draw.ellipse((x - 65, y - 65, x + 65, y + 65), fill=(255, 216, 63), outline=(255, 244, 170), width=10)
+    if any(k in query for k in ("lag", "disconnect", "wifi", "server")):
+        for n in range(3):
+            r = 95 + n * 65
+            draw.arc((width - 380 - r, 280 - r, width - 380 + r, 280 + r), 205, 335, fill=(255, 255, 255), width=18)
+        draw.ellipse((width - 395, 335, width - 365, 365), fill=(255, 255, 255))
+    if any(k in query for k in ("win", "victory", "finish", "goal")):
+        draw.polygon([(760, 360), (900, 430), (830, 570), (690, 520), (690, 410)], fill=(255, 218, 62))
+
+    # One short beat label only, like a modern caption card—not a generic template title.
+    emphasis = (scene.get("on_screen_emphasis") or "").strip().upper()[:36]
+    if emphasis:
+        font = _font(72, bold=True)
+        box = draw.textbbox((0, 0), emphasis, font=font)
+        tw = box[2] - box[0]
+        pad = 28
+        x1 = max(45, (width - tw) // 2 - pad)
+        x2 = min(width - 45, (width + tw) // 2 + pad)
+        draw.rounded_rectangle((x1, 145, x2, 270), radius=28, fill=(8, 12, 23))
+        draw.text(((width - tw) / 2, 172), emphasis, font=font, fill=(255, 255, 255))
+
+    # Soft depth and vignette.
+    vignette = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    vdraw = ImageDraw.Draw(vignette)
+    vdraw.rectangle((0, 0, width, 160), fill=(0, 0, 0, 70))
+    vdraw.rectangle((0, 1600, width, height), fill=(0, 0, 0, 85))
+    final = Image.alpha_composite(base.convert("RGBA"), vignette).convert("RGB")
     final.save(destination, quality=94)
+
+
+def _try_ai_scene(scene: dict, destination: Path, index: int, topic: str) -> dict[str, Any] | None:
+    try:
+        state = comfyui_health()
+        if not state.get("ok") or not state.get("image_ready"):
+            return None
+        direction = enhance_image_prompt(
+            scene_image_prompt(scene, topic),
+            style="roblox_bright",
+            purpose="hook" if scene.get("role") == "hook" else "scene_visual",
+        )
+        result = generate_ai_image(
+            prompt=direction["prompt"],
+            negative_prompt=direction["negative_prompt"],
+            aspect="9:16",
+            steps=18,
+            cfg=6.5,
+            seed=None,
+            job_id=f"shortscene_{index}_{random.randint(1000,9999)}",
+        )
+        source = Path(result["path"])
+        image = Image.open(source).convert("RGB")
+        image.save(destination, quality=94)
+        return {
+            "path": str(destination),
+            "kind": "ai_generated_scene",
+            "query": scene.get("visual_query") or topic,
+            "attribution": None,
+            "prompt": direction["prompt"],
+            "seed": result.get("seed"),
+            "checkpoint": result.get("checkpoint"),
+        }
+    except Exception:
+        return None
 
 
 def prepare_visual(scene: dict, job_dir: Path, index: int, topic: str) -> dict:
@@ -139,6 +202,14 @@ def prepare_visual(scene: dict, job_dir: Path, index: int, topic: str) -> dict:
     visual_dir.mkdir(parents=True, exist_ok=True)
     destination = visual_dir / f"scene_{index:02d}.jpg"
     query = scene.get("visual_query") or topic
+
+    # For Roblox, prefer a genuinely generated scene that illustrates the exact spoken beat.
+    is_roblox = "roblox" in f"{topic} {query}".lower()
+    if is_roblox:
+        generated = _try_ai_scene(scene, destination, index, topic)
+        if generated:
+            return generated
+
     attribution = search_commons(query)
     if attribution and attribution.get("download_url"):
         try:
@@ -148,9 +219,20 @@ def prepare_visual(scene: dict, job_dir: Path, index: int, topic: str) -> dict:
             image.thumbnail((1800, 1800))
             image.save(destination, quality=92)
             raw.unlink(missing_ok=True)
-            return {"path": str(destination), "kind": "wikimedia_commons", "query": query, "attribution": attribution}
+            return {
+                "path": str(destination),
+                "kind": "wikimedia_commons",
+                "query": query,
+                "attribution": attribution,
+            }
         except Exception:
             pass
 
-    _make_procedural_card(destination, topic, scene.get("on_screen_emphasis", ""), index * 991)
-    return {"path": str(destination), "kind": "generated_procedural", "query": query, "attribution": None}
+    # Last-resort storyboard is scene-specific and gets flagged in quality checks.
+    _make_storyboard_visual(destination, topic, scene, index * 991)
+    return {
+        "path": str(destination),
+        "kind": "storyboard_fallback",
+        "query": query,
+        "attribution": None,
+    }
