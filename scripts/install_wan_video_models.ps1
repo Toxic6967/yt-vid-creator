@@ -9,23 +9,76 @@ if (-not (Test-Path $installations)) {
 }
 
 $items = Get-Content $installations -Raw | ConvertFrom-Json
-$install = $items | Where-Object { $_.sourceId -eq "standalone" -and $_.status -eq "installed" } | Select-Object -First 1
+$install = $items |
+    Where-Object { $_.sourceId -eq "standalone" -and $_.status -eq "installed" } |
+    Select-Object -First 1
+
 if (-not $install) {
     throw "Could not find an installed local ComfyUI instance."
 }
 
-$comfy = $install.installPath
-$models = Join-Path $comfy "models"
-
-# If the user already has SDXL somewhere under this install, use its models root.
-$sdxl = Get-ChildItem -Path $comfy -Filter "sd_xl_base_1.0.safetensors" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($sdxl -and $sdxl.Directory.Name -eq "checkpoints") {
-    $models = Split-Path $sdxl.Directory.FullName -Parent
+$installRoot = [IO.Path]::GetFullPath([string]$install.installPath)
+if (-not (Test-Path $installRoot)) {
+    throw "ComfyUI install path does not exist: $installRoot"
 }
 
-Write-Host "ComfyUI: $comfy"
-Write-Host "Models:  $models"
+# New Comfy Desktop installations may use <installPath>\ComfyUI as the actual
+# backend directory. Locate the folder containing ComfyUI's folder_paths.py
+# instead of guessing.
+$folderPaths = Get-ChildItem -Path $installRoot -Filter "folder_paths.py" -File -Recurse -ErrorAction SilentlyContinue |
+    Sort-Object { $_.FullName.Length } |
+    Select-Object -First 1
+
+if ($folderPaths) {
+    $comfyRoot = $folderPaths.Directory.FullName
+}
+elseif (Test-Path (Join-Path $installRoot "ComfyUI\models")) {
+    $comfyRoot = Join-Path $installRoot "ComfyUI"
+}
+else {
+    $comfyRoot = $installRoot
+}
+
+$models = Join-Path $comfyRoot "models"
+New-Item -ItemType Directory -Force -Path $models | Out-Null
+
+Write-Host "Installation record: $installRoot"
+Write-Host "Actual ComfyUI root: $comfyRoot" -ForegroundColor Green
+Write-Host "Model root:          $models" -ForegroundColor Green
 Write-Host ""
+
+function Move-ExistingModel {
+    param(
+        [string]$FileName,
+        [string]$Destination
+    )
+
+    if (Test-Path $Destination) {
+        return $true
+    }
+
+    $found = Get-ChildItem -Path $installRoot -Filter $FileName -File -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -ne $Destination } |
+        Select-Object -First 1
+
+    if ($found) {
+        Write-Host "Found existing download:" -ForegroundColor Yellow
+        Write-Host "  $($found.FullName)"
+        Write-Host "Moving it to the model folder ComfyUI actually scans..."
+        New-Item -ItemType Directory -Force -Path (Split-Path $Destination -Parent) | Out-Null
+        Move-Item -LiteralPath $found.FullName -Destination $Destination -Force
+        return $true
+    }
+
+    return $false
+}
+
+# Also repair an SDXL checkpoint if it was placed beside the wrong models root.
+$sdxlName = "sd_xl_base_1.0.safetensors"
+$sdxlDest = Join-Path (Join-Path $models "checkpoints") $sdxlName
+if (-not (Test-Path $sdxlDest)) {
+    [void](Move-ExistingModel -FileName $sdxlName -Destination $sdxlDest)
+}
 
 $targets = @(
     @{
@@ -53,7 +106,12 @@ foreach ($item in $targets) {
     $dest = Join-Path $item.Dir $item.File
 
     if (Test-Path $dest) {
-        Write-Host "[OK] $($item.Name) already exists." -ForegroundColor Green
+        Write-Host "[OK] $($item.Name) is already in the correct folder." -ForegroundColor Green
+        continue
+    }
+
+    if (Move-ExistingModel -FileName $item.File -Destination $dest) {
+        Write-Host "[OK] Moved $($item.File) into the correct folder." -ForegroundColor Green
         continue
     }
 
@@ -76,6 +134,25 @@ foreach ($item in $targets) {
 }
 
 Write-Host ""
-Write-Host "Wan 2.1 video models are installed." -ForegroundColor Green
-Write-Host "Close ComfyUI completely and reopen it, then restart Shorts Studio."
+Write-Host "Verifying files in the actual ComfyUI model root..." -ForegroundColor Cyan
+$allGood = $true
+foreach ($item in $targets) {
+    $dest = Join-Path $item.Dir $item.File
+    if (Test-Path $dest) {
+        $sizeGB = [math]::Round((Get-Item $dest).Length / 1GB, 2)
+        Write-Host "[OK] $($item.File) ($sizeGB GB)" -ForegroundColor Green
+    }
+    else {
+        Write-Host "[MISSING] $dest" -ForegroundColor Red
+        $allGood = $false
+    }
+}
+
+if (-not $allGood) {
+    throw "One or more Wan model files are still missing."
+}
+
+Write-Host ""
+Write-Host "Wan 2.1 video models are in the correct ComfyUI model root." -ForegroundColor Green
+Write-Host "IMPORTANT: Completely close ComfyUI, reopen it, then restart Shorts Studio."
 Write-Host ""
