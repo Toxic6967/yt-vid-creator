@@ -11,6 +11,7 @@ import httpx
 
 from ..config import MEDIA_OUTPUT_DIR, settings
 from ..db import update_media_job
+from .media_director import enhance_image_prompt, enhance_video_prompt
 
 
 class ComfyUIError(RuntimeError):
@@ -92,6 +93,7 @@ def _standard_image_workflow(
     negative_prompt: str,
     aspect: str,
     steps: int,
+    cfg: float,
     seed: int,
 ) -> tuple[dict[str, Any], str]:
     ckpt = _checkpoint_name()
@@ -102,7 +104,7 @@ def _standard_image_workflow(
             "inputs": {
                 "seed": seed,
                 "steps": steps,
-                "cfg": 7.0,
+                "cfg": float(cfg),
                 "sampler_name": "euler",
                 "scheduler": "normal",
                 "denoise": 1.0,
@@ -163,6 +165,7 @@ def _video_workflow(
     negative_prompt: str,
     aspect: str,
     seconds: int,
+    motion_strength: float,
     seed: int,
 ) -> dict[str, Any]:
     path = Path(settings.comfyui_video_workflow)
@@ -189,6 +192,7 @@ def _video_workflow(
             "__HEIGHT__": height,
             "__FRAMES__": frames,
             "__SECONDS__": seconds,
+            "__MOTION_STRENGTH__": motion_strength,
         },
     )
 
@@ -275,11 +279,13 @@ def generate_ai_image(
     negative_prompt: str,
     aspect: str,
     steps: int,
+    cfg: float,
     job_id: str,
+    seed: int | None = None,
 ) -> dict[str, Any]:
-    seed = random.randint(0, 2_147_483_647)
+    seed = int(seed) if seed is not None else random.randint(0, 2_147_483_647)
     workflow, checkpoint = _standard_image_workflow(
-        prompt, negative_prompt, aspect, steps, seed
+        prompt, negative_prompt, aspect, steps, cfg, seed
     )
     prompt_id = _queue_workflow(workflow)
     ref = _wait_for_artifact(prompt_id, timeout_seconds=900)
@@ -299,13 +305,15 @@ def generate_ai_video(
     negative_prompt: str,
     aspect: str,
     seconds: int,
+    motion_strength: float,
     job_id: str,
+    seed: int | None = None,
 ) -> dict[str, Any]:
     state = health()
     if not state.get("ok"):
         raise ComfyUIError("ComfyUI is not running.")
-    seed = random.randint(0, 2_147_483_647)
-    workflow = _video_workflow(prompt, negative_prompt, aspect, seconds, seed)
+    seed = int(seed) if seed is not None else random.randint(0, 2_147_483_647)
+    workflow = _video_workflow(prompt, negative_prompt, aspect, seconds, motion_strength, seed)
     prompt_id = _queue_workflow(workflow)
     ref = _wait_for_artifact(prompt_id, timeout_seconds=3600)
     suffix = Path(ref["filename"]).suffix or ".mp4"
@@ -317,6 +325,21 @@ def generate_ai_video(
 def run_image_job(job_id: str, request: dict[str, Any]) -> None:
     try:
         update_media_job(job_id, status="running", progress=10, error=None)
+        request = dict(request)
+        request.pop("variations", None)
+        style = request.pop("style", "roblox_bright")
+        purpose = request.pop("purpose", "scene_visual")
+        enhance = bool(request.pop("enhance_prompt", True))
+        if enhance:
+            directed = enhance_image_prompt(request["prompt"], style=style, purpose=purpose)
+            request["prompt"] = directed["prompt"]
+            generated_negative = directed["negative_prompt"]
+            request["negative_prompt"] = ", ".join(
+                x for x in (request.get("negative_prompt", "").strip(), generated_negative) if x
+            )
+        elif not request.get("negative_prompt"):
+            request["negative_prompt"] = "text, logo, watermark, blurry, low quality, clutter"
+        update_media_job(job_id, progress=25)
         result = generate_ai_image(job_id=job_id, **request)
         update_media_job(
             job_id,
@@ -332,6 +355,28 @@ def run_image_job(job_id: str, request: dict[str, Any]) -> None:
 def run_video_job(job_id: str, request: dict[str, Any]) -> None:
     try:
         update_media_job(job_id, status="running", progress=10, error=None)
+        request = dict(request)
+        request.pop("variations", None)
+        style = request.pop("style", "roblox_bright")
+        camera = request.pop("camera", "auto")
+        purpose = request.pop("purpose", "b_roll")
+        enhance = bool(request.pop("enhance_prompt", True))
+        if enhance:
+            directed = enhance_video_prompt(
+                request["prompt"],
+                style=style,
+                camera=camera,
+                purpose=purpose,
+                seconds=int(request["seconds"]),
+            )
+            request["prompt"] = directed["prompt"]
+            generated_negative = directed["negative_prompt"]
+            request["negative_prompt"] = ", ".join(
+                x for x in (request.get("negative_prompt", "").strip(), generated_negative) if x
+            )
+        elif not request.get("negative_prompt"):
+            request["negative_prompt"] = "text, logo, watermark, flicker, morphing, blur"
+        update_media_job(job_id, progress=25)
         result = generate_ai_video(job_id=job_id, **request)
         update_media_job(
             job_id,
