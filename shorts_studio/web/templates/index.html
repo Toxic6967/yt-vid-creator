@@ -18,7 +18,7 @@
     </header>
 
     <nav class="tabs">
-      <button class="tab active" data-tab="auto">Auto Studio</button>
+      <button class="tab active" data-tab="auto">Story Studio</button>
       <button class="tab" data-tab="radar">Trend Radar</button>
       <button class="tab" data-tab="video">Video Studio</button>
       <button class="tab" data-tab="image">Image Studio</button>
@@ -29,11 +29,11 @@
       <section class="tab-page active" id="tab-auto">
         <div class="hero-grid">
           <section class="panel hero-panel">
-            <div class="eyebrow">ONE CLICK</div>
-            <h2>Full Auto Short</h2>
-            <p class="lead">Find a Roblox trend, research it, fact-check it, write it, narrate it, source visuals, edit, caption and export.</p>
+            <div class="eyebrow">ROBLOX MINI-MOVIE</div>
+            <h2>Full Auto Story</h2>
+            <p class="lead">Create a relatable Roblox story with recurring characters, a real hook, conflict, payoff, cinematic scenes, character voices and active captions.</p>
             <div id="profile-summary" class="profile-summary"></div>
-            <button id="auto-generate" class="primary big">GENERATE FULL SHORT</button>
+            <button id="auto-generate" class="primary big">GENERATE ROBLOX STORY</button>
             <p class="small">Nothing is published automatically. Finished videos go to Review Queue.</p>
           </section>
 
@@ -68,7 +68,7 @@
                 </select></label>
               </div>
               <div class="strategy">
-                <span>Trending games + updates</span><span>Relatable Roblox moments</span><span>Secrets + evergreen ideas</span>
+                <span>Relatable player stories</span><span>Funny / horror / mystery</span><span>Hook → conflict → payoff</span>
               </div>
               <input type="hidden" name="trend_weight" value="70">
               <input type="hidden" name="evergreen_weight" value="20">
@@ -165,9 +165,10 @@
             <div id="video-mode-short" class="mode-pane">
               <form id="video-form" class="creator-form">
                 <label class="prompt-label">Short topic
-                  <textarea name="topic" rows="5" placeholder="Why this Roblox game suddenly exploded" required></textarea>
+                  <textarea name="topic" rows="5" placeholder="Example: Two friends enter a Roblox horror game and one suddenly disappears"></textarea>
                 </label>
                 <label>Content style<select name="content_type">
+                  <option value="story" selected>Cinematic Roblox story — recommended</option>
                   <option value="auto">Auto — choose best style</option>
                   <option value="relatable">Relatable Roblox / POV</option>
                   <option value="trend">Trend / update / explainer</option>
@@ -184,7 +185,7 @@
                 <label>Target length<select name="target_seconds">
                   <option value="25">~25 sec</option><option value="32">~32 sec</option><option value="40">~40 sec</option><option value="45">~45 sec</option>
                 </select></label>
-                <div class="director-note">Uses the saved audience, hook/retention system, research, narration, captions and scene visuals.</div>
+                <div class="director-note">Story mode rejects weak/cringe scripts before rendering, keeps character descriptions consistent, gives characters separate voices, builds cinematic shots, and uses active-word captions.</div>
                 <button class="primary generate-wide" type="submit">CREATE FULL SHORT</button>
               </form>
             </div>
