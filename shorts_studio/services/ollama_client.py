@@ -44,18 +44,30 @@ def chat_json(system: str, user: str, *, temperature: float = 0.35) -> dict[str,
     payload = {
         "model": settings.ollama_model,
         "stream": False,
+        "think": False,
+        "keep_alive": "30m",
         "format": "json",
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        "options": {"temperature": temperature, "num_ctx": 8192},
+        "options": {
+            "temperature": temperature,
+            "num_ctx": 6144,
+            "num_predict": 2200,
+        },
     }
     try:
-        with httpx.Client(timeout=180) as client:
+        timeout = httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=30.0)
+        with httpx.Client(timeout=timeout) as client:
             response = client.post(f"{settings.ollama_base_url}/api/chat", json=payload)
             response.raise_for_status()
             content = response.json()["message"]["content"]
+    except httpx.ReadTimeout as exc:
+        raise OllamaError(
+            f"Ollama is running, but '{settings.ollama_model}' took longer than 10 minutes "
+            "to finish this AI step. Close other GPU-heavy apps and try Regenerate."
+        ) from exc
     except Exception as exc:
         raise OllamaError(
             f"Could not use Ollama at {settings.ollama_base_url}. "
