@@ -309,11 +309,22 @@ def _normalise_story(raw: dict, target_seconds: int) -> dict:
             "Natural game-character body motion, cinematic timing, no morphing, no outfit changes."
         )
 
+        spoken_line = _clean(item.get("narration"), 240)
+        if not spoken_line:
+            continue
+
+        raw_speaker = _clean(item.get("speaker") or "narrator", 30).lower()
+        if raw_speaker == "narrator":
+            speaker = "narrator"
+        else:
+            speaker_character = cmap.get(raw_speaker)
+            speaker = speaker_character["id"] if speaker_character else raw_speaker
+
         scenes.append(
             {
                 "role": role,
-                "speaker": _clean(item.get("speaker") or "narrator", 30).lower(),
-                "narration": _clean(item.get("narration"), 240),
+                "speaker": speaker,
+                "narration": spoken_line,
                 "characters": visible_ids,
                 "character_visuals": identities,
                 "environment": environment,
