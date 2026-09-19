@@ -147,11 +147,52 @@ Return:
 
 
 def scene_image_prompt(scene: dict, topic: str) -> str:
+    if scene.get("keyframe_prompt"):
+        return str(scene["keyframe_prompt"]).strip()
+
     narration = str(scene.get("narration", "")).strip()
     query = str(scene.get("visual_query", "")).strip()
     emphasis = str(scene.get("on_screen_emphasis", "")).strip()
+    character_visuals = "; ".join(str(x) for x in scene.get("character_visuals", []) if x)
+    environment = str(scene.get("environment", "")).strip()
+    action = str(scene.get("action", "")).strip()
+    camera = str(scene.get("camera", "")).strip()
+
+    details = []
+    if character_visuals:
+        details.append(f"Characters must match exactly: {character_visuals}")
+    if environment:
+        details.append(f"Environment: {environment}")
+    if action:
+        details.append(f"Action: {action}")
+    if camera:
+        details.append(f"Camera: {camera}")
+
     return (
         f"Scene topic: {topic}. Narration meaning: {narration}. "
         f"Show visually: {query or narration}. Important idea: {emphasis}. "
-        "Create a concrete Roblox-inspired scene that directly illustrates this exact beat."
+        + ". ".join(details)
+        + ". Create a polished modern Roblox-style cinematic frame that directly illustrates this exact beat."
+    )
+
+
+def scene_video_prompt(scene: dict, topic: str) -> str:
+    if scene.get("motion_prompt"):
+        base = str(scene["motion_prompt"]).strip()
+    else:
+        base = scene_image_prompt(scene, topic)
+
+    character_visuals = "; ".join(str(x) for x in scene.get("character_visuals", []) if x)
+    environment = str(scene.get("environment", "")).strip()
+    action = str(scene.get("action", "")).strip()
+    camera = str(scene.get("camera", "")).strip()
+
+    return (
+        f"{base} "
+        f"Characters: {character_visuals}. "
+        f"Environment: {environment}. "
+        f"Action over time: {action}. "
+        f"Camera: {camera}. "
+        "Modern polished Roblox-style 3D movie shot, cinematic lighting, clean materials, strong depth, "
+        "natural blocky character motion, consistent faces/clothes/hair, no morphing, no random costume changes."
     )
