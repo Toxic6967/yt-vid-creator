@@ -257,26 +257,42 @@ def media_jobs() -> list[dict]:
 
 @app.post("/api/media/image", status_code=202)
 def generate_ai_image(payload: AIImageRequest) -> dict:
-    job_id = uuid.uuid4().hex[:12]
-    create_media_job(job_id, "image", payload.prompt)
-    threading.Thread(
-        target=run_image_job,
-        args=(job_id, payload.model_dump()),
-        daemon=True,
-    ).start()
-    return {"id": job_id, "status": "queued"}
+    base = payload.model_dump()
+    job_ids = []
+    for index in range(payload.variations):
+        job_id = uuid.uuid4().hex[:12]
+        request = dict(base)
+        request["variations"] = 1
+        if payload.seed is not None:
+            request["seed"] = min(2147483647, int(payload.seed) + index)
+        create_media_job(job_id, "image", payload.prompt)
+        threading.Thread(
+            target=run_image_job,
+            args=(job_id, request),
+            daemon=True,
+        ).start()
+        job_ids.append(job_id)
+    return {"ids": job_ids, "status": "queued", "count": len(job_ids)}
 
 
 @app.post("/api/media/video", status_code=202)
 def generate_ai_video(payload: AIVideoRequest) -> dict:
-    job_id = uuid.uuid4().hex[:12]
-    create_media_job(job_id, "video", payload.prompt)
-    threading.Thread(
-        target=run_video_job,
-        args=(job_id, payload.model_dump()),
-        daemon=True,
-    ).start()
-    return {"id": job_id, "status": "queued"}
+    base = payload.model_dump()
+    job_ids = []
+    for index in range(payload.variations):
+        job_id = uuid.uuid4().hex[:12]
+        request = dict(base)
+        request["variations"] = 1
+        if payload.seed is not None:
+            request["seed"] = min(2147483647, int(payload.seed) + index)
+        create_media_job(job_id, "video", payload.prompt)
+        threading.Thread(
+            target=run_video_job,
+            args=(job_id, request),
+            daemon=True,
+        ).start()
+        job_ids.append(job_id)
+    return {"ids": job_ids, "status": "queued", "count": len(job_ids)}
 
 
 @app.get("/api/media/jobs/{job_id}/file")
