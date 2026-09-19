@@ -86,20 +86,38 @@ def render(job_dir: Path, scene_audio: list[dict], visuals: list[dict]) -> dict:
         duration = max(1.0, float(audio["duration"]))
         frames = max(1, math.ceil(duration * 30))
         clip = render_dir / f"visual_{idx:02d}.mp4"
-        vf = (
-            "scale=1080:1920:force_original_aspect_ratio=increase,"
-            "crop=1080:1920,"
-            f"zoompan=z='min(zoom+0.0007,1.07)':d={frames}:s=1080x1920:fps=30,"
-            "format=yuv420p"
-        )
-        _run([
-            "-loop", "1", "-i", visual["path"],
-            "-t", f"{duration:.3f}",
-            "-vf", vf,
-            "-r", "30", "-an",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p",
-            str(clip),
-        ])
+        kind = str(visual.get("kind", ""))
+        path = str(visual["path"])
+
+        if kind == "ai_generated_video" or Path(path).suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"}:
+            vf = (
+                "scale=1080:1920:force_original_aspect_ratio=increase,"
+                "crop=1080:1920,"
+                "fps=30,format=yuv420p"
+            )
+            _run([
+                "-stream_loop", "-1", "-i", path,
+                "-t", f"{duration:.3f}",
+                "-vf", vf,
+                "-an",
+                "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p",
+                str(clip),
+            ])
+        else:
+            vf = (
+                "scale=1080:1920:force_original_aspect_ratio=increase,"
+                "crop=1080:1920,"
+                f"zoompan=z='min(zoom+0.0012,1.10)':d={frames}:s=1080x1920:fps=30,"
+                "format=yuv420p"
+            )
+            _run([
+                "-loop", "1", "-i", path,
+                "-t", f"{duration:.3f}",
+                "-vf", vf,
+                "-r", "30", "-an",
+                "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p",
+                str(clip),
+            ])
         visual_clips.append(clip)
 
     visual_list = render_dir / "visuals.txt"
