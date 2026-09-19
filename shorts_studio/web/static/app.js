@@ -204,8 +204,13 @@ async function loadMediaHealth(){
 
 document.querySelector('#ai-image-form').addEventListener('submit', async e=>{
   e.preventDefault();
-  const data=Object.fromEntries(new FormData(e.currentTarget).entries());
+  const fd=new FormData(e.currentTarget);
+  const data=Object.fromEntries(fd.entries());
   data.steps=Number(data.steps);
+  data.cfg=Number(data.cfg);
+  data.variations=Number(data.variations);
+  data.seed=data.seed ? Number(data.seed) : null;
+  data.enhance_prompt=fd.has('enhance_prompt');
   const btn=document.querySelector('#ai-image-button');
   btn.disabled=true;btn.textContent='QUEUING AI IMAGE…';
   try{
@@ -217,8 +222,13 @@ document.querySelector('#ai-image-form').addEventListener('submit', async e=>{
 
 document.querySelector('#ai-video-form').addEventListener('submit', async e=>{
   e.preventDefault();
-  const data=Object.fromEntries(new FormData(e.currentTarget).entries());
+  const fd=new FormData(e.currentTarget);
+  const data=Object.fromEntries(fd.entries());
   data.seconds=Number(data.seconds);
+  data.motion_strength=Number(data.motion_strength);
+  data.variations=Number(data.variations);
+  data.seed=data.seed ? Number(data.seed) : null;
+  data.enhance_prompt=fd.has('enhance_prompt');
   const btn=document.querySelector('#ai-video-button');
   btn.disabled=true;btn.textContent='QUEUING AI VIDEO…';
   try{
