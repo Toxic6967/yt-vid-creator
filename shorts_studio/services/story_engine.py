@@ -701,6 +701,9 @@ AUDIENCE: {audience}
 REAL GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
+LOCKED CAUSAL ARC:
+{json.dumps(story.get("arc_plan") or {}, ensure_ascii=False)}
+
 STORY:
 {json.dumps(_writer_view(story), ensure_ascii=False)}
 
@@ -712,6 +715,7 @@ Score 0-100:
 - coherence: is there one understandable central goal from setup through climax, with no random nonsense?
 - cause_effect: do important beats happen because of previous choices/game mechanics rather than coincidence?
 - setup_payoff: does the climax/payoff use something established earlier and directly resolve the opening problem?
+- arc_fidelity: does the screenplay actually follow the locked causal arc without inventing unrelated twists?
 - dialogue: does the ONE narrator sound conversational and human rather than like an AI/documentary announcer?
 - movie_clarity: can every beat be understood visually?
 - character_consistency: are characters simple and reusable across shots?
@@ -730,6 +734,7 @@ Return:
   "coherence":0,
   "cause_effect":0,
   "setup_payoff":0,
+  "arc_fidelity":0,
   "dialogue":0,
   "movie_clarity":0,
   "character_consistency":0,
@@ -750,6 +755,7 @@ Return:
         "coherence",
         "cause_effect",
         "setup_payoff",
+        "arc_fidelity",
         "dialogue",
         "movie_clarity",
         "character_consistency",
@@ -759,19 +765,20 @@ Return:
     )
     scores = {k: max(0, min(100, int(float(result.get(k, 0) or 0)))) for k in keys}
     total = round(
-        scores["hook"] * 0.11
-        + scores["relatability"] * 0.10
-        + scores["escalation"] * 0.09
-        + scores["payoff"] * 0.11
+        scores["hook"] * 0.10
+        + scores["relatability"] * 0.09
+        + scores["escalation"] * 0.08
+        + scores["payoff"] * 0.10
         + scores["coherence"] * 0.09
         + scores["cause_effect"] * 0.07
         + scores["setup_payoff"] * 0.05
+        + scores["arc_fidelity"] * 0.08
         + scores["dialogue"] * 0.08
         + scores["movie_clarity"] * 0.06
         + scores["character_consistency"] * 0.04
-        + scores["visual_variety"] * 0.07
-        + scores["game_specificity"] * 0.09
-        + scores["cringe_avoidance"] * 0.04,
+        + scores["visual_variety"] * 0.06
+        + scores["game_specificity"] * 0.08
+        + scores["cringe_avoidance"] * 0.02,
         1,
     )
     problems = list(result.get("problems") or [])
@@ -822,6 +829,7 @@ Return:
         and scores["coherence"] >= 84
         and scores["cause_effect"] >= 80
         and scores["setup_payoff"] >= 82
+        and scores["arc_fidelity"] >= 85
         and scores["dialogue"] >= 82
         and scores["game_specificity"] >= 82
         and scores["cringe_avoidance"] >= 85
