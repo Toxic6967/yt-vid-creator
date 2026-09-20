@@ -34,13 +34,13 @@ document.querySelectorAll('[data-refresh-media]').forEach(btn=>btn.onclick=()=>l
 async function loadHealth(){
   try{
     const h = await jsonFetch('/api/health');
-    const voiceReady = Boolean(h.voice && h.voice.ready);
-    const ok = h.ollama.ok && h.ollama.model_installed && h.ffmpeg.ok && voiceReady;
+    const chatterboxReady = Boolean(h.voice && h.voice.chatterbox && h.voice.chatterbox.ready);
+    const ok = h.ollama.ok && h.ollama.model_installed && h.ffmpeg.ok && chatterboxReady;
     health.className = 'health ' + (ok ? 'ok' : 'bad');
-    if(ok) health.textContent = `Story AI ready • ${h.ollama.model} • human voice`;
+    if(ok) health.textContent = `Story AI ready • ${h.ollama.model} • natural narrator`;
     else if(!h.ollama.ok) health.textContent = 'Ollama not running';
     else if(!h.ollama.model_installed) health.textContent = `Install model: ollama pull ${h.ollama.model}`;
-    else if(!voiceReady) health.textContent = 'Human voice not installed • run install_human_voice.bat';
+    else if(!chatterboxReady) health.textContent = 'Natural narrator not installed • run install_natural_voice.bat';
     else health.textContent = 'FFmpeg unavailable';
   }catch(e){health.className='health bad';health.textContent='Health check failed';}
 }
