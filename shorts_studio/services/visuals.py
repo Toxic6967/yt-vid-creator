@@ -262,10 +262,11 @@ def _try_ai_scene(
                 final_prompt = (
                     direction["prompt"]
                     + " The cast reference controls avatar identity only. "
-                    "The environment reference controls the Roblox map/location only. "
-                    "Place the R15 avatars naturally INTO that environment with matching perspective and lighting. "
-                    "Do not copy the cast-sheet studio background. Preserve the map layout enough to keep the location recognisable. "
-                    "Every surface that could contain writing must stay blank because all English text is added later in editing."
+                    "The environment reference controls the Roblox set design/location, NOT the exact camera angle. "
+                    "Place the R15 avatars naturally inside that game area, then reframe the map to obey THIS shot's requested camera and action. "
+                    "Keep recognisable landmarks/materials while changing perspective, foreground and subject placement when the shot plan asks for it. "
+                    "Do not copy the cast-sheet studio background. Every surface that could contain writing must stay blank "
+                    "because all English text is added later in editing."
                 )
                 if environment_reference and Path(environment_reference).exists():
                     result = generate_story_scene_dual_reference(
