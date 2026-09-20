@@ -139,13 +139,97 @@ def chat_json(system: str, user: str, *, temperature: float = 0.35) -> dict[str,
         ) from exc
 
     content = re.sub(r"<think>.*?</think>", "", content, flags=re.S).strip()
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError as exc:
-        match = re.search(r"\{.*\}", content, flags=re.S)
-        if match:
+
+    def parse_object(value: str) -> dict[str, Any] | None:
+        value = value.strip()
+        if value.startswith("```"):
+            value = re.sub(r"^\s*```(?:json)?\s*", "", value, flags=re.I)
+            value = re.sub(r"\s*```\s*$", "", value)
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            pass
+
+        # raw_decode is safer than a greedy {.*} regex when the model adds
+        # text before/after the object.
+        decoder = json.JSONDecoder()
+        for match in re.finditer(r"\{", value):
             try:
-                return json.loads(match.group(0))
+                parsed, _ = decoder.raw_decode(value[match.start():])
+                if isinstance(parsed, dict):
+                    return parsed
             except json.JSONDecodeError:
-                pass
-        raise OllamaError(f"Ollama returned invalid JSON: {content[:500]}") from exc
+                continue
+        return None
+
+    parsed = parse_object(content)
+    if parsed is not None:
+        return parsed
+
+    # Qwen occasionally truncates or damages JSON even with format=json.
+    # Regenerate a compact answer once instead of failing the whole Short.
+    repair_payload = {
+        "model": settings.ollama_model,
+        "stream": False,
+        "think": False,
+        "keep_alive": "3m",
+        "format": "json",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    system
+                    + "\nYour previous response was invalid/truncated JSON. "
+                    "Regenerate the answer from scratch as ONE complete compact JSON object. "
+                    "No markdown, no commentary, no duplicated fields."
+                ),
+            },
+            {"role": "user", "content": user},
+        ],
+        "options": {
+            "temperature": min(float(temperature), 0.25),
+            "num_ctx": 6144,
+            "num_predict": 2600,
+        },
+    }
+
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            repair = client.post(
+                f"{settings.ollama_base_url}/api/chat",
+                json=repair_payload,
+            )
+            if repair.status_code >= 500:
+                repair_payload["keep_alive"] = 0
+                repair_payload["options"] = {
+                    "temperature": min(float(temperature), 0.20),
+                    "num_ctx": 4096,
+                    "num_predict": 2200,
+                    "num_gpu": 0,
+                }
+                repair = client.post(
+                    f"{settings.ollama_base_url}/api/chat",
+                    json=repair_payload,
+                )
+            repair.raise_for_status()
+            repair_content = re.sub(
+                r"<think>.*?</think>",
+                "",
+                repair.json()["message"]["content"],
+                flags=re.S,
+            ).strip()
+            parsed = parse_object(repair_content)
+            if parsed is not None:
+                return parsed
+            raise OllamaError(
+                "Ollama returned invalid JSON twice. "
+                f"Second response started: {repair_content[:500]}"
+            )
+    except OllamaError:
+        raise
+    except Exception as exc:
+        raise OllamaError(
+            "Ollama returned invalid JSON, and the automatic JSON regeneration failed: "
+            f"{exc}. First response started: {content[:350]}"
+        ) from exc
