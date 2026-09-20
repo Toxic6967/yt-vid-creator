@@ -14,4 +14,61 @@ jobs:
         with:
           python-version: "3.13"
       - name: Compile Python sources
-        run: python -m compileall shorts_studio run.py
+        run: python -m compileall -q shorts_studio scripts/blender run.py
+      - name: Smoke test V3 schema and animation timeline
+        env:
+          SHORTS_STUDIO_DATA: ${{ runner.temp }}/shorts-data
+        run: |
+          python - <<'PY'
+          from shorts_studio.db import init_db, create_job, get_job
+          from shorts_studio.services.animation_timeline import normalise_animation_plan
+
+          init_db()
+          create_job({
+              'id': 'ci-v3',
+              'channel_name': 'CI',
+              'niche': 'Roblox stories',
+              'requested_topic': 'test',
+              'content_type': 'story',
+              'story_genre': 'powers',
+              'visual_mode': 'animated',
+              'voice': 'auto-youthful-male',
+              'target_seconds': 65,
+          })
+          job = get_job('ci-v3')
+          assert job and job['visual_mode'] == 'animated'
+
+          scenes = []
+          audio = []
+          plates = {}
+          cameras = ['wide','medium','close-up','follow','low-angle','high-angle']
+          actions = ['run forward','jump obstacle','raise shield','energy blast','point at exit','celebrate win']
+          for i in range(6):
+              key = f'area {i}'
+              scenes.append({
+                  'role': 'hook' if i == 0 else ('payoff' if i == 5 else 'build'),
+                  'characters': ['max'],
+                  'environment_key': key,
+                  'environment': key,
+                  'action': actions[i],
+                  'camera': cameras[i],
+              })
+              audio.append({'duration': 3.0})
+              plates[key] = f'/tmp/{i}.png'
+          plan = normalise_animation_plan(
+              {'shots': []},
+              script={
+                  'game_name': 'Test Game',
+                  'genre': 'powers',
+                  'characters': [{'id':'max','name':'Max','visual_identity':'R15'}],
+                  'scenes': scenes,
+              },
+              scene_audio=audio,
+              environment_plates=plates,
+              allow_powers=True,
+          )
+          assert len(plan['shots']) == 6
+          assert plan['shots'][2]['actors'][0]['power_effect'] == 'shield'
+          assert plan['shots'][3]['actors'][0]['power_effect'] == 'energy_blast'
+          print('V3 smoke test OK')
+          PY
