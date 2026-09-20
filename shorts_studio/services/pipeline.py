@@ -331,14 +331,27 @@ def run_pipeline(job_id: str) -> None:
                     f"Writing + repairing Story pass {story_attempt}/3 inside {research.get('game_name','Roblox')}",
                     24 + story_attempt * 3,
                 )
-                candidate = create_story(
-                    idea_hint,
-                    audience=audience,
-                    tone=story_tone,
-                    target_seconds=int(job["target_seconds"]),
-                    game_context=research,
-                    genre=job.get("story_genre", "auto"),
-                )
+                try:
+                    candidate = create_story(
+                        idea_hint,
+                        audience=audience,
+                        tone=story_tone,
+                        target_seconds=int(job["target_seconds"]),
+                        game_context=research,
+                        genre=job.get("story_genre", "auto"),
+                    )
+                except Exception as story_exc:
+                    story_attempt_summaries.append(
+                        {
+                            "attempt": story_attempt,
+                            "passed": False,
+                            "total": 0,
+                            "error": str(story_exc),
+                            "problems": ["Story build crashed before scoring; automatically trying a fresh build."],
+                        }
+                    )
+                    continue
+
                 candidate_score = candidate.get("story_score") or {}
                 candidate_total = float(candidate_score.get("total") or 0)
                 story_attempt_summaries.append(
