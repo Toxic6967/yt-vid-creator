@@ -5,9 +5,24 @@ Write-Host "=== Shorts Studio - Human Voice Setup ===" -ForegroundColor Cyan
 Write-Host "Installs Kokoro ONNX and the local voice model used by Story Studio."
 Write-Host ""
 
-$root = Split-Path -Parent $PSScriptRoot
-$modelDir = Join-Path $root "data\assets\kokoro"
+$projectRoot = Split-Path -Parent $PSScriptRoot
+$storageMarker = Join-Path $projectRoot ".shorts_studio_storage"
+if (Test-Path $storageMarker) {
+    $storageRoot = (Get-Content $storageMarker -Raw).Trim()
+}
+else {
+    $storageRoot = "E:\auto yt"
+}
+if (-not $storageRoot) {
+    throw "Shorts Studio storage root is empty. Run setup_external_storage.bat first."
+}
+if (-not (Test-Path ([IO.Path]::GetPathRoot($storageRoot)))) {
+    throw "Storage drive is unavailable: $storageRoot"
+}
+
+$modelDir = Join-Path $storageRoot "data\assets\kokoro"
 New-Item -ItemType Directory -Force -Path $modelDir | Out-Null
+Write-Host "Voice model folder: $modelDir" -ForegroundColor Green
 
 Write-Host "Installing Python voice packages..." -ForegroundColor Yellow
 & py -m pip install --upgrade "kokoro-onnx>=0.6.1,<0.7" "soundfile>=0.13,<1"
