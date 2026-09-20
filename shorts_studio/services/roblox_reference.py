@@ -347,3 +347,98 @@ def build_environment_seed(destination: Path) -> Path:
 
     image.save(destination, quality=95)
     return destination
+
+
+
+def _cutout_reference_character(path: Path) -> Image.Image:
+    """Remove the neutral studio background from a polished cast reference."""
+    image = Image.open(path).convert("RGBA")
+    rgb = image.convert("RGB")
+    sample_points = [
+        (4, 4),
+        (rgb.width - 5, 4),
+        (4, rgb.height - 5),
+        (rgb.width - 5, rgb.height - 5),
+    ]
+    samples = [rgb.getpixel(point) for point in sample_points]
+    bg = tuple(sum(pixel[i] for pixel in samples) // len(samples) for i in range(3))
+
+    pixels = list(rgb.getdata())
+    alpha = []
+    for r, g, b in pixels:
+        distance = max(abs(r - bg[0]), abs(g - bg[1]), abs(b - bg[2]))
+        # Neutral cast-sheet background disappears; subject edges remain soft.
+        a = max(0, min(255, (distance - 18) * 8))
+        alpha.append(a)
+
+    mask = Image.new("L", rgb.size)
+    mask.putdata(alpha)
+    bbox = mask.getbbox()
+    if not bbox:
+        return image
+    margin = 8
+    bbox = (
+        max(0, bbox[0] - margin),
+        max(0, bbox[1] - margin),
+        min(image.width, bbox[2] + margin),
+        min(image.height, bbox[3] + margin),
+    )
+    image.putalpha(mask)
+    return image.crop(bbox)
+
+
+def compose_scene_previsualization(
+    environment_path: str | Path,
+    character_paths: list[str | Path],
+    destination: Path,
+    camera: str = "medium",
+) -> Path:
+    """Deterministically stage polished R15 refs inside the generated Roblox map before FLUX refinement."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    canvas = Image.open(environment_path).convert("RGBA").resize(
+        (576, 1024),
+        Image.Resampling.LANCZOS,
+    )
+
+    paths = [Path(p) for p in character_paths if p and Path(p).exists()][:3]
+    if not paths:
+        canvas.convert("RGB").save(destination, quality=96)
+        return destination
+
+    camera = (camera or "medium").lower()
+    target_heights = {
+        "wide": 430,
+        "high-angle": 470,
+        "medium": 560,
+        "follow": 580,
+        "over-shoulder": 600,
+        "low-angle": 610,
+        "close-up": 690,
+    }
+    target_h = target_heights.get(camera, 560)
+    if len(paths) == 2:
+        target_h = int(target_h * 0.88)
+    elif len(paths) >= 3:
+        target_h = int(target_h * 0.73)
+
+    positions = {
+        1: [0.50],
+        2: [0.35, 0.67],
+        3: [0.23, 0.50, 0.77],
+    }[len(paths)]
+    ground_y = 905 if camera != "close-up" else 940
+
+    for idx, path in enumerate(paths):
+        char = _cutout_reference_character(path)
+        scale = target_h / max(1, char.height)
+        target_w = max(1, int(char.width * scale))
+        resized = char.resize((target_w, target_h), Image.Resampling.LANCZOS)
+
+        center_x = int(576 * positions[idx])
+        x = center_x - target_w // 2
+        y = ground_y - target_h
+        canvas.alpha_composite(resized, (x, y))
+
+    # This is a conditioning image only; FLUX will make lighting/poses coherent.
+    canvas.convert("RGB").save(destination, quality=96)
+    return destination
