@@ -28,7 +28,7 @@ class RegenerateRequest(BaseModel):
 class ChannelProfileRequest(BaseModel):
     channel_name: str = Field(min_length=1, max_length=80)
     niche: str = Field(min_length=2, max_length=160)
-    tone: str = Field(default="Fast, exciting Roblox gaming documentary", max_length=120)
+    tone: str = Field(default="Natural, cinematic Roblox mini-movie storytelling; conversational, specific, suspenseful or funny without fake hype", max_length=160)
     audience: str = Field(default="Kids / young Roblox players (roughly 8-14); energetic, clear, exciting, never babyish", min_length=3, max_length=180)
     voice: str = Field(default="auto-youthful-male", max_length=80)
     target_seconds: int = Field(default=58, ge=40, le=75)
