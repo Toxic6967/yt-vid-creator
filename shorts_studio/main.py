@@ -49,6 +49,7 @@ from .services.ollama_client import health as ollama_health
 from .services.pipeline import run_pipeline
 from .services.topic_radar import run_radar_job
 from .services.tts import human_voice_health
+from .services.blender_bridge import health as animation_health
 
 app = FastAPI(title=settings.app_name, docs_url="/docs", redoc_url=None)
 WEB_DIR = ROOT_DIR / "shorts_studio" / "web"
@@ -74,30 +75,25 @@ def api_health() -> dict:
         "ffmpeg": ffmpeg_health(),
         "comfyui": comfyui_health(),
         "voice": human_voice_health(),
+        "animation": animation_health(),
     }
 
 
-def _ensure_story_backend_ready() -> None:
+def _ensure_story_backend_ready(visual_mode: str = "animated") -> None:
     voice_state = human_voice_health()
     chatterbox = voice_state.get("chatterbox") or {}
     if not chatterbox.get("ready"):
         raise HTTPException(
             409,
             "Story Studio's upgraded natural narrator is not installed yet. "
-            "Run install_natural_voice.bat, restart Shorts Studio, then try again. "
-            "Kokoro remains available for legacy tools, but finished Story renders now require the stronger narrator.",
+            "Run install_natural_voice.bat, restart Shorts Studio, then try again.",
         )
 
     state = comfyui_health()
     if not state.get("ok"):
         raise HTTPException(
             409,
-            "Story Studio needs ComfyUI running before Full Auto can start.",
-        )
-    if not state.get("image_ready"):
-        raise HTTPException(
-            409,
-            "Story Studio needs a normal image checkpoint for the general image tools.",
+            "Story Studio needs ComfyUI running so it can build the Roblox environment plates.",
         )
     if not state.get("story_image_ready"):
         missing_image = ", ".join(state.get("missing_story_image_models") or [])
@@ -109,15 +105,25 @@ def _ensure_story_backend_ready() -> None:
         if missing_image:
             message += f" Missing: {missing_image}."
         raise HTTPException(409, message)
-    if not state.get("story_video_ready"):
-        missing = ", ".join(state.get("missing_story_video_models") or [])
-        message = (
-            "Cinematic Story video is not installed yet. "
-            "Run install_story_video_models.bat, restart ComfyUI, then try again."
-        )
-        if missing:
-            message += f" Missing: {missing}."
-        raise HTTPException(409, message)
+
+    if visual_mode == "animated":
+        animation = animation_health()
+        if not animation.get("ready"):
+            raise HTTPException(
+                409,
+                "V3 AI-directed Roblox animation is selected, but Blender is not installed. "
+                "Run install_animation_engine.bat, restart Shorts Studio, then try again.",
+            )
+    else:
+        if not state.get("story_video_ready"):
+            missing = ", ".join(state.get("missing_story_video_models") or [])
+            message = (
+                "Generative Story mode needs the LTX keyframe-to-video backend. "
+                "Run install_story_video_models.bat, restart ComfyUI, then try again."
+            )
+            if missing:
+                message += f" Missing: {missing}."
+            raise HTTPException(409, message)
 
 
 def _queue_short(
@@ -128,6 +134,7 @@ def _queue_short(
     target_seconds: int,
     content_type: str = "auto",
     story_genre: str = "auto",
+    visual_mode: str = "animated",
 ) -> dict:
     job_id = uuid.uuid4().hex[:12]
     create_job(
@@ -138,6 +145,7 @@ def _queue_short(
             "requested_topic": topic,
             "content_type": content_type,
             "story_genre": story_genre,
+            "visual_mode": visual_mode,
             "voice": voice,
             "target_seconds": target_seconds,
         }
@@ -158,7 +166,7 @@ def update_profile(payload: ChannelProfileRequest) -> dict:
 
 @app.post("/api/auto-generate", status_code=202)
 def auto_generate() -> dict:
-    _ensure_story_backend_ready()
+    _ensure_story_backend_ready("animated")
     profile = get_channel_profile()
     return _queue_short(
         profile["channel_name"],
@@ -168,6 +176,7 @@ def auto_generate() -> dict:
         int(profile["target_seconds"]),
         "story",
         "auto",
+        "animated",
     )
 
 
@@ -220,7 +229,7 @@ def api_job(job_id: str) -> dict:
 @app.post("/api/jobs", status_code=202)
 def api_generate(payload: GenerateRequest) -> dict:
     if payload.content_type == "story":
-        _ensure_story_backend_ready()
+        _ensure_story_backend_ready(payload.visual_mode)
     return _queue_short(
         payload.channel_name,
         payload.niche,
@@ -229,6 +238,7 @@ def api_generate(payload: GenerateRequest) -> dict:
         payload.target_seconds,
         payload.content_type,
         payload.story_genre,
+        payload.visual_mode,
     )
 
 
@@ -248,7 +258,7 @@ def remake_as_story(job_id: str) -> dict:
     old = get_job(job_id)
     if not old:
         raise HTTPException(404, "Job not found")
-    _ensure_story_backend_ready()
+    _ensure_story_backend_ready(old.get("visual_mode", "animated"))
     return _queue_short(
         old["channel_name"],
         old["niche"],
@@ -257,6 +267,7 @@ def remake_as_story(job_id: str) -> dict:
         old["target_seconds"],
         "story",
         "auto",
+        old.get("visual_mode", "animated"),
     )
 
 
@@ -266,7 +277,7 @@ def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
     if not old:
         raise HTTPException(404, "Job not found")
     if old.get("content_type") == "story":
-        _ensure_story_backend_ready()
+        _ensure_story_backend_ready(old.get("visual_mode", "animated"))
     return _queue_short(
         old["channel_name"],
         old["niche"],
@@ -275,6 +286,7 @@ def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
         old["target_seconds"],
         old.get("content_type", "auto"),
         old.get("story_genre", "auto"),
+        old.get("visual_mode", "animated"),
     )
 
 
