@@ -417,6 +417,8 @@ def run_pipeline(job_id: str) -> None:
                     )
             script["retention"] = {
                 "passed": bool(story_score.get("passed")),
+                "quality_target_met": bool(story_score.get("quality_target_met")),
+                "accepted_below_target": bool(story_score.get("accepted_below_target")),
                 "total": story_score.get("total"),
                 "scores": {
                     "hook": story_scores.get("hook"),
