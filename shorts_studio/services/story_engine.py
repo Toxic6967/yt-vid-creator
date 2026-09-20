@@ -557,6 +557,7 @@ def _normalise_story(
             "core_loop": game_context.get("core_loop"),
             "mechanics": game_context.get("mechanics", []),
             "locations": game_context.get("locations", []),
+            "visual_setpieces": game_context.get("visual_setpieces", []),
             "player_situations": game_context.get("player_situations", []),
         },
         "genre": _clean(raw.get("genre") or "relatable", 24).lower(),
