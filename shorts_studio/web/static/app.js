@@ -34,11 +34,13 @@ document.querySelectorAll('[data-refresh-media]').forEach(btn=>btn.onclick=()=>l
 async function loadHealth(){
   try{
     const h = await jsonFetch('/api/health');
-    const ok = h.ollama.ok && h.ollama.model_installed && h.ffmpeg.ok;
+    const voiceReady = Boolean(h.voice && h.voice.ready);
+    const ok = h.ollama.ok && h.ollama.model_installed && h.ffmpeg.ok && voiceReady;
     health.className = 'health ' + (ok ? 'ok' : 'bad');
-    if(ok) health.textContent = `Local AI ready • ${h.ollama.model}`;
+    if(ok) health.textContent = `Story AI ready • ${h.ollama.model} • human voice`;
     else if(!h.ollama.ok) health.textContent = 'Ollama not running';
     else if(!h.ollama.model_installed) health.textContent = `Install model: ollama pull ${h.ollama.model}`;
+    else if(!voiceReady) health.textContent = 'Human voice not installed • run install_human_voice.bat';
     else health.textContent = 'FFmpeg unavailable';
   }catch(e){health.className='health bad';health.textContent='Health check failed';}
 }
@@ -377,8 +379,14 @@ function updateJobCard(node, job){
   }
   if(['ready','review_needed','failed'].includes(job.status)){
     const regen=document.createElement('button');
-    regen.className='action';regen.textContent='Regenerate';
-    regen.onclick=async()=>{await jsonFetch(`/api/jobs/${job.id}/regenerate`,{method:'POST',body:'{}'});loadJobs();};
+    regen.className='action';
+    if((job.content_type||'auto')==='story'){
+      regen.textContent='Regenerate Story';
+      regen.onclick=async()=>{await jsonFetch(`/api/jobs/${job.id}/regenerate`,{method:'POST',body:'{}'});loadJobs();};
+    }else{
+      regen.textContent='Remake as Story';
+      regen.onclick=async()=>{await jsonFetch(`/api/jobs/${job.id}/remake-story`,{method:'POST',body:'{}'});loadJobs();};
+    }
     actions.appendChild(regen);
   }
   if(job.output_path){
