@@ -263,18 +263,20 @@ def render_story_narration(
             backend = "chatterbox-continuous"
             resolved_voice = "chatterbox-builtin"
         except Exception as exc:
-            # If the user installed the stronger backend, do not silently pretend
-            # the old voice is equivalent. Keep the exact reason in metadata, but
-            # fall back so a temporary Chatterbox issue does not destroy a long render.
-            backend_error = str(exc)
+            raise RuntimeError(
+                "Natural Chatterbox narration failed. Story Studio stopped instead of silently "
+                f"substituting the older synthetic narrator: {exc}"
+            ) from exc
 
     if not wav_path.exists():
+        # Legacy safety path only. Story-mode preflight requires Chatterbox, so
+        # finished Stories should never reach Kokoro.
         model = _get_kokoro()
         import soundfile as sf
 
         samples, sample_rate = model.create(
             spoken_text,
-            voice=resolved_voice if resolved_voice != "chatterbox-builtin" else KOKORO_VOICES.get(voice, "am_puck"),
+            voice=KOKORO_VOICES.get(voice, "am_puck"),
             speed=0.98,
             lang="en-us",
         )
