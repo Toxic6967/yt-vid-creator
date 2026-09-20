@@ -171,14 +171,24 @@ Return:
   "locations":[
     {{"name":"...","description":"...","source_ids":[1]}}
   ],
+  "visual_setpieces":[
+    {{
+      "name":"exact verified area/room/landmark/obstacle group",
+      "appearance":"what a player would visibly recognise: layout, dominant materials/colours, props, lighting, obstacle shapes",
+      "story_use":"what kinds of player actions/story beats can physically happen here",
+      "source_ids":[1,2]
+    }}
+  ],
   "player_situations":[
     {{"situation":"relatable thing that can genuinely happen because of the mechanics","source_ids":[1,2]}}
   ],
   "avoid_inventing":["things the sources do NOT establish"]
 }}
 
-Need at least 6 useful mechanics/locations/situations total and preferably 4+ visually distinct set-pieces/locations.
-Do not invent decorative details that the sources do not support. Keep each item concise.
+Need at least 8 useful mechanics/locations/situations total and at least 4 visually distinct visual_setpieces.
+For visual_setpieces, include only recognisable visual details supported by the source pack.
+Do not invent fake rooms, signs, colours, props, enemies or landmarks just to make the movie prettier.
+Prefer set-pieces that genuinely look different from one another on screen. Keep each item concise.
 """,
         temperature=0.12,
     )
@@ -195,7 +205,7 @@ Do not invent decorative details that the sources do not support. Keep each item
         if isinstance(context.get("player_situations"), list)
         else []
     )
-    if len(mechanics) + len(locations) + len(setpieces) + len(situations) < 6:
+    if len(mechanics) + len(locations) + len(setpieces) + len(situations) < 8:
         raise RuntimeError(
             f"Research for {game_name} did not produce enough verified gameplay detail. "
             "Story Studio stopped instead of making up a generic Roblox story."
