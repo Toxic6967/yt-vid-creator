@@ -139,8 +139,19 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
     scenes = script.get("scenes") or []
     game_name = str(script.get("game_name") or "Roblox").strip()
     game_context = script.get("game_context") or {}
-    visual_setpieces = game_context.get("visual_setpieces") or []
-    visual_context = json.dumps(visual_setpieces[:8], ensure_ascii=False)
+    visual_setpieces = [
+        item
+        for item in [
+            *(game_context.get("visual_setpieces") or []),
+            *(game_context.get("locations") or []),
+        ]
+        if isinstance(item, dict)
+    ]
+    setpiece_lookup = {
+        _environment_key(str(item.get("name") or "")): item
+        for item in visual_setpieces
+        if str(item.get("name") or "").strip()
+    }
     plate_dir = job_dir / "reference" / "environments"
     plate_dir.mkdir(parents=True, exist_ok=True)
     seed_ref = build_environment_seed(job_dir / "reference" / "environment_seed.png")
@@ -153,6 +164,8 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
             continue
 
         seed = zlib.crc32(f"roblox-env-v2|{game_name}|{key}".encode("utf-8")) & 0x7FFFFFFF
+        matched_context = setpiece_lookup.get(key) or {}
+        visual_context = json.dumps(matched_context, ensure_ascii=False)
         first_plate = generate_story_keyframe(
             prompt=(
                 f"Empty Roblox gameplay environment for {game_name}. "
