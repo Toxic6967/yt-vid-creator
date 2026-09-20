@@ -1316,6 +1316,63 @@ Return exactly:
     return story
 
 
+def _repair_story_logic(
+    story: dict[str, Any],
+    *,
+    audience: str,
+    target_seconds: int,
+    game_context: dict[str, Any],
+    audit: dict[str, Any],
+) -> dict[str, Any]:
+    """Targeted rewrite for plot holes found by the independent logic critic."""
+    result = chat_json(
+        "You are a continuity editor repairing a Roblox mini-movie. Return JSON only.",
+        f"""
+AUDIENCE: {audience}
+TARGET RUNTIME: {target_seconds} seconds
+GAME: {game_context.get("game_name")}
+
+VERIFIED GAME CONTEXT:
+{story_game_prompt_context(game_context)}
+
+LOCKED ARC:
+{json.dumps(story.get("arc_plan") or {}, ensure_ascii=False)}
+
+CURRENT STORY:
+{json.dumps(_writer_view(story), ensure_ascii=False)}
+
+INDEPENDENT LOGIC AUDIT:
+{json.dumps(audit, ensure_ascii=False)}
+
+Repair the story instead of making it louder or more random.
+
+Hard rules:
+- Preserve the same central goal and general premise unless the audit proves they are impossible.
+- Every scene after the hook must clearly happen because of an earlier player choice, failure, discovery or VERIFIED game mechanic.
+- Fix characters acting stupid for plot convenience.
+- Remove filler scenes rather than padding them.
+- Replace coincidence with setup, skill, mistake, risk or a mechanic established earlier.
+- The turning point must be an earned decision/discovery.
+- The climax must use something established earlier and resolve the original goal.
+- The payoff must directly answer the hook.
+- Do not invent items, enemies, powers, rooms, currencies, UI or lore outside VERIFIED GAME CONTEXT.
+- Keep 14-18 purposeful scenes for a normal ~65 second Story, scaled to the requested runtime.
+- Preserve the compact CURRENT STORY JSON shape.
+- Keep because_of and changes for every scene.
+- Do not add generated visual prompt fields.
+
+Return ONLY the repaired compact story JSON.
+""",
+        temperature=0.30,
+    )
+
+    repaired = _normalise_story(result, target_seconds, game_context)
+    repaired["arc_plan"] = story.get("arc_plan") or {}
+    if story.get("idea_selection"):
+        repaired["idea_selection"] = story.get("idea_selection")
+    return repaired
+
+
 def _finalize_story_quality(
     story: dict[str, Any],
     *,
@@ -1368,6 +1425,20 @@ def _finalize_story_quality(
 
         if score.get("passed"):
             return candidate
+
+        # A failed logic audit needs an actual plot rewrite; simply re-directing
+        # the same broken screenplay cannot repair coincidence or motivation.
+        if not logic_audit.get("passed"):
+            try:
+                best_story = _repair_story_logic(
+                    candidate,
+                    audience=audience,
+                    target_seconds=target_seconds,
+                    game_context=game_context,
+                    audit=logic_audit,
+                )
+            except Exception:
+                best_story = candidate
 
     best_story["story_score"] = best_score or _score_story(
         best_story,
