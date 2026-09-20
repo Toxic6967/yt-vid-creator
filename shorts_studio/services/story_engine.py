@@ -236,6 +236,73 @@ Return:
     selected["candidate_scores"] = judged.get("scores") or []
     return selected
 
+def _plan_story_arc(
+    idea: str,
+    *,
+    audience: str,
+    game_context: dict[str, Any],
+    genre: str,
+    target_seconds: int,
+) -> dict[str, Any]:
+    """Lock the causal plot before the screenplay writer expands it."""
+    result = chat_json(
+        "You are a Roblox story architect. Build simple causal plots, never random AI nonsense. Return JSON only.",
+        f"""
+AUDIENCE: {audience}
+GAME: {game_context.get("game_name")}
+GENRE: {genre}
+TARGET: {target_seconds} seconds
+PREMISE/IDEA: {idea}
+
+VERIFIED GAME CONTEXT:
+{story_game_prompt_context(game_context)}
+
+Design ONE coherent mini-movie arc.
+
+Rules:
+- One central player goal only.
+- Every major problem must come from a VERIFIED game mechanic, player choice or earlier mistake.
+- No random hacker, magic portal, secret weapon, mystery NPC, sudden superpower, fake item or invented lore.
+- The failed attempt must make the next problem worse or more urgent.
+- The turning point must be something the player notices/decides/uses, not coincidence.
+- The climax must resolve the same goal established near the beginning.
+- The payoff must directly answer the hook and feel earned.
+- Keep it relatable to actual players of this game.
+- Longer runtime means more escalation and character decisions, not extra unrelated subplots.
+
+Return exactly:
+{{
+  "central_goal":"...",
+  "stakes":"...",
+  "hook_event":"...",
+  "setup":"...",
+  "first_obstacle":"...",
+  "failed_attempt":"...",
+  "escalation":"...",
+  "turning_point":"...",
+  "climax":"...",
+  "payoff":"...",
+  "verified_mechanics_used":["...", "..."],
+  "do_not_invent":["..."]
+}}
+""",
+        temperature=0.26,
+    )
+    required = (
+        "central_goal",
+        "stakes",
+        "hook_event",
+        "first_obstacle",
+        "failed_attempt",
+        "turning_point",
+        "climax",
+        "payoff",
+    )
+    if any(not _clean(result.get(key), 240) for key in required):
+        raise RuntimeError("Story architect did not produce a complete causal plot.")
+    return result
+
+
 def _story_prompt(
     idea: str | None,
     audience: str,
@@ -243,6 +310,7 @@ def _story_prompt(
     target_seconds: int,
     genre: str,
     game_context: dict[str, Any],
+    arc_plan: dict[str, Any],
 ) -> str:
     requested = idea.strip() if idea else "Use the selected premise supplied by the commissioning editor."
     recurring_cast = "\n".join(
@@ -258,6 +326,9 @@ USER IDEA: {requested}
 
 REAL GAME CONTEXT — DO NOT INVENT OUTSIDE THIS:
 {story_game_prompt_context(game_context)}
+
+LOCKED CAUSAL STORY ARC:
+{json.dumps(arc_plan, ensure_ascii=False, indent=2)}
 
 RECURRING CHANNEL CAST:
 {recurring_cast}
@@ -275,6 +346,7 @@ NON-NEGOTIABLE:
 - Hook in the FIRST 1-2 seconds. Start inside the problem; no introduction.
 - Use 10-14 purposeful scenes. Maximum 3 characters.
 - Each narration line should usually be 6-14 spoken words. The longer runtime is for MORE STORY, not filler.
+- Follow the LOCKED CAUSAL STORY ARC above. Do not replace it with a different plot.
 - Build a real cause-and-effect story arc:
   1) HOOK: show the immediate problem or strange situation.
   2) GOAL: make it obvious what the player is trying to do.
@@ -1075,12 +1147,29 @@ def create_story(
         )
         genre = str(selected_idea.get("genre") or genre)
 
+    arc_plan = _plan_story_arc(
+        idea,
+        audience=audience,
+        game_context=game_context,
+        genre=genre,
+        target_seconds=target_seconds,
+    )
+
     draft = chat_json(
         "You are a sharp Roblox mini-movie writer/director. You write for young players without writing down to them. Return JSON only.",
-        _story_prompt(idea, audience, tone, target_seconds, genre, game_context),
-        temperature=0.62,
+        _story_prompt(
+            idea,
+            audience,
+            tone,
+            target_seconds,
+            genre,
+            game_context,
+            arc_plan,
+        ),
+        temperature=0.54,
     )
     story = _normalise_story(draft, target_seconds, game_context)
+    story["arc_plan"] = arc_plan
     if selected_idea:
         story["idea_selection"] = selected_idea
 
@@ -1102,6 +1191,9 @@ TARGET: {target_seconds} seconds
 REAL GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
+LOCKED CAUSAL ARC:
+{json.dumps(story.get("arc_plan") or {}, ensure_ascii=False)}
+
 CURRENT STORY:
 {json.dumps(_writer_view(story), ensure_ascii=False)}
 
@@ -1121,7 +1213,9 @@ retention, claims, warnings, source_ids, edit_instruction, pattern_interrupt or 
             temperature=0.48,
         )
         retained_idea = story.get("idea_selection")
+        retained_arc_plan = story.get("arc_plan") or arc_plan
         story = _normalise_story(rewritten, target_seconds, game_context)
+        story["arc_plan"] = retained_arc_plan
         if retained_idea:
             story["idea_selection"] = retained_idea
 
