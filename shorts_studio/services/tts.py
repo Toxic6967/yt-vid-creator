@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import math
 import os
 import re
@@ -286,7 +287,46 @@ def render_story_narration(
 
     info = sf.info(str(wav_path))
     duration = float(info.frames) / float(info.samplerate) if info.samplerate else 0.0
-    master_words = _estimated_word_timings(spoken_text, duration)
+
+    # Align captions to the actual generated narration instead of estimating
+    # timing from word length. Clean TTS is ideal for tiny.en alignment.
+    master_words: list[dict[str, Any]] = []
+    if voice_state.get("chatterbox", {}).get("ready"):
+        alignment_path = output_path.parent / "story_narration_alignment.json"
+        alignment_runner = ROOT_DIR / "scripts" / "align_narration.py"
+        whisper_dir = (
+            (STORAGE_ROOT / "cache" / "whisper")
+            if STORAGE_ROOT
+            else (CACHE_DIR / "whisper")
+        )
+        whisper_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            aligned = subprocess.run(
+                [
+                    str(settings.chatterbox_python),
+                    str(alignment_runner),
+                    "--audio", str(wav_path),
+                    "--output", str(alignment_path),
+                    "--model-dir", str(whisper_dir),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=1800,
+                env=os.environ.copy(),
+            )
+            if aligned.returncode == 0 and alignment_path.exists():
+                payload = json.loads(alignment_path.read_text(encoding="utf-8"))
+                candidate_words = payload.get("words") if isinstance(payload, dict) else []
+                if isinstance(candidate_words, list) and candidate_words:
+                    expected_count = max(1, sum(scene_word_counts))
+                    ratio = len(candidate_words) / expected_count
+                    if 0.72 <= ratio <= 1.28:
+                        master_words = candidate_words
+        except Exception:
+            master_words = []
+
+    if not master_words:
+        master_words = _estimated_word_timings(spoken_text, duration)
 
     total_expected = sum(scene_word_counts)
     if not master_words or total_expected <= 0:
