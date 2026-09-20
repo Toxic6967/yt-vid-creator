@@ -15,6 +15,7 @@ from .comfyui_client import (
     generate_ai_image,
     generate_ai_image_from_reference,
     generate_ai_video,
+    generate_story_keyframe,
     generate_story_video_from_image,
     health as comfyui_health,
 )
@@ -213,22 +214,36 @@ def _try_ai_scene(
         character_key = "|".join(
             str(x) for x in scene.get("character_visuals", []) if x
         ) or topic
-        stable_seed = zlib.crc32(character_key.encode("utf-8")) & 0x7FFFFFFF
+        seed_key = f"{character_key}|{scene.get('game_name','')}|scene:{index}"
+        stable_seed = zlib.crc32(seed_key.encode("utf-8")) & 0x7FFFFFFF
 
         if is_story and reference_image and Path(reference_image).exists():
-            ref_path = Path(reference_image)
-            first_cast_reference = ref_path.name.lower().startswith("cast_reference")
-            result = generate_ai_image_from_reference(
-                prompt=direction["prompt"],
-                negative_prompt=direction["negative_prompt"],
-                reference_path=reference_image,
-                aspect="9:16",
-                steps=30 if first_cast_reference else 26,
-                cfg=6.2,
-                denoise=0.80 if first_cast_reference else 0.60,
-                seed=stable_seed,
-                job_id=f"storyframe_{index}_{random.randint(1000,9999)}",
-            )
+            if state.get("story_image_ready"):
+                result = generate_story_keyframe(
+                    prompt=(
+                        direction["prompt"]
+                        + " Treat the supplied reference image as the exact avatar/body-shape and continuity reference. "
+                        "Keep the Roblox R15 body geometry and outfit identity, but change pose, camera and environment "
+                        "to match this scene. Do not copy any text from the reference."
+                    ),
+                    reference_path=reference_image,
+                    seed=stable_seed,
+                    job_id=f"storyframe_{index}_{random.randint(1000,9999)}",
+                )
+            else:
+                ref_path = Path(reference_image)
+                first_cast_reference = ref_path.name.lower().startswith("cast_reference")
+                result = generate_ai_image_from_reference(
+                    prompt=direction["prompt"],
+                    negative_prompt=direction["negative_prompt"],
+                    reference_path=reference_image,
+                    aspect="9:16",
+                    steps=30 if first_cast_reference else 26,
+                    cfg=6.2,
+                    denoise=0.72 if first_cast_reference else 0.58,
+                    seed=stable_seed,
+                    job_id=f"storyframe_{index}_{random.randint(1000,9999)}",
+                )
         else:
             result = generate_ai_image(
                 prompt=direction["prompt"],
