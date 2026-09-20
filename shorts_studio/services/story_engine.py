@@ -681,6 +681,166 @@ Return:
     }
 
 
+def _rebuild_scene_visual_prompts(
+    scene: dict[str, Any],
+    characters: list[dict[str, Any]],
+    game_name: str,
+) -> None:
+    cmap = _character_map(characters)
+    identities = [
+        cmap[cid]["visual_identity"]
+        for cid in scene.get("characters", [])
+        if cid in cmap
+    ]
+    environment = _clean(scene.get("environment"), 220)
+    action = _clean(scene.get("action"), 260)
+    camera = _clean(scene.get("camera"), 60) or "medium"
+    emotion = _clean(scene.get("emotion"), 80)
+
+    keyframe_prompt = (
+        f"FRAME FROM A ROBLOX R15 GAMEPLAY MINI-MOVIE set inside the real Roblox experience {game_name}. "
+        "The players must have unmistakable modern Roblox R15 avatar anatomy: softly beveled plastic head, "
+        "classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox-style joints, "
+        "catalog hair accessories and Roblox clothing textures. Never use voxel/Minecraft cube anatomy, LEGO proportions, "
+        "Pixar/cartoon children or realistic humans. "
+        f"Characters: {'; '.join(identities)}. THIS SHOT'S distinct in-game area/background: {environment}. "
+        f"THIS SHOT'S action: {action}. Camera/framing: {camera}. Emotion through pose: {emotion}. "
+        "Make this composition clearly different from adjacent shots while preserving character identity. "
+        "Show enough of the game environment to make the location/obstacle/set-piece readable. "
+        "Current polished Roblox-engine lighting, cinematic depth, vertical composition. "
+        "ZERO typography in the generated picture: all signs, monitors, posters, boards and labels are blank or pictorial. "
+        "No words, fake words, letters, numbers, usernames, UI text, captions, logos or watermarks. "
+        "All readable English text is added later by the video editor."
+    )
+    motion_prompt = (
+        f"Inside the real Roblox experience {game_name}: {action}. Camera movement/framing: {camera}. "
+        "Preserve unmistakable Roblox R15 anatomy, exact avatar identity, catalog hair/clothing and this shot's environment. "
+        f"Environment: {environment}. Emotion through Roblox-style pose/animation: {emotion}. "
+        "Use one readable action and restrained game-like movement. No scene transformation, no human anatomy and no voxel/Minecraft look. "
+        "Generate no writing, letters, numbers, usernames, captions, signs with text or UI; editor overlays all text later."
+    )
+
+    scene["visual_query"] = keyframe_prompt
+    scene["keyframe_prompt"] = keyframe_prompt
+    scene["motion_prompt"] = motion_prompt
+    scene["edit_instruction"] = f"{camera} cinematic cut"
+
+
+def _direct_story_shots(
+    story: dict[str, Any],
+    *,
+    game_context: dict[str, Any],
+) -> dict[str, Any]:
+    """Separate movie direction from writing so every scene earns a new visual."""
+    scenes = story.get("scenes") or []
+    if not scenes:
+        return story
+
+    compact = [
+        {
+            "index": idx,
+            "role": scene.get("role"),
+            "narration": scene.get("narration"),
+            "characters": scene.get("characters"),
+            "current_environment": scene.get("environment"),
+            "current_action": scene.get("action"),
+            "current_camera": scene.get("camera"),
+        }
+        for idx, scene in enumerate(scenes)
+    ]
+
+    directed = chat_json(
+        "You are a Roblox cinematic shot director. Return JSON only.",
+        f"""
+GAME: {game_context.get("game_name")}
+
+VERIFIED GAME CONTEXT:
+{story_game_prompt_context(game_context)}
+
+LOCKED STORY BEATS:
+{json.dumps(compact, ensure_ascii=False)}
+
+Create a shot plan for these exact beats. Do NOT rewrite narration or plot.
+
+Hard rules:
+- Return exactly {len(scenes)} shots in the same order.
+- Every shot must visibly communicate its narration beat.
+- Use only locations, mechanics, props, enemies or objectives supported by VERIFIED GAME CONTEXT.
+- The movie happens in one continuous game session, but it must VISIBLY MOVE FORWARD.
+- Prefer 3-5 distinct game areas/set-pieces across the Short when the verified game supports them.
+- Never give adjacent shots the same environment + camera combination.
+- Use at least 5 camera/framing changes across the Short.
+- Alternate useful visual scale: establishing/wide, medium action, close-up reaction/detail, follow/over-shoulder.
+- Reuse an environment only when the story logically returns there, and then change angle/action/composition.
+- Do not design text cards, fake UI, signs with writing, usernames or menus. Any sign/screen must be blank or pictorial.
+- Do not ask the image/video model to spell anything.
+- Keep actions simple enough for a 2-4 second AI-video shot.
+- Avoid vague directions like "he looks shocked"; include a physical action or visible game event.
+
+Return exactly:
+{{
+  "shots":[
+    {{
+      "index":0,
+      "environment":"specific verified game area/background/set-piece",
+      "action":"one physical visible action",
+      "camera":"wide|medium|close-up|over-shoulder|follow|low-angle|high-angle",
+      "emotion":"short pose/emotion direction",
+      "motion_priority":"high|medium|low",
+      "visual_change":"what makes this shot visibly different from the previous shot"
+    }}
+  ]
+}}
+""",
+        temperature=0.26,
+    )
+
+    shots = directed.get("shots") if isinstance(directed.get("shots"), list) else []
+    by_index: dict[int, dict[str, Any]] = {}
+    for shot in shots:
+        if not isinstance(shot, dict):
+            continue
+        try:
+            idx = int(shot.get("index"))
+        except Exception:
+            continue
+        by_index[idx] = shot
+
+    cameras = ("wide", "medium", "close-up", "over-shoulder", "follow", "low-angle", "high-angle")
+    for idx, scene in enumerate(scenes):
+        shot = by_index.get(idx)
+        if shot:
+            env = _clean(shot.get("environment"), 220)
+            action = _clean(shot.get("action"), 260)
+            camera = _clean(shot.get("camera"), 60).lower()
+            emotion = _clean(shot.get("emotion"), 90)
+            priority = _clean(shot.get("motion_priority"), 12).lower()
+            if env:
+                scene["environment"] = env
+            if action:
+                scene["action"] = action
+            if camera in cameras:
+                scene["camera"] = camera
+            if emotion:
+                scene["emotion"] = emotion
+            if priority in {"high", "medium", "low"}:
+                scene["motion_priority"] = priority
+            scene["visual_change"] = _clean(shot.get("visual_change"), 180)
+
+        # Deterministic fallback: adjacent scenes can never keep the same camera.
+        if idx and scene.get("camera") == scenes[idx - 1].get("camera"):
+            current = str(scene.get("camera") or "medium")
+            pos = cameras.index(current) if current in cameras else 1
+            scene["camera"] = cameras[(pos + 2 + idx) % len(cameras)]
+
+    characters = story.get("characters") or []
+    game_name = _clean(story.get("game_name") or game_context.get("game_name"), 80)
+    for scene in scenes:
+        _rebuild_scene_visual_prompts(scene, characters, game_name)
+
+    return story
+
+
 def _polish_narration(
     story: dict,
     *,
@@ -777,6 +937,10 @@ def create_story(
     for _ in range(2):
         score = _score_story(story, audience, target_seconds, game_context)
         if score["passed"]:
+            story = _direct_story_shots(
+                story,
+                game_context=game_context,
+            )
             story = _polish_narration(
                 story,
                 audience=audience,
@@ -818,6 +982,10 @@ retention, claims, warnings, source_ids, edit_instruction, pattern_interrupt or 
         if retained_idea:
             story["idea_selection"] = retained_idea
 
+    story = _direct_story_shots(
+        story,
+        game_context=game_context,
+    )
     story = _polish_narration(
         story,
         audience=audience,
