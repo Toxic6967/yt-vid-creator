@@ -165,6 +165,7 @@ def render(
     scene_audio: list[dict],
     visuals: list[dict],
     scenes: list[dict] | None = None,
+    master_audio: dict | None = None,
 ) -> dict:
     render_dir = job_dir / "render"
     render_dir.mkdir(parents=True, exist_ok=True)
@@ -232,40 +233,87 @@ def render(
     combined_video = render_dir / "video.mp4"
     _run(["-f", "concat", "-safe", "0", "-i", str(visual_list), "-c", "copy", str(combined_video)])
 
-    mixed_scene_audio: list[Path] = []
-    for idx, audio in enumerate(scene_audio):
-        source = Path(audio["path"])
-        scene = (scenes or [])[idx] if scenes and idx < len(scenes) else {}
-        sfx = pick_sfx(scene.get("sfx_cue"))
-        if not sfx:
-            mixed_scene_audio.append(source)
-            continue
-
-        mixed = render_dir / f"audio_scene_{idx + 1:02d}.m4a"
-        _run([
-            "-i", str(source),
-            "-i", str(sfx),
-            "-filter_complex",
-            "[0:a]volume=1.0[voice];"
-            "[1:a]volume=0.16,adelay=70|70[sfx];"
-            "[voice][sfx]amix=inputs=2:duration=first:dropout_transition=0[a]",
-            "-map", "[a]",
-            "-c:a", "aac", "-b:a", "192k",
-            str(mixed),
-        ])
-        mixed_scene_audio.append(mixed)
-
-    audio_list = render_dir / "audio.txt"
-    audio_list.write_text(
-        "\n".join(f"file '{p.as_posix()}'" for p in mixed_scene_audio),
-        encoding="utf-8",
-    )
     narration = render_dir / "narration.m4a"
-    _run([
-        "-f", "concat", "-safe", "0", "-i", str(audio_list),
-        "-c:a", "aac", "-b:a", "192k",
-        str(narration),
-    ])
+
+    if master_audio and Path(str(master_audio.get("path", ""))).exists():
+        # Story mode: keep the one continuous Kokoro take intact. SFX are delayed
+        # onto this master track instead of cutting/rejoining the narrator at every scene.
+        voice_source = Path(str(master_audio["path"]))
+        sfx_specs: list[tuple[Path, int]] = []
+        timeline_ms = 0
+        for idx, audio in enumerate(scene_audio):
+            scene = (scenes or [])[idx] if scenes and idx < len(scenes) else {}
+            sfx = pick_sfx(scene.get("sfx_cue"))
+            if sfx:
+                sfx_specs.append((sfx, timeline_ms + 90))
+            timeline_ms += int(round(float(audio.get("duration", 0)) * 1000))
+
+        if sfx_specs:
+            args = ["-i", str(voice_source)]
+            for sfx, _delay in sfx_specs:
+                args.extend(["-i", str(sfx)])
+
+            filters = ["[0:a]volume=1.0[voice]"]
+            mix_labels = ["[voice]"]
+            for input_idx, (_sfx, delay_ms) in enumerate(sfx_specs, start=1):
+                label = f"sfx{input_idx}"
+                filters.append(
+                    f"[{input_idx}:a]volume=0.12,adelay={delay_ms}|{delay_ms}[{label}]"
+                )
+                mix_labels.append(f"[{label}]")
+            filters.append(
+                "".join(mix_labels)
+                + f"amix=inputs={len(mix_labels)}:duration=first:dropout_transition=0[a]"
+            )
+
+            args.extend([
+                "-filter_complex", ";".join(filters),
+                "-map", "[a]",
+                "-c:a", "aac", "-b:a", "192k",
+                str(narration),
+            ])
+            _run(args)
+        else:
+            _run([
+                "-i", str(voice_source),
+                "-c:a", "aac", "-b:a", "192k",
+                str(narration),
+            ])
+    else:
+        # Legacy/non-Story path.
+        mixed_scene_audio: list[Path] = []
+        for idx, audio in enumerate(scene_audio):
+            source = Path(audio["path"])
+            scene = (scenes or [])[idx] if scenes and idx < len(scenes) else {}
+            sfx = pick_sfx(scene.get("sfx_cue"))
+            if not sfx:
+                mixed_scene_audio.append(source)
+                continue
+
+            mixed = render_dir / f"audio_scene_{idx + 1:02d}.m4a"
+            _run([
+                "-i", str(source),
+                "-i", str(sfx),
+                "-filter_complex",
+                "[0:a]volume=1.0[voice];"
+                "[1:a]volume=0.16,adelay=70|70[sfx];"
+                "[voice][sfx]amix=inputs=2:duration=first:dropout_transition=0[a]",
+                "-map", "[a]",
+                "-c:a", "aac", "-b:a", "192k",
+                str(mixed),
+            ])
+            mixed_scene_audio.append(mixed)
+
+        audio_list = render_dir / "audio.txt"
+        audio_list.write_text(
+            "\n".join(f"file '{p.as_posix()}'" for p in mixed_scene_audio),
+            encoding="utf-8",
+        )
+        _run([
+            "-f", "concat", "-safe", "0", "-i", str(audio_list),
+            "-c:a", "aac", "-b:a", "192k",
+            str(narration),
+        ])
 
     captions = render_dir / "captions.ass"
     build_captions(scene_audio, captions, scenes=scenes)
@@ -297,7 +345,12 @@ def render(
 
     return {
         "path": str(final_path),
-        "duration": round(sum(float(a["duration"]) for a in scene_audio), 2),
+        "duration": round(
+            float(master_audio.get("duration"))
+            if master_audio and master_audio.get("duration") is not None
+            else sum(float(a["duration"]) for a in scene_audio),
+            2,
+        ),
         "fps": 30,
         "resolution": "1080x1920",
         "video_codec": "H.264",
