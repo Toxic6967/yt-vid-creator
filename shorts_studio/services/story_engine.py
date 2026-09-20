@@ -938,6 +938,97 @@ Return:
     }
 
 
+def _logic_audit(
+    story: dict[str, Any],
+    *,
+    game_context: dict[str, Any],
+) -> dict[str, Any]:
+    """Independent red-team pass: reject stories that technically score well but make no sense."""
+    result = chat_json(
+        "You are a skeptical Roblox player reviewing a story for plot holes. Return JSON only.",
+        f"""
+GAME: {game_context.get("game_name")}
+
+VERIFIED GAME CONTEXT:
+{story_game_prompt_context(game_context)}
+
+LOCKED ARC:
+{json.dumps(story.get("arc_plan") or {}, ensure_ascii=False)}
+
+STORY:
+{json.dumps(_writer_view(story), ensure_ascii=False)}
+
+Try to DISPROVE that this is a good story. Check:
+- causal_logic: does each meaningful event follow from an earlier action, mistake, clue or verified mechanic?
+- player_behavior: do the characters act like believable players, or do they become stupid just so the plot can happen?
+- game_truth: are game mechanics/locations/items used consistently with the verified context?
+- central_goal: is the same goal still driving the middle and climax?
+- escalation: do setbacks genuinely increase pressure rather than repeat the same problem?
+- turning_point: does a character notice/decide/use something that earns the change in direction?
+- ending_logic: does the climax/payoff actually resolve the hook and goal without coincidence?
+- filler: are there any scenes that could disappear with no effect on the story?
+
+Return exactly:
+{{
+  "causal_logic":0,
+  "player_behavior":0,
+  "game_truth":0,
+  "central_goal":0,
+  "escalation":0,
+  "turning_point":0,
+  "ending_logic":0,
+  "filler":0,
+  "fatal_problems":[],
+  "notes":[]
+}}
+
+For filler, 100 means NO filler.
+For player_behavior, 100 means believable decisions.
+""",
+        temperature=0.10,
+    )
+    keys = (
+        "causal_logic",
+        "player_behavior",
+        "game_truth",
+        "central_goal",
+        "escalation",
+        "turning_point",
+        "ending_logic",
+        "filler",
+    )
+    scores = {
+        key: max(0, min(100, int(float(result.get(key, 0) or 0))))
+        for key in keys
+    }
+    fatal = [
+        _clean(item, 220)
+        for item in (result.get("fatal_problems") or [])
+        if _clean(item, 220)
+    ][:6]
+    passed = (
+        not fatal
+        and scores["causal_logic"] >= 84
+        and scores["player_behavior"] >= 80
+        and scores["game_truth"] >= 86
+        and scores["central_goal"] >= 84
+        and scores["escalation"] >= 80
+        and scores["turning_point"] >= 80
+        and scores["ending_logic"] >= 84
+        and scores["filler"] >= 82
+    )
+    return {
+        "scores": scores,
+        "fatal_problems": fatal,
+        "notes": [
+            _clean(item, 220)
+            for item in (result.get("notes") or [])
+            if _clean(item, 220)
+        ][:8],
+        "passed": passed,
+    }
+
+
 def _rebuild_scene_visual_prompts(
     scene: dict[str, Any],
     characters: list[dict[str, Any]],
@@ -1236,7 +1327,7 @@ def _finalize_story_quality(
     best_story = story
     best_score: dict[str, Any] | None = None
 
-    for _ in range(2):
+    for _ in range(3):
         candidate = _direct_story_shots(
             best_story,
             game_context=game_context,
@@ -1253,6 +1344,22 @@ def _finalize_story_quality(
             target_seconds,
             game_context,
         )
+        logic_audit = _logic_audit(
+            candidate,
+            game_context=game_context,
+        )
+        score["logic_audit"] = logic_audit
+        if not logic_audit.get("passed"):
+            score["passed"] = False
+            audit_problems = logic_audit.get("fatal_problems") or logic_audit.get("notes") or []
+            if audit_problems:
+                score.setdefault("problems", []).extend(
+                    ["Logic audit: " + str(x) for x in audit_problems[:4]]
+                )
+            score.setdefault("rewrite_instructions", []).append(
+                "Repair the causal chain, player motivation and payoff using only verified game mechanics; remove filler and coincidence."
+            )
+
         candidate["story_score"] = score
 
         if best_score is None or float(score.get("total") or 0) >= float(best_score.get("total") or 0):
