@@ -181,6 +181,7 @@ def _try_ai_scene(
     index: int,
     topic: str,
     reference_image: str | Path | None = None,
+    identity_reference: str | Path | None = None,
 ) -> dict[str, Any] | None:
     try:
         state = comfyui_health()
@@ -227,6 +228,7 @@ def _try_ai_scene(
                         "to match this scene. Do not copy any text from the reference."
                     ),
                     reference_path=reference_image,
+                    identity_reference_path=identity_reference,
                     seed=stable_seed,
                     job_id=f"storyframe_{index}_{random.randint(1000,9999)}",
                 )
@@ -340,6 +342,7 @@ def prepare_visual(
     *,
     duration: float = 3.0,
     reference_image: str | Path | None = None,
+    identity_reference: str | Path | None = None,
 ) -> dict:
     visual_dir = job_dir / "visuals"
     visual_dir.mkdir(parents=True, exist_ok=True)
@@ -366,6 +369,7 @@ def prepare_visual(
                 index,
                 topic,
                 reference_image=reference_image,
+                identity_reference=identity_reference,
             )
             if not keyframe:
                 raise RuntimeError(
