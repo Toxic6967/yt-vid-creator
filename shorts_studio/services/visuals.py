@@ -314,22 +314,33 @@ def _try_ai_scene(
             and str(result.get("backend", "")).startswith("flux2")
         ):
             try:
-                cleaned = generate_story_keyframe(
-                    prompt=(
-                        "Polish this exact Roblox gameplay movie frame without changing the story beat, camera or map layout. "
-                        "FIRST: make every visible player unmistakably authentic Roblox R15 if the previous pass drifted: "
-                        "classic Roblox face decal, R15 torso, separate upper/lower limbs, Roblox joints, catalog hair/clothing, "
-                        "simple game-avatar hands with no fingers. Remove any Minecraft/voxel, LEGO or human anatomy drift. "
-                        "SECOND: keep the environment looking like a polished Roblox Studio game map, not a photoreal film set. "
-                        "THIRD: remove every piece of generated typography or pseudo-typography. Make signs, screens, posters, "
-                        "labels and boards blank or purely pictorial. Do not add letters, numbers, usernames, logos, captions or symbols. "
-                        "Preserve outfit colours, pose, action and composition."
-                    ),
-                    reference_path=result["path"],
-                    identity_reference_path=identity_reference or reference_image,
-                    seed=(stable_seed + 991) & 0x7FFFFFFF,
-                    job_id=f"storyclean_{index}_{random.randint(1000,9999)}",
+                cleanup_prompt = (
+                    "Polish this exact Roblox gameplay movie frame without changing the story beat, camera or map layout. "
+                    "FIRST: make every visible player unmistakably authentic current Roblox R15: flat classic face decal, "
+                    "R15 upper/lower torso proportions, clearly separated upper/lower limbs and Roblox joints, catalog hair/clothing, "
+                    "simple Roblox hands with no fingers. Correct Minecraft/voxel, LEGO, Pixar or human anatomy drift. "
+                    "SECOND: preserve the recognisable Roblox game environment and make it read as a polished Roblox Studio map: "
+                    "stylized Parts/MeshParts/Terrain, clean game-scale geometry, readable obstacle layout, current Roblox-style lighting, "
+                    "never a photoreal movie set and never a voxel/Minecraft world. "
+                    "THIRD: remove every piece of generated typography or pseudo-typography. Signs, screens, posters, labels and boards "
+                    "must be blank or pictorial. Do not add letters, numbers, usernames, logos, captions, symbols or UI. "
+                    "Preserve outfit colours, action, environment identity and composition."
                 )
+                if identity_reference and Path(identity_reference).exists():
+                    cleaned = generate_story_scene_dual_reference(
+                        prompt=cleanup_prompt,
+                        identity_reference_path=identity_reference,
+                        environment_reference_path=result["path"],
+                        seed=(stable_seed + 991) & 0x7FFFFFFF,
+                        job_id=f"storyclean_{index}_{random.randint(1000,9999)}",
+                    )
+                else:
+                    cleaned = generate_story_keyframe(
+                        prompt=cleanup_prompt,
+                        reference_path=result["path"],
+                        seed=(stable_seed + 991) & 0x7FFFFFFF,
+                        job_id=f"storyclean_{index}_{random.randint(1000,9999)}",
+                    )
                 cleaned["text_cleanup_pass"] = True
                 result = cleaned
             except Exception:
