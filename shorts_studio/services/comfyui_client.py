@@ -427,7 +427,9 @@ def _story_i2v_workflow(
     resolved = state.get("story_video_models_resolved") or {}
 
     frames = max(49, min(97, (round(max(2.0, min(4.0, seconds)) * 24) // 8) * 8 + 1))
-    width, height = 512, 768
+    # Slightly taller native generation gives more useful vertical detail while
+    # staying within the practical 8 GB LTX 2B FP8 range.
+    width, height = 512, 896
 
     return _replace_placeholders(
         workflow,
@@ -445,7 +447,7 @@ def _story_i2v_workflow(
             "__WIDTH__": width,
             "__HEIGHT__": height,
             "__FRAMES__": frames,
-            "__I2V_STRENGTH__": 0.88,
+            "__I2V_STRENGTH__": 0.94,
         },
     )
 
