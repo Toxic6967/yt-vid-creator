@@ -611,23 +611,37 @@ def run_pipeline(job_id: str) -> None:
                     )
                 )
 
-        real_video_count = sum(1 for v in visuals if v.get("kind") == "ai_generated_video")
+        real_video_count = sum(
+            1 for v in visuals
+            if v.get("kind") in {"ai_generated_video", "blender_animated_scene"}
+        )
         ltx_video_count = sum(
             1 for v in visuals
             if v.get("kind") == "ai_generated_video" and v.get("backend") == "ltx_i2v"
         )
+        blender_animation_count = sum(
+            1 for v in visuals
+            if v.get("backend") == "blender_r15_v3"
+        )
         required_story_motion = 0
         if content_type == "story":
-            required_story_motion = max(
-                7,
-                min(10, round(len(script.get("scenes", [])) * 0.62)),
-            )
-            if ltx_video_count < required_story_motion:
-                raise RuntimeError(
-                    f"Story render stopped because only {ltx_video_count} cinematic motion shots completed; "
-                    f"this story needs at least {required_story_motion}. "
-                    "This prevents a slideshow or weak fallback video from being marked finished."
+            if visual_mode == "animated":
+                required_story_motion = len(script.get("scenes", []))
+                if blender_animation_count != required_story_motion:
+                    raise RuntimeError(
+                        f"V3 animation returned {blender_animation_count} rendered shots for "
+                        f"{required_story_motion} Story scenes."
+                    )
+            else:
+                required_story_motion = max(
+                    7,
+                    min(10, round(len(script.get("scenes", [])) * 0.62)),
                 )
+                if ltx_video_count < required_story_motion:
+                    raise RuntimeError(
+                        f"Story render stopped because only {ltx_video_count} cinematic motion shots completed; "
+                        f"this story needs at least {required_story_motion}."
+                    )
         if content_type != "story" and "roblox" in job["niche"].lower() and real_video_count < 3:
             from .comfyui_client import health as comfyui_health
             media_state = comfyui_health()
@@ -664,6 +678,7 @@ def run_pipeline(job_id: str) -> None:
         fallback_visuals = [v for v in visuals if v.get("kind") == "storyboard_fallback"]
         ai_visuals = [v for v in visuals if v.get("kind") == "ai_generated_scene"]
         ai_videos = [v for v in visuals if v.get("kind") == "ai_generated_video"]
+        blender_videos = [v for v in visuals if v.get("backend") == "blender_r15_v3"]
         adjacent_similarities = [
             float(v.get("previous_frame_similarity", 0.0))
             for v in visuals
@@ -694,22 +709,36 @@ def run_pipeline(job_id: str) -> None:
             "external_visual_count": len(external_visuals),
             "ai_visual_count": len(ai_visuals),
             "ai_video_count": len(ai_videos),
+            "blender_animation_count": len(blender_videos),
             "cinematic_i2v_count": sum(1 for v in ai_videos if v.get("backend") == "ltx_i2v"),
             "required_cinematic_i2v_count": required_story_motion if content_type == "story" else 0,
             "cinematic_motion_ok": (
-                sum(1 for v in ai_videos if v.get("backend") == "ltx_i2v") >= required_story_motion
-                if content_type == "story"
-                else True
+                (
+                    len(blender_videos) == required_story_motion
+                    and bool((manifest.get("animation_quality") or {}).get("passed"))
+                )
+                if content_type == "story" and visual_mode == "animated"
+                else (
+                    sum(1 for v in ai_videos if v.get("backend") == "ltx_i2v") >= required_story_motion
+                    if content_type == "story"
+                    else True
+                )
             ),
             "fallback_visual_count": len(fallback_visuals),
             "max_adjacent_visual_similarity": round(max_adjacent_similarity, 3),
             "visual_variety_ok": (
-                max_adjacent_similarity < 0.84 if content_type == "story" else True
+                bool((manifest.get("animation_quality") or {}).get("passed"))
+                if content_type == "story" and visual_mode == "animated"
+                else (max_adjacent_similarity < 0.84 if content_type == "story" else True)
             ),
             "polished_cast_ok": (
-                bool(manifest.get("polished_cast_references"))
-                if content_type == "story"
-                else True
+                True
+                if content_type == "story" and visual_mode == "animated"
+                else (
+                    bool(manifest.get("polished_cast_references"))
+                    if content_type == "story"
+                    else True
+                )
             ),
             "environment_plate_count": environment_plate_count,
             "environment_variety_ok": (
@@ -718,6 +747,12 @@ def run_pipeline(job_id: str) -> None:
             "visual_content_ok": len(fallback_visuals) == 0 and (
                 (
                     content_type == "story"
+                    and visual_mode == "animated"
+                    and len(blender_videos) == len(script.get("scenes", []))
+                )
+                or (
+                    content_type == "story"
+                    and visual_mode != "animated"
                     and sum(1 for v in ai_videos if v.get("backend") == "ltx_i2v") >= 3
                 )
                 or (
