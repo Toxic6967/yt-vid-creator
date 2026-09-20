@@ -108,6 +108,21 @@ def add_torus(name, loc, major, minor, material, parent=None, rotation=(0, 0, 0)
     return obj
 
 
+def add_empty(name, loc, parent=None):
+    obj = bpy.data.objects.new(name, None)
+    bpy.context.collection.objects.link(obj)
+    obj.location = loc
+    if parent:
+        obj.parent = parent
+    return obj
+
+
+def reparent_keep_world(obj, parent):
+    world = obj.matrix_world.copy()
+    obj.parent = parent
+    obj.matrix_world = world
+
+
 def rgb(hex_value):
     value = hex_value.lstrip("#")
     return tuple(int(value[i:i+2], 16) / 255.0 for i in (0, 2, 4))
@@ -169,7 +184,7 @@ def create_r15(cid, lane):
             f"{cid}_{side}_Hand", (x, -0.01, 2.25), (0.42, 0.50, 0.30), mats["skin"], root, 0.10
         )
         # Rounded joint caps make the segmented body read as R15 rather than voxel/Minecraft.
-        add_uv(
+        parts[f"{side}_shoulder_joint"] = add_uv(
             f"{cid}_{side}_ShoulderJoint",
             (x, 0, 3.82),
             (0.22, 0.24, 0.22),
@@ -178,7 +193,7 @@ def create_r15(cid, lane):
             16,
             8,
         )
-        add_uv(
+        parts[f"{side}_elbow_joint"] = add_uv(
             f"{cid}_{side}_ElbowJoint",
             (x, 0, 3.02),
             (0.19, 0.20, 0.19),
@@ -198,7 +213,7 @@ def create_r15(cid, lane):
         parts[f"{side}_foot"] = add_box(
             f"{cid}_{side}_Foot", (lx, -0.10, 0.34), (0.62, 0.88, 0.32), mats["shoe"], root, 0.09
         )
-        add_uv(
+        parts[f"{side}_hip_joint"] = add_uv(
             f"{cid}_{side}_HipJoint",
             (lx, 0, 2.02),
             (0.24, 0.25, 0.22),
@@ -207,7 +222,7 @@ def create_r15(cid, lane):
             16,
             8,
         )
-        add_uv(
+        parts[f"{side}_knee_joint"] = add_uv(
             f"{cid}_{side}_KneeJoint",
             (lx, 0, 1.16),
             (0.21, 0.22, 0.19),
@@ -302,7 +317,30 @@ def create_r15(cid, lane):
         8,
     )
 
-    return {"root": root, "parts": parts}
+    # Simple hierarchical controls make limb motion pivot at Roblox joints
+    # instead of rotating disconnected blocks around their centres.
+    controls = {}
+    for side, sign in (("L", -1), ("R", 1)):
+        shoulder = add_empty(f"{cid}_{side}_Shoulder_CTRL", (1.05 * sign, 0, 3.82), root)
+        elbow = add_empty(f"{cid}_{side}_Elbow_CTRL", (1.05 * sign, 0, 3.02), root)
+        reparent_keep_world(elbow, shoulder)
+        for name in (f"{side}_upper_arm",):
+            reparent_keep_world(parts[name], shoulder)
+        for name in (f"{side}_lower_arm", f"{side}_hand", f"{side}_elbow_joint"):
+            reparent_keep_world(parts[name], elbow)
+        controls[f"{side}_shoulder"] = shoulder
+        controls[f"{side}_elbow"] = elbow
+
+        hip = add_empty(f"{cid}_{side}_Hip_CTRL", (0.43 * sign, 0, 2.02), root)
+        knee = add_empty(f"{cid}_{side}_Knee_CTRL", (0.43 * sign, 0, 1.16), root)
+        reparent_keep_world(knee, hip)
+        reparent_keep_world(parts[f"{side}_upper_leg"], hip)
+        for name in (f"{side}_lower_leg", f"{side}_foot", f"{side}_knee_joint"):
+            reparent_keep_world(parts[name], knee)
+        controls[f"{side}_hip"] = hip
+        controls[f"{side}_knee"] = knee
+
+    return {"root": root, "parts": parts, "controls": controls}
 
 
 def key(obj, frame, *, location=None, rotation=None, scale=None):
@@ -320,6 +358,7 @@ def key(obj, frame, *, location=None, rotation=None, scale=None):
 def animate_actor(actor, rig, frame_end):
     root = rig["root"]
     parts = rig["parts"]
+    controls = rig.get("controls") or {}
     clip = str(actor.get("clip") or "idle")
     start_x = float(actor.get("start_lane") or 0.0)
     end_x = float(actor.get("end_lane") if actor.get("end_lane") is not None else start_x)
@@ -333,12 +372,14 @@ def animate_actor(actor, rig, frame_end):
 
     def swing(amount=0.65):
         for frame, sign in ((1, 1), (q1, -1), (mid, 1), (q3, -1), (frame_end, 1)):
-            parts["L_upper_arm"].rotation_euler[0] = amount * sign
-            parts["R_upper_arm"].rotation_euler[0] = -amount * sign
-            parts["L_upper_leg"].rotation_euler[0] = -amount * sign
-            parts["R_upper_leg"].rotation_euler[0] = amount * sign
-            for name in ("L_upper_arm", "R_upper_arm", "L_upper_leg", "R_upper_leg"):
-                parts[name].keyframe_insert(data_path="rotation_euler", frame=frame)
+            controls["L_shoulder"].rotation_euler[0] = amount * sign
+            controls["R_shoulder"].rotation_euler[0] = -amount * sign
+            controls["L_hip"].rotation_euler[0] = -amount * sign
+            controls["R_hip"].rotation_euler[0] = amount * sign
+            controls["L_knee"].rotation_euler[0] = max(0.0, amount * 0.28 * sign)
+            controls["R_knee"].rotation_euler[0] = max(0.0, -amount * 0.28 * sign)
+            for name in ("L_shoulder", "R_shoulder", "L_hip", "R_hip", "L_knee", "R_knee"):
+                controls[name].keyframe_insert(data_path="rotation_euler", frame=frame)
 
     if clip in {"run", "dash"}:
         swing(0.80 if clip == "run" else 1.0)
@@ -357,26 +398,26 @@ def animate_actor(actor, rig, frame_end):
         key(root, mid, rotation=(0, 0, math.radians(18 if clip != "turn" else 42)))
         key(root, frame_end, rotation=(0, 0, 0 if clip != "turn" else math.radians(28)))
     elif clip == "point":
-        parts["R_upper_arm"].rotation_euler[0] = math.radians(-75)
-        parts["R_lower_arm"].rotation_euler[0] = math.radians(-25)
-        parts["R_upper_arm"].keyframe_insert(data_path="rotation_euler", frame=mid)
-        parts["R_lower_arm"].keyframe_insert(data_path="rotation_euler", frame=mid)
+        controls["R_shoulder"].rotation_euler[0] = math.radians(-75)
+        controls["R_elbow"].rotation_euler[0] = math.radians(-25)
+        controls["R_shoulder"].keyframe_insert(data_path="rotation_euler", frame=mid)
+        controls["R_elbow"].keyframe_insert(data_path="rotation_euler", frame=mid)
     elif clip in {"open", "push", "pickup"}:
-        parts["R_upper_arm"].rotation_euler[0] = math.radians(-65)
-        parts["R_lower_arm"].rotation_euler[0] = math.radians(-45)
-        parts["R_upper_arm"].keyframe_insert(data_path="rotation_euler", frame=mid)
-        parts["R_lower_arm"].keyframe_insert(data_path="rotation_euler", frame=mid)
+        controls["R_shoulder"].rotation_euler[0] = math.radians(-65)
+        controls["R_elbow"].rotation_euler[0] = math.radians(-45)
+        controls["R_shoulder"].keyframe_insert(data_path="rotation_euler", frame=mid)
+        controls["R_elbow"].keyframe_insert(data_path="rotation_euler", frame=mid)
         if clip == "pickup":
             key(root, mid, location=((start_x + end_x) / 2, 0, -0.35))
     elif clip in {"attack", "power_cast", "ground_slam", "shield"}:
-        parts["R_upper_arm"].rotation_euler[0] = math.radians(-95)
-        parts["L_upper_arm"].rotation_euler[0] = math.radians(-55)
-        parts["R_upper_arm"].keyframe_insert(data_path="rotation_euler", frame=q1)
-        parts["L_upper_arm"].keyframe_insert(data_path="rotation_euler", frame=q1)
-        parts["R_upper_arm"].rotation_euler[0] = math.radians(35)
-        parts["L_upper_arm"].rotation_euler[0] = math.radians(20)
-        parts["R_upper_arm"].keyframe_insert(data_path="rotation_euler", frame=mid)
-        parts["L_upper_arm"].keyframe_insert(data_path="rotation_euler", frame=mid)
+        controls["R_shoulder"].rotation_euler[0] = math.radians(-95)
+        controls["L_shoulder"].rotation_euler[0] = math.radians(-55)
+        controls["R_shoulder"].keyframe_insert(data_path="rotation_euler", frame=q1)
+        controls["L_shoulder"].keyframe_insert(data_path="rotation_euler", frame=q1)
+        controls["R_shoulder"].rotation_euler[0] = math.radians(35)
+        controls["L_shoulder"].rotation_euler[0] = math.radians(20)
+        controls["R_shoulder"].keyframe_insert(data_path="rotation_euler", frame=mid)
+        controls["L_shoulder"].keyframe_insert(data_path="rotation_euler", frame=mid)
         if clip == "ground_slam":
             key(root, q1, location=(start_x, 0, 0.65))
             key(root, mid, location=((start_x + end_x) / 2, 0, -0.08))
@@ -388,9 +429,9 @@ def animate_actor(actor, rig, frame_end):
         else:
             key(root, frame_end, rotation=(0, 0, 0))
     elif clip == "celebrate":
-        for name in ("L_upper_arm", "R_upper_arm"):
-            parts[name].rotation_euler[0] = math.radians(-145)
-            parts[name].keyframe_insert(data_path="rotation_euler", frame=mid)
+        for name in ("L_shoulder", "R_shoulder"):
+            controls[name].rotation_euler[0] = math.radians(-145)
+            controls[name].keyframe_insert(data_path="rotation_euler", frame=mid)
         key(root, mid, location=((start_x + end_x) / 2, 0, 0.18))
     else:
         key(root, mid, location=((start_x + end_x) / 2, 0, 0.07))
