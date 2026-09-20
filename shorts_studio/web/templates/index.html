@@ -165,7 +165,7 @@
                   <textarea name="topic" rows="5" placeholder="Leave blank and Story Studio picks a real Roblox game. Or try: DOORS — my teammate steals the last hiding spot"></textarea>
                 </label>
                 <input type="hidden" name="content_type" value="story">
-                <div class="director-note">Full Shorts are now 45–70 second Roblox mini-movies. Story Studio researches a real game, locks a goal→setback→turn→climax→payoff arc, then builds the screenplay around it.</div>
+                <div class="director-note">Full Shorts are now 50–75 second Roblox mini-movies, with ~65 seconds recommended. Story Studio researches a real game, locks a goal→setback→turn→climax→payoff arc, then red-teams the plot for nonsense before rendering.</div>
                 <label>Story genre<select name="story_genre">
                   <option value="auto" selected>Auto — pick the strongest idea</option>
                   <option value="funny">Funny / relatable</option>
@@ -180,7 +180,11 @@
                   <option value="auto-youthful-female">Natural Story narrator — female</option>
                 </select></label>
                 <label>Target length<select name="target_seconds">
-                  <option value="45">~45 sec</option><option value="52">~52 sec</option><option value="58" selected>~58 sec — recommended</option><option value="65">~65 sec</option><option value="70">~70 sec</option>
+                  <option value="50">~50 sec</option>
+                  <option value="58">~58 sec</option>
+                  <option value="65" selected>~65 sec — recommended</option>
+                  <option value="70">~70 sec</option>
+                  <option value="75">~75 sec</option>
                 </select></label>
                 <div class="director-note">Characters use polished reusable R15 references. Each scene gets a separately generated Roblox-map reference, then FLUX combines the cast + environment before LTX adds restrained motion. All readable English text is added afterward by the editor.</div>
                 <button class="primary generate-wide" type="submit">CREATE FULL SHORT</button>
