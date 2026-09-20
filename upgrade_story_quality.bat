@@ -11,7 +11,11 @@ echo   2. FLUX.2 Klein 4B Story keyframes
 echo   3. LTX 2B cinematic keyframe-to-video
 echo.
 echo Existing model files are skipped.
+echo Heavy files will be stored under E:\auto yt.
 echo.
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\setup_external_storage.ps1" -Quiet
+if errorlevel 1 exit /b 1
 
 call install_human_voice.bat
 if errorlevel 1 exit /b 1
