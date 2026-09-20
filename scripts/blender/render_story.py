@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import shutil
 import sys
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from mathutils import Vector
 
 
 FPS = 30
-RENDERER_VERSION = "3.2-cinematic-r15"
+RENDERER_VERSION = "3.3-cinematic-r15"
 
 
 def parse_args():
@@ -982,7 +983,11 @@ def configure_scene(frame_end, output, *, powered=False):
         scene.render.ffmpeg.video_bitrate = 14000
     except Exception:
         pass
-    scene.render.filepath = str(output)
+
+    # Blender's movie renderer may append its own extension depending on build/settings.
+    # Render to an extension-free stem, then normalise the emitted movie ourselves.
+    scene.render.use_file_extension = True
+    scene.render.filepath = str(Path(output).with_suffix(""))
 
     try:
         scene.view_settings.look = "AgX - Medium High Contrast"
@@ -1027,9 +1032,62 @@ def render_shot(shot, output_dir):
 
     index = int(shot.get("index") or 0)+1
     output = output_dir/f"scene_{index:02d}.mp4"
+    stem = output.with_suffix("")
+    for stale in output_dir.glob(stem.name + "*.mp4"):
+        try:
+            stale.unlink()
+        except Exception:
+            pass
+
     configure_scene(frame_end,output,powered=powered)
     bpy.context.scene.frame_set(1)
     bpy.ops.render.render(animation=True)
+
+    # Normalise Blender's actual output to the exact filename expected by Shorts Studio.
+    candidates = [
+        output,
+        stem.with_suffix(".mp4"),
+        *sorted(output_dir.glob(stem.name + "*.mp4")),
+    ]
+    rendered = next(
+        (
+            path for path in candidates
+            if path.exists() and path.is_file() and path.stat().st_size > 4096
+        ),
+        None,
+    )
+    if rendered is None:
+        files = ", ".join(path.name for path in sorted(output_dir.iterdir()) if path.is_file())
+        raise RuntimeError(
+            f"Blender finished scene {index} but no MP4 was emitted. "
+            f"Expected stem {stem.name}. Files present: {files or 'none'}"
+        )
+    if rendered.resolve() != output.resolve():
+        shutil.move(str(rendered), str(output))
+
+    report = {
+        "renderer_version": RENDERER_VERSION,
+        "scene": index,
+        "duration": duration,
+        "frames": frame_end,
+        "fps": FPS,
+        "output": str(output),
+        "bytes": output.stat().st_size,
+        "camera": shot.get("camera"),
+        "camera_motion": shot.get("camera_motion"),
+        "actors": [
+            {
+                "id": actor.get("id"),
+                "clip": actor.get("clip"),
+                "power_effect": actor.get("power_effect"),
+            }
+            for actor in actors
+        ],
+    }
+    (output_dir / f"scene_{index:02d}.json").write_text(
+        json.dumps(report, indent=2),
+        encoding="utf-8",
+    )
 
 def main():
     args = parse_args()
