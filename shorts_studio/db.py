@@ -52,6 +52,7 @@ def init_db() -> None:
                 selected_topic TEXT,
                 content_type TEXT NOT NULL DEFAULT 'auto',
                 story_genre TEXT NOT NULL DEFAULT 'auto',
+                visual_mode TEXT NOT NULL DEFAULT 'animated',
                 voice TEXT NOT NULL,
                 target_seconds INTEGER NOT NULL,
                 status TEXT NOT NULL,
@@ -134,6 +135,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE jobs ADD COLUMN content_type TEXT NOT NULL DEFAULT 'auto'")
         if "story_genre" not in job_columns:
             conn.execute("ALTER TABLE jobs ADD COLUMN story_genre TEXT NOT NULL DEFAULT 'auto'")
+        if "visual_mode" not in job_columns:
+            conn.execute("ALTER TABLE jobs ADD COLUMN visual_mode TEXT NOT NULL DEFAULT 'animated'")
 
         profile_columns = {
             row["name"] for row in conn.execute("PRAGMA table_info(channel_profile)").fetchall()
@@ -187,13 +190,14 @@ def create_job(job: dict[str, Any]) -> None:
             """
             INSERT INTO jobs (
                 id, created_at, updated_at, channel_name, niche, requested_topic,
-                content_type, story_genre, voice, target_seconds, status, stage, progress
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                content_type, story_genre, visual_mode, voice, target_seconds, status, stage, progress
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job["id"], now, now, job["channel_name"], job["niche"],
                 job.get("requested_topic"), job.get("content_type", "auto"),
-                job.get("story_genre", "auto"), job["voice"], job["target_seconds"],
+                job.get("story_genre", "auto"), job.get("visual_mode", "animated"),
+                job["voice"], job["target_seconds"],
                 "queued", "Queued", 0,
             ),
         )
