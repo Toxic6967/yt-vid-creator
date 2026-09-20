@@ -154,13 +154,26 @@ REQUESTED GENRE: {genre}
 REAL ROBLOX GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
-Create 8 DIFFERENT mini-movie ideas that happen INSIDE this exact Roblox game.
+Create 12 DIFFERENT mini-movie ideas that happen INSIDE this exact Roblox game.
 
 Every idea must:
 - depend on a real mechanic, objective, location, item, enemy, round rule or player situation from the game context;
 - be recognisable to someone who actually plays the game;
 - be understandable even if the viewer only knows the game casually;
-- use the game's mechanics to create the problem and payoff.
+- use the game's mechanics to create the problem and payoff;
+- have enough CAUSAL STORY DEPTH to sustain 45-70 seconds without filler;
+- naturally move through several visually different areas/set-pieces from the verified game context.
+
+Make the 12 ideas genuinely different from one another. Mix structures such as:
+- teammate mistake -> escalating recovery;
+- greed/risk -> consequence -> clever recovery;
+- scary close call -> failed escape -> clutch;
+- underdog/underestimated player -> setback -> earned win;
+- rare objective/item attempt -> loss -> second chance;
+- betrayal/suspicion -> proof -> reversal;
+- one-player-left survival;
+- risky shortcut -> cost -> comeback.
+Do not make all 12 "friend disappears" or "mysterious empty server" stories.
 
 Good story energy: unlucky timing, teammate mistake, clutch save, scary close call,
 rare drop luck, greed, betrayal, panic, risky shortcut, one-player-left moment, or a funny
@@ -182,7 +195,7 @@ Return {{"ideas":[{{"premise":"...","genre":"...","opening":"...","escalation":"
         temperature=0.72,
     )
     ideas = raw.get("ideas") if isinstance(raw.get("ideas"), list) else []
-    ideas = [item for item in ideas if isinstance(item, dict)][:8]
+    ideas = [item for item in ideas if isinstance(item, dict)][:12]
     if not ideas:
         game_name = _clean(game_context.get("game_name"), 80) or "the selected Roblox game"
         situations = game_context.get("player_situations") or []
@@ -214,6 +227,8 @@ Score each 0-100 for:
 - escalation
 - payoff
 - originality
+- causal_depth: can this support a real 45-70 second goal->setback->turn->climax story without filler?
+- visual_progression: can it naturally move through multiple different game areas/set-pieces?
 - game_specificity: would a real player recognise that this story belongs in THIS game?
 - cringe_avoidance (100 = not cringe)
 
