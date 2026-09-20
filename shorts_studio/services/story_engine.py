@@ -534,11 +534,31 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
     expected_max = min(120, round(target_seconds * 2.8))
     banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
 
+    line_starters = []
+    for scene in scenes:
+        line = re.sub(r"\s+", " ", str(scene.get("narration") or "")).strip()
+        first = re.sub(r"[^a-z']+", "", line.lower().split(" ", 1)[0]) if line else ""
+        line_starters.append(first)
+    mechanical_starters = {"i", "then", "and", "so", "but", "suddenly"}
+    mechanical_start_count = sum(1 for x in line_starters if x in mechanical_starters)
+    repeated_start_run = any(
+        line_starters[i]
+        and line_starters[i] == line_starters[i - 1] == line_starters[i - 2]
+        for i in range(2, len(line_starters))
+    )
+    natural_flow_ok = (
+        mechanical_start_count <= max(2, len(scenes) // 3)
+        and not repeated_start_run
+    )
+
     return {
         "scene_count_ok": 7 <= len(scenes) <= 11,
         "short_lines_ok": max_words <= 13,
         "word_count_ok": expected_min <= total_words <= expected_max,
         "single_narrator_ok": narrator_lines == len(scenes),
+        "natural_flow_ok": natural_flow_ok,
+        "mechanical_start_count": mechanical_start_count,
+        "line_starters": line_starters,
         "visual_variety_ok": len(unique_environments) >= 2 and len(unique_cameras) >= 4,
         "unique_environment_count": len(unique_environments),
         "unique_camera_count": len(unique_cameras),
@@ -633,6 +653,13 @@ Return:
     if not mechanical["single_narrator_ok"]:
         problems.append("Story switches speakers even though this format uses one consistent narrator.")
         rewrite_instructions.append("Use narrator as the speaker for every beat; let characters act visually.")
+    if not mechanical["natural_flow_ok"]:
+        problems.append(
+            f"Narration restarts too mechanically between scenes ({mechanical['mechanical_start_count']} stiff line starts)."
+        )
+        rewrite_instructions.append(
+            "Rewrite the scene lines so they join into one continuous spoken story; vary sentence openings and let clauses flow across cuts."
+        )
     if not mechanical["visual_variety_ok"]:
         problems.append(
             f"Movie repeats too much visually ({mechanical['unique_environment_count']} environments, "
@@ -657,6 +684,7 @@ Return:
         and scores["hook"] >= 84
         and scores["relatability"] >= 80
         and scores["payoff"] >= 80
+        and scores["dialogue"] >= 82
         and scores["game_specificity"] >= 82
         and scores["cringe_avoidance"] >= 85
         and all(
@@ -666,6 +694,7 @@ Return:
                 "short_lines_ok",
                 "word_count_ok",
                 "single_narrator_ok",
+                "natural_flow_ok",
                 "visual_variety_ok",
                 "banned_phrase_ok",
             )
