@@ -37,10 +37,10 @@ def _default_character(idx: int) -> dict[str, str]:
             "name": "Max",
             "gender": "male",
             "visual_identity": (
-                "authentic Roblox R15 avatar with a square block head, classic simple Roblox smile face, "
-                "rectangular torso, segmented block arms and legs, plastic game-avatar proportions; "
-                "messy dark-brown Roblox hair accessory, royal-blue hoodie shirt texture, black cargo-style pants, white shoes; "
-                "must look like an actual Roblox player avatar, never a human, clay toy, LEGO figure, Minecraft character or Pixar person"
+                "authentic Roblox R15 player avatar with classic Roblox proportions, softly beveled plastic head, "
+                "simple classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox joints; "
+                "messy dark-brown Roblox catalog hair accessory, royal-blue hoodie clothing texture, black cargo-style pants, white shoes; "
+                "recognizably Roblox, not voxel/cubic Minecraft, not LEGO, not a human child and not a Pixar character"
             ),
             "personality": "confident, competitive, gets himself into trouble",
         },
@@ -49,10 +49,10 @@ def _default_character(idx: int) -> dict[str, str]:
             "name": "Mia",
             "gender": "female",
             "visual_identity": (
-                "authentic Roblox R15 avatar with a square block head, classic simple Roblox smile face, "
-                "rectangular torso, segmented block arms and legs, plastic game-avatar proportions; "
-                "long dark Roblox ponytail hair accessory, purple jacket shirt texture, black pants, white shoes; "
-                "must look like an actual Roblox player avatar, never a human, clay toy, LEGO figure, Minecraft character or Pixar person"
+                "authentic Roblox R15 player avatar with classic Roblox proportions, softly beveled plastic head, "
+                "simple classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox joints; "
+                "long dark Roblox ponytail catalog hair accessory, purple jacket clothing texture, black pants, white shoes; "
+                "recognizably Roblox, not voxel/cubic Minecraft, not LEGO, not a human child and not a Pixar character"
             ),
             "personality": "quick-thinking, sarcastic, notices details first",
         },
@@ -61,10 +61,10 @@ def _default_character(idx: int) -> dict[str, str]:
             "name": "Kai",
             "gender": "male",
             "visual_identity": (
-                "authentic Roblox R15 avatar with a square block head, classic simple Roblox smile face, "
-                "rectangular torso, segmented block arms and legs, plastic game-avatar proportions; "
-                "short black Roblox hair accessory, red-and-black jacket shirt texture, dark pants, red shoes; "
-                "must look like an actual Roblox player avatar, never a human, clay toy, LEGO figure, Minecraft character or Pixar person"
+                "authentic Roblox R15 player avatar with classic Roblox proportions, softly beveled plastic head, "
+                "simple classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox joints; "
+                "short black Roblox catalog hair accessory, red-and-black jacket clothing texture, dark pants, red shoes; "
+                "recognizably Roblox, not voxel/cubic Minecraft, not LEGO, not a human child and not a Pixar character"
             ),
             "personality": "calm, loyal, suspicious when something feels wrong",
         },
@@ -276,23 +276,29 @@ NON-NEGOTIABLE:
 - Use 7-10 short scenes. Maximum 3 characters.
 - Each narration line should usually be 5-12 spoken words so the visual shot can finish before the next cut.
 - Tell it like a creator recounting something that just happened in the game, not like a movie trailer.
-- Keep the story mostly inside ONE continuous game session/location so the movie is visually coherent.
-  Change rooms/areas only when the plot actually requires it; prefer new camera angles over teleporting worlds.
+- Keep it inside ONE continuous game session, but the VIDEO must visibly progress.
+- Use at least 3 visually different rooms, areas, obstacles, set-pieces or background compositions from the same game when the verified context allows it.
+- Never leave two adjacent scenes with the same environment AND the same camera framing. Each cut must reveal new visual information.
 - Conflict must escalate every few seconds.
 - The ending must pay off the opening: twist, funny reversal, satisfying win, scary reveal,
   or relatable punchline.
 - Do not write a fake inspirational moral.
 - Do not write random nonsense just because it is dramatic.
 - Do not use baby talk, forced Gen-Z slang, "bro" every sentence, or corporate AI wording.
-- Use ONE natural narrator voice for the whole Short, like a person telling a quick story over the action.
-- Keep narration conversational and human. No announcer voice, no documentary phrasing, no fake hype.
-- Characters should ACT the story visually. If a character speaks, paraphrase/quote it inside the narrator line instead of switching voices.
-- Avoid long narration. Each line should sound like something a real creator would naturally say in one breath.
+- Use ONE natural narrator voice for the whole Short, like a real creator casually telling friends what happened.
+- The narration must read smoothly as ONE continuous paragraph when all scene lines are joined together.
+- Use contractions and ordinary spoken English. Vary sentence length. Let some lines flow into the next instead of sounding like eight separate announcements.
+- Do NOT repeatedly start lines with "I", "Then", "And then", "So", "But then", "Suddenly", or "That's when".
+- Do NOT use trailer/documentary phrases like "little did I know", "everything changed", "what happened next", "I couldn't believe it", or fake hype.
+- Characters ACT the story visually. If a character speaks, paraphrase or briefly quote it inside the narrator's continuous story.
+- Avoid long narration. Each line should sound natural when spoken aloud and should connect cleanly to the lines around it.
 - Every scene must be easy to understand visually with no explanation.
 - Keep violence game-like/non-graphic and appropriate for the audience.
 - Characters must keep EXACTLY the same clothing/hair/colours in every scene.
-- EVERY visible player character must be an authentic Roblox R15 avatar: square block head, rectangular torso,
-  segmented block arms/legs and simple Roblox face. Never humanoid Pixar/clay/LEGO/Minecraft-looking people.
+- EVERY visible player character must look unmistakably like a Roblox R15 avatar: classic Roblox body proportions,
+  beveled plastic head, classic Roblox face decal, R15 torso and visibly separated upper/lower limb parts.
+  Never use voxel/Minecraft cube anatomy, pixel faces, LEGO/minifigure proportions, realistic human anatomy,
+  Pixar/cartoon children, fingers, noses or realistic mouths.
 - Reuse the same important props and environmental details when the story returns to a location.
 - Use at least TWO real game-specific mechanics/locations/items from the verified game context.
 - Never invent a fake item, enemy, currency, room, objective or UI element.
@@ -319,7 +325,7 @@ Return JSON exactly:
       "speaker":"narrator",
       "narration":"ONE short natural narrator line",
       "characters":["character ids visible in shot"],
-      "environment":"specific Roblox-style game location",
+      "environment":"specific verified in-game area/background for THIS shot; avoid repeating the previous shot",
       "action":"what physically happens during this shot",
       "camera":"wide|medium|close-up|over-shoulder|follow|low-angle|high-angle",
       "emotion":"...",
@@ -371,26 +377,34 @@ def _normalise_story(
         environment = _clean(item.get("environment"), 180) or f"recognisable {game_name} Roblox gameplay area"
         action = _clean(item.get("action"), 220) or _clean(item.get("narration"), 220)
         camera = _clean(item.get("camera"), 60) or "medium"
+        allowed_cameras = ("wide", "medium", "close-up", "over-shoulder", "follow", "low-angle", "high-angle")
+        if camera not in allowed_cameras:
+            camera = allowed_cameras[idx % len(allowed_cameras)]
+        if scenes and camera == str(scenes[-1].get("camera") or ""):
+            camera = allowed_cameras[(allowed_cameras.index(camera) + 2 + idx) % len(allowed_cameras)]
         emotion = _clean(item.get("emotion"), 80)
 
         keyframe_prompt = (
-            f"AUTHENTIC ROBLOX GAMEPLAY MOVIE FRAME from the real Roblox experience {game_name}. "
-            "Use Roblox R15 player-avatar geometry: square block heads, simple Roblox faces, rectangular torsos, "
-            "segmented block arms and legs, plastic Roblox game proportions. Absolutely NOT realistic humans, "
-            "Pixar people, clay toys, LEGO minifigures, Minecraft/voxel people or generic cartoon children. "
-            f"Characters: {'; '.join(identities)}. Recognisable in-game environment: {environment}. "
-            f"Action frozen at the clearest dramatic moment: {action}. Camera: {camera}. Emotion: {emotion}. "
-            "Modern Roblox game lighting, crisp 3D gameplay screenshot feel, cinematic depth, vertical composition. "
-            "Frame characters around the middle/lower-middle and leave the top 12 percent as clean environment only. "
-            "No words, no letters, no numbers, no captions, no signs, no fake game title, no logo, no watermark, "
-            "no UI text, no extra limbs, no duplicated characters. Keep exact avatar clothing, hair and colours."
+            f"FRAME FROM A ROBLOX R15 GAMEPLAY MINI-MOVIE set inside the real Roblox experience {game_name}. "
+            "The players must have unmistakable modern Roblox R15 avatar anatomy: softly beveled plastic head, "
+            "classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox-style joints, "
+            "catalog hair accessories and Roblox clothing textures. Do NOT make voxel cube people. Do NOT make Minecraft, "
+            "LEGO, Pixar, clay figures or realistic humans. "
+            f"Characters: {'; '.join(identities)}. THIS SHOT'S game area/background: {environment}. "
+            f"THIS SHOT'S action: {action}. Camera/framing: {camera}. Emotion conveyed by pose: {emotion}. "
+            "Use a noticeably different composition from the previous shot. Show the game environment clearly enough "
+            "that a player can recognise where the scene is. Current polished Roblox-engine lighting, cinematic depth, vertical composition. "
+            "IMPORTANT: the generated picture contains ZERO typography. Every sign, monitor, poster, board and label must be blank or purely pictorial. "
+            "No readable words, fake words, letters, numbers, captions, subtitles, logos, watermarks, usernames, UI text or symbols. "
+            "All English captions are added later by the editor. Keep exact avatar outfit colours and hair identity."
         )
         motion_prompt = (
-            f"Inside {game_name} Roblox gameplay: {action}. Camera movement: {camera}. "
-            "Keep authentic Roblox R15 square-head/block-limb geometry throughout the entire shot. "
-            "Keep the exact same characters, clothing, hair, simple Roblox faces and environment. "
-            f"Emotion: {emotion}. Natural Roblox game-animation body motion, cinematic timing, "
-            "no morphing, no human anatomy, no outfit changes, no words or UI text appearing."
+            f"Inside the real Roblox experience {game_name}: {action}. Camera movement: {camera}. "
+            "Preserve unmistakable Roblox R15 anatomy and proportions throughout: classic face decal, R15 torso, "
+            "separate upper/lower limbs and Roblox catalog hair/clothing. Keep exact character identity and outfit. "
+            f"Environment for this shot: {environment}. Emotion through Roblox-style pose/animation: {emotion}. "
+            "One readable action only, natural Roblox game-animation timing, no morphing and no human anatomy. "
+            "Do not generate ANY writing, letters, numbers, captions, signs, usernames or UI; text is added later in editing."
         )
 
         spoken_line = _clean(item.get("narration"), 240)
@@ -640,6 +654,70 @@ Return:
     }
 
 
+def _polish_narration(
+    story: dict,
+    *,
+    audience: str,
+    game_context: dict[str, Any],
+) -> dict:
+    scenes = story.get("scenes") or []
+    if not scenes:
+        return story
+
+    compact = [
+        {
+            "index": idx,
+            "role": scene.get("role"),
+            "event": scene.get("action"),
+            "current_line": scene.get("narration"),
+        }
+        for idx, scene in enumerate(scenes)
+    ]
+    result = chat_json(
+        "You are a human-sounding YouTube Shorts narration editor. Return JSON only.",
+        f"""
+AUDIENCE: {audience}
+GAME: {game_context.get("game_name")}
+
+The visuals/events are LOCKED. Rewrite ONLY the narration so it sounds like one real person
+casually telling a friend what happened while the gameplay/movie plays.
+
+SCENES:
+{json.dumps(compact, ensure_ascii=False)}
+
+Rules:
+- Return exactly {len(scenes)} lines, one per scene, same order.
+- Preserve every event and the ending. Do not add new plot points.
+- When all lines are joined with spaces, they must sound like ONE continuous spoken story.
+- Usually 4-11 words per line. Total narration should stay concise.
+- Use contractions: I'm, I'd, we're, didn't, couldn't, etc.
+- Natural everyday wording, not screenplay wording and not an AI narrator.
+- Avoid restarting the story every scene.
+- Do not repeatedly start with I / Then / And then / So / But then / Suddenly.
+- Never say: little did I know, everything changed, what happened next, you won't believe,
+  that's when everything changed, I couldn't believe my eyes.
+- No fake hype and no moral.
+- Punctuation should create natural breathing: commas for small pauses, periods only where a person would really stop.
+
+Return exactly:
+{{"lines":["line 1","line 2"]}}
+""",
+        temperature=0.28,
+    )
+    lines = result.get("lines") if isinstance(result.get("lines"), list) else []
+    lines = [_clean(x, 180) for x in lines]
+    if len(lines) != len(scenes) or any(not x for x in lines):
+        return story
+
+    for scene, line in zip(scenes, lines):
+        scene["narration"] = line
+    story["hook"] = scenes[0]["narration"]
+    narration = " ".join(scene["narration"] for scene in scenes)
+    story["narration"] = narration
+    story["word_count"] = len(re.findall(r"\b[\w'-]+\b", narration))
+    return story
+
+
 def create_story(
     idea: str | None,
     *,
@@ -672,7 +750,14 @@ def create_story(
     for _ in range(2):
         score = _score_story(story, audience, target_seconds, game_context)
         if score["passed"]:
-            story["story_score"] = score
+            story = _polish_narration(
+                story,
+                audience=audience,
+                game_context=game_context,
+            )
+            story["story_score"] = _score_story(
+                story, audience, target_seconds, game_context
+            )
             return story
 
         rewritten = chat_json(
@@ -706,5 +791,10 @@ retention, claims, warnings, source_ids, edit_instruction, pattern_interrupt or 
         if retained_idea:
             story["idea_selection"] = retained_idea
 
+    story = _polish_narration(
+        story,
+        audience=audience,
+        game_context=game_context,
+    )
     story["story_score"] = _score_story(story, audience, target_seconds, game_context)
     return story
