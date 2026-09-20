@@ -36,14 +36,42 @@ async function loadHealth(){
     const h = await jsonFetch('/api/health');
     const chatterboxReady = Boolean(h.voice && h.voice.chatterbox && h.voice.chatterbox.ready);
     const animationReady = Boolean(h.animation && h.animation.ready);
-    const ok = h.ollama.ok && h.ollama.model_installed && h.ffmpeg.ok && chatterboxReady;
+    const comfyReady = Boolean(h.comfyui && h.comfyui.ok && h.comfyui.story_image_ready);
+    const ollamaReady = Boolean(h.ollama && h.ollama.ok && h.ollama.model_installed);
+    const ffmpegReady = Boolean(h.ffmpeg && h.ffmpeg.ok);
+    const ok = ollamaReady && ffmpegReady && chatterboxReady && comfyReady && animationReady;
+
     health.className = 'health ' + (ok ? 'ok' : 'bad');
-    if(ok) health.textContent = `Story AI ready • ${h.ollama.model} • natural narrator • ${animationReady ? 'V3 animation ready' : 'install V3 animation engine'}`;
-    else if(!h.ollama.ok) health.textContent = 'Ollama not running';
-    else if(!h.ollama.model_installed) health.textContent = `Install model: ollama pull ${h.ollama.model}`;
-    else if(!chatterboxReady) health.textContent = 'Natural narrator not installed • run install_natural_voice.bat';
-    else health.textContent = 'FFmpeg unavailable';
-  }catch(e){health.className='health bad';health.textContent='Health check failed';}
+
+    if(ok){
+      health.textContent = `V3 ready • ${h.ollama.model} • Chatterbox • FLUX environments • Blender animation`;
+      return;
+    }
+
+    const missing = [];
+    if(!h.ollama || !h.ollama.ok) missing.push('Ollama not running');
+    else if(!h.ollama.model_installed) missing.push(`missing ${h.ollama.model}`);
+    if(!ffmpegReady) missing.push('FFmpeg unavailable');
+    if(!chatterboxReady) missing.push('natural narrator not installed');
+    if(!h.comfyui || !h.comfyui.ok) missing.push('ComfyUI not running');
+    else if(!h.comfyui.story_image_ready) missing.push('FLUX Story models not ready');
+    if(!animationReady) missing.push('Blender animation engine not ready');
+
+    const componentError =
+      (h.animation && h.animation.error) ||
+      (h.voice && h.voice.error) ||
+      (h.comfyui && h.comfyui.error) ||
+      (h.ollama && h.ollama.error) ||
+      (h.ffmpeg && h.ffmpeg.error);
+
+    health.textContent = missing.length
+      ? missing.join(' • ')
+      : (componentError ? `Health problem: ${componentError}` : 'Health check incomplete');
+  }catch(e){
+    health.className='health bad';
+    const msg = String(e && e.message ? e.message : e).replace(/\s+/g,' ').slice(0,220);
+    health.textContent = `Health endpoint failed: ${msg}`;
+  }
 }
 
 async function loadProfile(){
