@@ -274,7 +274,7 @@ def run_pipeline(job_id: str) -> None:
         "tone": tone,
         "content_type": job.get("content_type", "auto"),
         "story_genre": job.get("story_genre", "auto"),
-        "pipeline_version": "2.1.0",
+        "pipeline_version": "2.2.0",
     }
 
     try:
@@ -600,10 +600,11 @@ def run_pipeline(job_id: str) -> None:
             1 for v in visuals
             if v.get("kind") == "ai_generated_video" and v.get("backend") == "ltx_i2v"
         )
+        required_story_motion = 0
         if content_type == "story":
             required_story_motion = max(
-                5,
-                min(8, round(len(script.get("scenes", [])) * 0.60)),
+                7,
+                min(10, round(len(script.get("scenes", [])) * 0.62)),
             )
             if ltx_video_count < required_story_motion:
                 raise RuntimeError(
@@ -678,6 +679,12 @@ def run_pipeline(job_id: str) -> None:
             "ai_visual_count": len(ai_visuals),
             "ai_video_count": len(ai_videos),
             "cinematic_i2v_count": sum(1 for v in ai_videos if v.get("backend") == "ltx_i2v"),
+            "required_cinematic_i2v_count": required_story_motion if content_type == "story" else 0,
+            "cinematic_motion_ok": (
+                sum(1 for v in ai_videos if v.get("backend") == "ltx_i2v") >= required_story_motion
+                if content_type == "story"
+                else True
+            ),
             "fallback_visual_count": len(fallback_visuals),
             "max_adjacent_visual_similarity": round(max_adjacent_similarity, 3),
             "visual_variety_ok": (
@@ -733,6 +740,7 @@ def run_pipeline(job_id: str) -> None:
                 "scene_citations_ok",
                 "visual_rights_ok",
                 "visual_content_ok",
+                "cinematic_motion_ok",
                 "visual_variety_ok",
                 "polished_cast_ok",
                 "environment_variety_ok",
