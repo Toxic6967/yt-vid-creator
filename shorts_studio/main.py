@@ -79,11 +79,13 @@ def api_health() -> dict:
 
 def _ensure_story_backend_ready() -> None:
     voice_state = human_voice_health()
-    if not voice_state.get("ready"):
+    chatterbox = voice_state.get("chatterbox") or {}
+    if not chatterbox.get("ready"):
         raise HTTPException(
             409,
-            "Story Studio now requires the local human voice backend. "
-            "Run install_human_voice.bat, restart Shorts Studio, then try again.",
+            "Story Studio's upgraded natural narrator is not installed yet. "
+            "Run install_natural_voice.bat, restart Shorts Studio, then try again. "
+            "Kokoro remains available for legacy tools, but finished Story renders now require the stronger narrator.",
         )
 
     state = comfyui_health()
