@@ -20,6 +20,7 @@ from .retention import optimize_retention
 from .story_engine import create_story
 from .story_game import research_story_game
 from .ollama_client import unload_model
+from .comfyui_client import free_models as free_comfyui_models
 from .tts import render_scene, render_story_narration
 from .visuals import prepare_visual, visual_similarity
 from .roblox_reference import (
@@ -253,8 +254,11 @@ def run_pipeline(job_id: str) -> None:
         metadata = create_metadata(selected_topic, script)
         manifest["metadata"] = metadata
 
-        # Writing is complete. Free Qwen before ComfyUI/Wan takes the GPU.
+        # Writing is complete. Free both local-AI runtimes before the
+        # higher-quality narration model gets temporary GPU ownership.
         unload_model()
+        if content_type == "story":
+            free_comfyui_models()
 
         _stage(job_id, "Generating one continuous human narration take", 58)
         audio_dir = job_dir / "audio"
