@@ -190,12 +190,18 @@ async function loadMediaHealth(){
     const videoButton=document.querySelector('#ai-video-button');
 
     if(state.ok){
-      imageStatus.textContent = state.image_ready
-        ? `ComfyUI connected • image checkpoint ready (${state.image_checkpoint || 'detected'})`
-        : 'ComfyUI connected, but no image checkpoint is installed yet.';
-      imageStatus.className='notice '+(state.image_ready?'ok':'');
-      if(state.story_video_ready){
-        videoStatus.textContent='ComfyUI connected • cinematic keyframe→video engine ready (LTX 2B FP8)';
+      if(state.story_image_ready){
+        imageStatus.textContent='ComfyUI connected • Story keyframes: FLUX.2 Klein 4B FP8 ready';
+      }else if(state.image_ready){
+        imageStatus.textContent=`ComfyUI connected • general image engine ready • Story FLUX upgrade missing`;
+      }else{
+        imageStatus.textContent='ComfyUI connected, but no image checkpoint is installed yet.';
+      }
+      imageStatus.className='notice '+(state.story_image_ready?'ok':'');
+      if(state.story_video_ready && state.story_image_ready){
+        videoStatus.textContent='Story movie stack ready • FLUX.2 Klein keyframes → LTX 2B motion';
+      }else if(state.story_video_ready){
+        videoStatus.textContent='LTX motion ready • FLUX.2 Story keyframes not installed yet';
       }else if(state.video_ready){
         videoStatus.textContent='ComfyUI connected • Wan motion fallback ready • cinematic I2V upgrade not installed yet';
       }else if((state.missing_video_models||[]).length){
