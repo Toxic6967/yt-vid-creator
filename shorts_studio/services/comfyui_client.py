@@ -769,6 +769,68 @@ def generate_story_keyframe(
         "backend": "flux2_klein_reference",
     }
 
+def generate_story_scene_dual_reference(
+    prompt: str,
+    identity_reference_path: str | Path,
+    environment_reference_path: str | Path,
+    job_id: str,
+    seed: int | None = None,
+) -> dict[str, Any]:
+    """Generate a Story frame using separate avatar identity and environment references."""
+    state = health()
+    if not state.get("story_image_ready"):
+        missing = ", ".join(state.get("missing_story_image_models") or [])
+        raise ComfyUIError(
+            "High-quality Story image engine is not ready."
+            + (f" Missing: {missing}" if missing else "")
+        )
+
+    path = Path(settings.comfyui_story_dual_image_workflow)
+    if not path.exists():
+        raise ComfyUIError(f"Dual-reference Story image workflow missing: {path}")
+
+    try:
+        workflow = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ComfyUIError(f"Could not read dual-reference Story image workflow: {exc}") from exc
+
+    seed = int(seed) if seed is not None else random.randint(0, 2_147_483_647)
+    uploaded_identity = _upload_input_image(Path(identity_reference_path))
+    uploaded_environment = _upload_input_image(Path(environment_reference_path))
+    resolved = state.get("story_image_models_resolved") or {}
+
+    workflow = _replace_placeholders(
+        workflow,
+        {
+            "__FLUX2_MODEL__": resolved.get(
+                "diffusion", state["story_image_models"]["diffusion"]
+            ),
+            "__FLUX2_TEXT_ENCODER__": resolved.get(
+                "text_encoder", state["story_image_models"]["text_encoder"]
+            ),
+            "__FLUX2_VAE__": resolved.get(
+                "vae", state["story_image_models"]["vae"]
+            ),
+            "__IDENTITY_REFERENCE__": uploaded_identity,
+            "__ENVIRONMENT_REFERENCE__": uploaded_environment,
+            "__PROMPT__": prompt,
+            "__SEED__": seed,
+        },
+    )
+
+    prompt_id = _queue_workflow(workflow)
+    ref = _wait_for_artifact(prompt_id, timeout_seconds=1200)
+    suffix = Path(ref["filename"]).suffix or ".png"
+    output = MEDIA_OUTPUT_DIR / f"{job_id}{suffix}"
+    _download_artifact(ref, output)
+    return {
+        "path": str(output),
+        "prompt_id": prompt_id,
+        "seed": seed,
+        "backend": "flux2_klein_dual_reference",
+    }
+
+
 def generate_ai_video(
     prompt: str,
     negative_prompt: str,
