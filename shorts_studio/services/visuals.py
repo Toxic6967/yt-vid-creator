@@ -464,7 +464,7 @@ def prepare_visual(
                         prompt=direction["prompt"],
                         negative_prompt=direction["negative_prompt"],
                         image_path=keyframe["path"],
-                        seconds=max(2, min(4, round(duration))),
+                        seconds=max(2, min(3, round(duration))),
                         job_id=f"storyi2v_{index}_{random.randint(1000,9999)}",
                     )
                     return {
