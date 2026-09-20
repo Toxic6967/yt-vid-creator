@@ -53,12 +53,8 @@
               </select></label>
               <div class="split">
                 <label>Voice<select name="voice">
-                  <option value="auto-youthful-male">Human youthful male — recommended</option>
-                  <option value="auto-youthful-female">Human youthful female</option>
-                  <option value="en-AU-WilliamNeural">Australian male — William</option>
-                  <option value="en-AU-NatashaNeural">Australian female — Natasha</option>
-                  <option value="en-US-GuyNeural">US male — Guy</option>
-                  <option value="en-US-JennyNeural">US female — Jenny</option>
+                  <option value="auto-youthful-male">Local human narrator — male (recommended)</option>
+                  <option value="auto-youthful-female">Local human narrator — female</option>
                 </select></label>
                 <label>Target length<select name="target_seconds">
                   <option value="25">~25 sec</option>
@@ -164,16 +160,11 @@
 
             <div id="video-mode-short" class="mode-pane">
               <form id="video-form" class="creator-form">
-                <label class="prompt-label">Short topic
-                  <textarea name="topic" rows="5" placeholder="Example: Two friends enter a Roblox horror game and one suddenly disappears"></textarea>
+                <label class="prompt-label">Game or story idea <span class="muted">(optional)</span>
+                  <textarea name="topic" rows="5" placeholder="Leave blank and Story Studio picks a real Roblox game. Or try: DOORS — my teammate steals the last hiding spot"></textarea>
                 </label>
-                <label>Content style<select name="content_type">
-                  <option value="story" selected>Cinematic Roblox story — recommended</option>
-                  <option value="auto">Auto — choose best style</option>
-                  <option value="relatable">Relatable Roblox / POV</option>
-                  <option value="trend">Trend / update / explainer</option>
-                  <option value="evergreen">Evergreen Roblox topic</option>
-                </select></label>
+                <input type="hidden" name="content_type" value="story">
+                <div class="director-note">Every Full Short is now a story inside a real researched Roblox game — not a trend explainer.</div>
                 <label>Story genre<select name="story_genre">
                   <option value="auto" selected>Auto — pick the strongest idea</option>
                   <option value="funny">Funny / relatable</option>
@@ -184,17 +175,13 @@
                   <option value="sad">Emotional — still Roblox appropriate</option>
                 </select></label>
                 <label>Voice<select name="voice">
-                  <option value="auto-youthful-male">Human youthful male — recommended</option>
-                  <option value="auto-youthful-female">Human youthful female</option>
-                  <option value="en-AU-WilliamNeural">Australian male — William</option>
-                  <option value="en-AU-NatashaNeural">Australian female — Natasha</option>
-                  <option value="en-US-GuyNeural">US male — Guy</option>
-                  <option value="en-US-JennyNeural">US female — Jenny</option>
+                  <option value="auto-youthful-male">Local human narrator — male (recommended)</option>
+                  <option value="auto-youthful-female">Local human narrator — female</option>
                 </select></label>
                 <label>Target length<select name="target_seconds">
                   <option value="25">~25 sec</option><option value="32">~32 sec</option><option value="40">~40 sec</option><option value="45">~45 sec</option>
                 </select></label>
-                <div class="director-note">Story mode rejects weak/cringe scripts before rendering, keeps character descriptions consistent, gives characters separate voices, builds cinematic shots, and uses active-word captions.</div>
+                <div class="director-note">One natural narrator tells the story while authentic R15-style characters act it out. Story Studio researches the chosen game mechanics, rejects generic/cringe scripts, animates cinematic keyframes and adds active-word captions.</div>
                 <button class="primary generate-wide" type="submit">CREATE FULL SHORT</button>
               </form>
             </div>
