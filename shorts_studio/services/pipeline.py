@@ -385,13 +385,36 @@ def run_pipeline(job_id: str) -> None:
             update_job(job_id, selected_topic=selected_topic)
             story_score = script.get("story_score") or {}
             story_scores = story_score.get("scores") or {}
+
+            # V3 tuning mode: keep the writer/editor ambitious, but only stop the
+            # expensive render for a truly broken screenplay. A near-miss on soft
+            # reviewer scores should reach Blender so we can judge the real video.
             if not story_score.get("passed"):
-                problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:6])
-                raise RuntimeError(
-                    "Story Studio tried three full screenplay builds plus their internal repair passes, "
-                    "but none met the quality gate. Expensive voice/visual rendering was correctly stopped. "
-                    + (f"Best remaining problems: {problems}" if problems else "The story still needs rewriting.")
+                mechanical = story_score.get("mechanical") or {}
+                logic_audit = story_score.get("logic_audit") or {}
+                logic_scores = logic_audit.get("scores") or {}
+                production_safe = (
+                    float(story_score.get("total") or 0) >= 56
+                    and bool(mechanical.get("scene_count_ok"))
+                    and bool(mechanical.get("arc_structure_ok"))
+                    and bool(mechanical.get("arc_fields_ok"))
+                    and bool(mechanical.get("single_narrator_ok"))
+                    and bool(mechanical.get("banned_phrase_ok"))
+                    and float(story_scores.get("coherence") or 0) >= 55
+                    and float(story_scores.get("game_specificity") or 0) >= 62
+                    and float(logic_scores.get("game_truth") or 100) >= 58
+                    and float(logic_scores.get("ending_logic") or 100) >= 52
                 )
+                if production_safe:
+                    story_score["passed"] = True
+                    story_score["accepted_below_target"] = True
+                    script["story_score"] = story_score
+                else:
+                    problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:6])
+                    raise RuntimeError(
+                        "Story Studio could not produce a production-safe screenplay after automatic repairs. "
+                        + (f"Best remaining problems: {problems}" if problems else "The story is structurally broken.")
+                    )
             script["retention"] = {
                 "passed": bool(story_score.get("passed")),
                 "total": story_score.get("total"),
