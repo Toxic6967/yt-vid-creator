@@ -654,6 +654,8 @@ def run_pipeline(job_id: str) -> None:
         ]
         max_adjacent_similarity = max(adjacent_similarities, default=0.0)
         retention_scores = (script.get("retention") or {}).get("scores") or {}
+        logic_audit = ((script.get("story_score") or {}).get("logic_audit") or {}) if content_type == "story" else {}
+        logic_scores = logic_audit.get("scores") or {}
         environment_plate_count = len(manifest.get("environment_plates") or {})
         quality = {
             "duration_ok": (
@@ -714,6 +716,12 @@ def run_pipeline(job_id: str) -> None:
             "character_consistency_score": retention_scores.get("character_consistency"),
             "visual_variety_score": retention_scores.get("visual_variety"),
             "game_specificity_score": retention_scores.get("game_specificity"),
+            "logic_audit_ok": logic_audit.get("passed", True),
+            "causal_logic_score": logic_scores.get("causal_logic"),
+            "player_behavior_score": logic_scores.get("player_behavior"),
+            "game_truth_score": logic_scores.get("game_truth"),
+            "ending_logic_score": logic_scores.get("ending_logic"),
+            "filler_score": logic_scores.get("filler"),
             "output_exists": Path(render_info["path"]).exists(),
             "output_bytes": Path(render_info["path"]).stat().st_size if Path(render_info["path"]).exists() else 0,
         }
@@ -729,6 +737,7 @@ def run_pipeline(job_id: str) -> None:
                 "polished_cast_ok",
                 "environment_variety_ok",
                 "retention_ok",
+                "logic_audit_ok",
                 "output_exists",
             )
         )
