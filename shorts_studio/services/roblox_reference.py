@@ -31,98 +31,201 @@ PALETTES = {
 }
 
 
-def _draw_r15(draw: ImageDraw.ImageDraw, cx: int, ground: int, scale: float, palette: dict) -> None:
-    # Deliberately rigid R15-like conditioning geometry: square head,
-    # rectangular torso and segmented block limbs.
-    head = int(112 * scale)
-    torso_w = int(108 * scale)
-    torso_h = int(150 * scale)
-    limb_w = int(42 * scale)
-    upper = int(82 * scale)
-    lower = int(78 * scale)
+def _shade(rgb: tuple[int, int, int], factor: float) -> tuple[int, int, int]:
+    return tuple(max(0, min(255, round(v * factor))) for v in rgb)
 
-    head_y = ground - (head + torso_h + upper + lower)
-    head_x = cx - head // 2
 
-    # legs: upper + lower segments
-    hip_y = head_y + head + torso_h
-    leg_gap = int(15 * scale)
+def _draw_part(
+    draw: ImageDraw.ImageDraw,
+    box: tuple[int, int, int, int],
+    fill: tuple[int, int, int],
+    radius: int,
+) -> None:
+    x1, y1, x2, y2 = box
+    draw.rounded_rectangle(box, radius=radius, fill=fill, outline=_shade(fill, 0.73), width=max(1, radius // 4))
+    inset = max(2, radius // 2)
+    if x2 - x1 > inset * 3 and y2 - y1 > inset * 3:
+        draw.line(
+            (x1 + inset, y1 + inset, x2 - inset, y1 + inset),
+            fill=_shade(fill, 1.13),
+            width=max(1, radius // 5),
+        )
+
+
+def _draw_r15(
+    draw: ImageDraw.ImageDraw,
+    cx: int,
+    ground: int,
+    scale: float,
+    palette: dict,
+) -> None:
+    """Text-free R15-shaped conditioning figure, intentionally unlike voxel/Minecraft anatomy."""
+    head_w = int(92 * scale)
+    head_h = int(86 * scale)
+    torso_top = int(88 * scale)
+    torso_bottom = int(102 * scale)
+    torso_h = int(126 * scale)
+    limb_w = int(30 * scale)
+    upper_arm = int(64 * scale)
+    lower_arm = int(61 * scale)
+    upper_leg = int(72 * scale)
+    lower_leg = int(72 * scale)
+    joint_gap = max(3, int(8 * scale))
+
+    total_h = head_h + int(11 * scale) + torso_h + upper_leg + lower_leg + joint_gap
+    head_y = ground - total_h
+    head_x = cx - head_w // 2
+
+    # R15 legs: narrower separated upper/lower segments with visible joints.
+    hip_y = head_y + head_h + int(11 * scale) + torso_h
+    leg_sep = int(12 * scale)
     for side in (-1, 1):
-        lx = cx + side * (leg_gap + limb_w // 2) - limb_w // 2
-        draw.rounded_rectangle(
-            (lx, hip_y, lx + limb_w, hip_y + upper),
-            radius=max(2, int(5 * scale)),
-            fill=palette["pants"],
+        lx = cx + side * (leg_sep + limb_w // 2) - limb_w // 2
+        _draw_part(
+            draw,
+            (lx, hip_y, lx + limb_w, hip_y + upper_leg),
+            palette["pants"],
+            max(4, int(8 * scale)),
         )
-        draw.rounded_rectangle(
-            (lx, hip_y + upper + 2, lx + limb_w, hip_y + upper + lower),
-            radius=max(2, int(5 * scale)),
-            fill=palette["pants"],
+        lower_y = hip_y + upper_leg + joint_gap
+        _draw_part(
+            draw,
+            (lx, lower_y, lx + limb_w, lower_y + lower_leg),
+            palette["pants"],
+            max(4, int(8 * scale)),
         )
-        shoe_h = int(22 * scale)
-        draw.rectangle(
-            (lx - int(3 * scale), hip_y + upper + lower - shoe_h,
-             lx + limb_w + int(8 * scale), hip_y + upper + lower),
+        shoe_h = int(18 * scale)
+        draw.rounded_rectangle(
+            (
+                lx - int(4 * scale),
+                lower_y + lower_leg - shoe_h,
+                lx + limb_w + int(10 * scale),
+                lower_y + lower_leg + int(4 * scale),
+            ),
+            radius=max(3, int(6 * scale)),
             fill=palette["shoes"],
+            outline=_shade(palette["shoes"], 0.72),
+            width=max(1, int(2 * scale)),
         )
 
-    # torso
-    torso_x = cx - torso_w // 2
-    torso_y = head_y + head
-    draw.rounded_rectangle(
-        (torso_x, torso_y, torso_x + torso_w, torso_y + torso_h),
-        radius=max(3, int(6 * scale)),
-        fill=palette["shirt"],
+    # R15 torso has a subtle shoulder-to-waist taper instead of a Minecraft rectangle.
+    torso_y = head_y + head_h + int(11 * scale)
+    torso_poly = [
+        (cx - torso_top // 2, torso_y),
+        (cx + torso_top // 2, torso_y),
+        (cx + torso_bottom // 2, torso_y + torso_h),
+        (cx - torso_bottom // 2, torso_y + torso_h),
+    ]
+    draw.polygon(torso_poly, fill=palette["shirt"], outline=_shade(palette["shirt"], 0.72))
+    draw.line(
+        (cx - torso_top // 2 + int(8 * scale), torso_y + int(8 * scale),
+         cx + torso_top // 2 - int(8 * scale), torso_y + int(8 * scale)),
+        fill=_shade(palette["shirt"], 1.12),
+        width=max(1, int(3 * scale)),
     )
 
-    # arms: upper + lower segments
-    arm_y = torso_y + int(8 * scale)
+    # R15 arms: shoulder / forearm / hand are visibly separate pieces.
+    shoulder_y = torso_y + int(6 * scale)
     for side in (-1, 1):
-        ax = torso_x - limb_w - int(8 * scale) if side < 0 else torso_x + torso_w + int(8 * scale)
-        draw.rounded_rectangle(
-            (ax, arm_y, ax + limb_w, arm_y + upper),
-            radius=max(2, int(5 * scale)),
-            fill=palette["shirt"],
+        ax = (
+            cx - torso_top // 2 - limb_w - int(7 * scale)
+            if side < 0
+            else cx + torso_top // 2 + int(7 * scale)
         )
+        _draw_part(
+            draw,
+            (ax, shoulder_y, ax + limb_w, shoulder_y + upper_arm),
+            palette["shirt"],
+            max(4, int(8 * scale)),
+        )
+        fore_y = shoulder_y + upper_arm + joint_gap
+        _draw_part(
+            draw,
+            (ax, fore_y, ax + limb_w, fore_y + lower_arm),
+            palette["skin"],
+            max(4, int(8 * scale)),
+        )
+        hand_r = max(5, int(13 * scale))
+        hand_cx = ax + limb_w // 2
+        hand_cy = fore_y + lower_arm + hand_r // 2
         draw.rounded_rectangle(
-            (ax, arm_y + upper + 2, ax + limb_w, arm_y + upper + lower),
-            radius=max(2, int(5 * scale)),
+            (
+                hand_cx - hand_r,
+                hand_cy - hand_r,
+                hand_cx + hand_r,
+                hand_cy + hand_r,
+            ),
+            radius=hand_r // 2,
             fill=palette["skin"],
+            outline=_shade(palette["skin"], 0.78),
+            width=max(1, int(2 * scale)),
         )
 
-    # square head + classic simple face
-    draw.rounded_rectangle(
-        (head_x, head_y, head_x + head, head_y + head),
-        radius=max(3, int(7 * scale)),
-        fill=palette["skin"],
-    )
-    eye = max(3, int(6 * scale))
-    eye_y = head_y + int(head * 0.47)
-    for ex in (head_x + int(head * 0.32), head_x + int(head * 0.68)):
-        draw.rectangle((ex - eye, eye_y - eye, ex + eye, eye_y + eye), fill=(28, 29, 32))
-    mouth_y = head_y + int(head * 0.70)
-    draw.arc(
-        (head_x + int(head * 0.33), mouth_y - int(10 * scale),
-         head_x + int(head * 0.67), mouth_y + int(16 * scale)),
-        5, 175, fill=(37, 38, 40), width=max(2, int(4 * scale))
+    # Beveled classic Roblox head, not a voxel cube.
+    _draw_part(
+        draw,
+        (head_x, head_y, head_x + head_w, head_y + head_h),
+        palette["skin"],
+        max(8, int(14 * scale)),
     )
 
-    # simple Roblox hair cap/accessory shape
-    hair_y = head_y - int(8 * scale)
-    draw.rectangle(
-        (head_x + int(4 * scale), hair_y, head_x + head - int(4 * scale), head_y + int(24 * scale)),
+    # Classic Roblox-style face decal: tiny oval eyes + simple smile.
+    eye_w = max(2, int(5 * scale))
+    eye_h = max(4, int(8 * scale))
+    eye_y = head_y + int(head_h * 0.48)
+    for ex in (head_x + int(head_w * 0.35), head_x + int(head_w * 0.65)):
+        draw.ellipse(
+            (ex - eye_w, eye_y - eye_h, ex + eye_w, eye_y + eye_h),
+            fill=(25, 27, 30),
+        )
+    mouth_box = (
+        head_x + int(head_w * 0.34),
+        head_y + int(head_h * 0.56),
+        head_x + int(head_w * 0.66),
+        head_y + int(head_h * 0.78),
+    )
+    draw.arc(
+        mouth_box,
+        15,
+        165,
+        fill=(35, 36, 38),
+        width=max(2, int(4 * scale)),
+    )
+
+    # Catalog-hair silhouette rather than a Minecraft hair block.
+    hair_y = head_y - int(5 * scale)
+    draw.rounded_rectangle(
+        (
+            head_x + int(3 * scale),
+            hair_y,
+            head_x + head_w - int(3 * scale),
+            head_y + int(17 * scale),
+        ),
+        radius=max(5, int(10 * scale)),
         fill=palette["hair"],
     )
-    draw.polygon(
-        [
-            (head_x + int(5 * scale), head_y + int(10 * scale)),
-            (head_x + int(24 * scale), head_y - int(20 * scale)),
-            (head_x + int(44 * scale), head_y + int(5 * scale)),
-            (head_x + int(70 * scale), head_y - int(15 * scale)),
-            (head_x + head - int(5 * scale), head_y + int(12 * scale)),
-        ],
-        fill=palette["hair"],
-    )
+    spikes = [
+        (0.05, 0.20),
+        (0.20, -0.12),
+        (0.34, 0.10),
+        (0.50, -0.16),
+        (0.66, 0.08),
+        (0.82, -0.08),
+        (0.95, 0.17),
+    ]
+    pts = []
+    for x_ratio, y_ratio in spikes:
+        pts.append(
+            (
+                head_x + int(head_w * x_ratio),
+                head_y + int(head_h * y_ratio),
+            )
+        )
+    pts += [
+        (head_x + head_w - int(4 * scale), head_y + int(22 * scale)),
+        (head_x + int(4 * scale), head_y + int(22 * scale)),
+    ]
+    draw.polygon(pts, fill=palette["hair"])
 
 
 def build_cast_reference(
@@ -132,27 +235,45 @@ def build_cast_reference(
     destination.parent.mkdir(parents=True, exist_ok=True)
     width, height = 576, 1024
 
-    image = Image.new("RGB", (width, height), (89, 146, 211))
+    # Neutral text-free studio reference. It deliberately contains no world/background
+    # details for FLUX to accidentally copy into every scene.
+    image = Image.new("RGB", (width, height), (211, 216, 223))
     draw = ImageDraw.Draw(image)
-
-    # Text-free, simple game-like staging. This image is conditioning only.
-    draw.rectangle((0, int(height * 0.58), width, height), fill=(87, 164, 88))
-    draw.rectangle((0, int(height * 0.76), width, height), fill=(106, 109, 119))
-    draw.rectangle((0, int(height * 0.10), width, int(height * 0.58)), fill=(101, 160, 220))
+    draw.rectangle((0, int(height * 0.78), width, height), fill=(182, 187, 194))
+    draw.ellipse(
+        (int(width * 0.08), int(height * 0.82), int(width * 0.92), int(height * 0.95)),
+        fill=(162, 167, 174),
+    )
 
     count = max(1, min(3, len(characters)))
     xs = {
         1: [width // 2],
         2: [int(width * 0.34), int(width * 0.66)],
-        3: [int(width * 0.24), int(width * 0.50), int(width * 0.76)],
+        3: [int(width * 0.23), int(width * 0.50), int(width * 0.77)],
     }[count]
-    scale = 0.86 if count == 1 else (0.70 if count == 2 else 0.58)
-    ground = int(height * 0.88)
+    scale = 1.08 if count == 1 else (0.86 if count == 2 else 0.69)
+    ground = int(height * 0.86)
 
     for idx, character in enumerate(characters[:count]):
         cid = str(character.get("id") or "").lower()
         palette = PALETTES.get(cid, PALETTES["max"])
         _draw_r15(draw, xs[idx], ground, scale, palette)
 
-    image.save(destination, quality=95)
+    image.save(destination, quality=96)
     return destination
+
+
+def build_scene_cast_reference(
+    scene: dict[str, Any],
+    characters: list[dict[str, Any]],
+    destination: Path,
+) -> Path:
+    visible = {str(x).lower() for x in (scene.get("characters") or []) if x}
+    selected = [
+        character
+        for character in characters
+        if str(character.get("id") or "").lower() in visible
+    ]
+    if not selected:
+        selected = characters[:1]
+    return build_cast_reference(selected, destination)
