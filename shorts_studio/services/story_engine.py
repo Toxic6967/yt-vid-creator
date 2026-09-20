@@ -298,6 +298,9 @@ Return:
 GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
+POWER/FANTASY RULES:
+{_power_story_rules(genre)}
+
 WEAK SELECTED CONCEPT:
 {json.dumps(selected, ensure_ascii=False)}
 
@@ -865,7 +868,7 @@ Score 0-100:
 - movie_clarity: can every beat be understood visually?
 - character_consistency: are characters simple and reusable across shots?
 - visual_variety: do consecutive scenes visibly change framing, area, obstacle or set-piece instead of repeating one backdrop?
-- game_specificity: does this clearly happen inside the named game using real mechanics, rather than generic Roblox?
+- game_specificity: does this clearly happen inside the named game using real mechanics/locations rather than generic Roblox? In powers genre, approved fictional character powers are allowed but must not replace game-specific setting/mechanics.
 - cringe_avoidance: 100 means not cringe, not babyish, no forced slang, no fake moral.
 
 Also list exact problems and exact rewrite instructions.
@@ -1425,6 +1428,9 @@ GAME: {game_context.get("game_name")}
 VERIFIED GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
+POWER/FANTASY RULES:
+{_power_story_rules(story.get("genre"))}
+
 LOCKED ARC:
 {json.dumps(story.get("arc_plan") or {}, ensure_ascii=False)}
 
@@ -1604,6 +1610,9 @@ AUDIENCE: {audience}
 TARGET: {target_seconds} seconds
 REAL GAME CONTEXT:
 {story_game_prompt_context(game_context)}
+
+POWER/FANTASY RULES:
+{_power_story_rules(genre)}
 
 LOCKED CAUSAL ARC:
 {json.dumps(story.get("arc_plan") or {}, ensure_ascii=False)}
