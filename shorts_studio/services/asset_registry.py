@@ -116,7 +116,20 @@ def choose_clip_from_action(action: str, role: str = "") -> str:
         ("run", "run"),
         ("sprint", "run"),
         ("chase", "run"),
+        ("escape", "run"),
+        ("rush", "run"),
+        ("flee", "run"),
         ("walk", "walk"),
+        ("move toward", "walk"),
+        ("moves toward", "walk"),
+        ("approach", "walk"),
+        ("head toward", "walk"),
+        ("heads toward", "walk"),
+        ("enter", "walk"),
+        ("leave", "walk"),
+        ("follow", "walk"),
+        ("cross", "walk"),
+        ("step", "walk"),
         ("jump", "jump"),
         ("leap", "jump"),
         ("hide", "hide"),
@@ -134,8 +147,18 @@ def choose_clip_from_action(action: str, role: str = "") -> str:
         ("pick", "pickup"),
         ("grab", "pickup"),
         ("collect", "pickup"),
-        ("turn", "turn"),
         ("look back", "look_back"),
+        ("looks back", "look_back"),
+        ("glance back", "look_back"),
+        ("watch", "turn"),
+        ("look at", "turn"),
+        ("looks at", "turn"),
+        ("notice", "react"),
+        ("spots", "react"),
+        ("sees", "react"),
+        ("realizes", "react"),
+        ("realises", "react"),
+        ("turn", "turn"),
         ("attack", "attack"),
         ("hit", "attack"),
         ("celebrate", "celebrate"),
@@ -150,6 +173,8 @@ def choose_clip_from_action(action: str, role: str = "") -> str:
         return "react"
     if role == "payoff":
         return "celebrate"
+    if role == "setup":
+        return "turn"
     return "idle"
 
 
