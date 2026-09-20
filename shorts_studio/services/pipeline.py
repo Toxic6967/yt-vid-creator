@@ -359,7 +359,7 @@ def run_pipeline(job_id: str) -> None:
                     + (f" Missing: {missing_story}." if missing_story else "")
                 )
 
-        _stage(job_id, "Building polished Roblox R15 cast + cinematic scenes", 70)
+        _stage(job_id, "Building polished Roblox R15 cast", 64)
         visuals = []
         channel_cast_reference = None
         polished_cast_refs: dict[str, str] = {}
@@ -377,12 +377,14 @@ def run_pipeline(job_id: str) -> None:
             )
             manifest["polished_cast_references"] = polished_cast_refs
 
-            _stage(job_id, "Building Roblox game environments", 66)
+            _stage(job_id, "Building Roblox game environments", 68)
             environment_plates = _ensure_story_environment_plates(job_dir, script)
             manifest["environment_plates"] = environment_plates
 
         previous_story_frame = None
         duplicate_retry_count = 0
+        if content_type == "story":
+            _stage(job_id, "Composing cinematic Roblox scenes", 72)
 
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
             scene_reference = None
@@ -478,8 +480,8 @@ def run_pipeline(job_id: str) -> None:
         )
         if content_type == "story":
             required_story_motion = max(
-                4,
-                min(6, round(len(script.get("scenes", [])) * 0.55)),
+                5,
+                min(8, round(len(script.get("scenes", [])) * 0.60)),
             )
             if ltx_video_count < required_story_motion:
                 raise RuntimeError(
