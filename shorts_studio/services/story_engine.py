@@ -217,7 +217,7 @@ Score each 0-100 for:
 - game_specificity: would a real player recognise that this story belongs in THIS game?
 - cringe_avoidance (100 = not cringe)
 
-Pick the best idea for a 20-45 second cinematic Roblox Short.
+Pick the best idea for a 45-70 second cinematic Roblox mini-movie.
 Do not reward random shock value. The best idea should be simple enough to understand
 instantly but strong enough to make someone stay for the ending.
 
@@ -273,13 +273,27 @@ moment, server moment, obby moment or friendship moment they can recognise.
 
 NON-NEGOTIABLE:
 - Hook in the FIRST 1-2 seconds. Start inside the problem; no introduction.
-- Use 7-10 short scenes. Maximum 3 characters.
-- Each narration line should usually be 5-12 spoken words so the visual shot can finish before the next cut.
+- Use 10-14 purposeful scenes. Maximum 3 characters.
+- Each narration line should usually be 6-14 spoken words. The longer runtime is for MORE STORY, not filler.
+- Build a real cause-and-effect story arc:
+  1) HOOK: show the immediate problem or strange situation.
+  2) GOAL: make it obvious what the player is trying to do.
+  3) FIRST OBSTACLE: a real game mechanic makes the goal harder.
+  4) FAILED ATTEMPT / COST: something goes wrong because of a choice or mechanic.
+  5) ESCALATION: the situation becomes harder, riskier, funnier or scarier.
+  6) TURN: the player notices/tries something that changes the direction of the story.
+  7) CLIMAX: one decisive game action resolves the central problem.
+  8) PAYOFF: directly answer the hook with a satisfying result, reversal or punchline.
+- Every scene must CAUSE or ENABLE the next important beat. If a scene can be removed without changing the story, remove it.
 - Tell it like a creator recounting something that just happened in the game, not like a movie trailer.
 - Keep it inside ONE continuous game session, but the VIDEO must visibly progress.
-- Use at least 3 visually different rooms, areas, obstacles, set-pieces or background compositions from the same game when the verified context allows it.
+- Use at least 4 visually different rooms, areas, obstacles, set-pieces or background compositions from the same game when the verified context allows it.
+- The background must look like a polished ROBLOX GAME ENVIRONMENT: Roblox Studio-style materials, simple readable geometry, stylized game lighting and game-scale props. Never make a photoreal real-world movie set or a Minecraft voxel map.
 - Never leave two adjacent scenes with the same environment AND the same camera framing. Each cut must reveal new visual information.
 - Conflict must escalate every few seconds.
+- Establish one clear central goal and keep it alive through the whole Short.
+- Do not introduce random new villains, secret weapons, portals, powers, rare items or lore unless the verified game context supports them AND they matter to the original goal.
+- No coincidence may solve the climax. The ending must come from a character decision, skill, mistake or verified game mechanic established earlier.
 - The ending must pay off the opening: twist, funny reversal, satisfying win, scary reveal,
   or relatable punchline.
 - Do not write a fake inspirational moral.
@@ -309,6 +323,10 @@ Return JSON exactly:
   "game_name":"{game_context.get('game_name')}",
   "genre":"funny|horror|mystery|action|relatable|sad",
   "premise":"one sentence",
+  "story_goal":"the one clear thing the player wants during this story",
+  "stakes":"what they lose/fail/miss if the goal goes wrong",
+  "turning_point":"the decision, discovery or game mechanic that changes the direction of the story",
+  "payoff":"how the climax directly resolves the hook and central goal",
   "hook":"first spoken line",
   "characters":[
     {{
@@ -349,7 +367,7 @@ def _normalise_story(
     scenes_raw = raw.get("scenes") if isinstance(raw.get("scenes"), list) else []
     scenes: list[dict[str, Any]] = []
 
-    for idx, item in enumerate(scenes_raw[:13]):
+    for idx, item in enumerate(scenes_raw[:16]):
         if not isinstance(item, dict):
             continue
         role = _clean(item.get("role"), 20).lower()
@@ -437,8 +455,8 @@ def _normalise_story(
             }
         )
 
-    if len(scenes) < 6:
-        raise RuntimeError("Story writer did not create enough usable movie scenes.")
+    if len(scenes) < 10:
+        raise RuntimeError("Story writer did not create enough usable scenes for a proper longer mini-movie.")
 
     scenes[0]["role"] = "hook"
     scenes[-1]["role"] = "payoff"
@@ -456,6 +474,10 @@ def _normalise_story(
         },
         "genre": _clean(raw.get("genre") or "relatable", 24).lower(),
         "premise": _clean(raw.get("premise"), 240),
+        "story_goal": _clean(raw.get("story_goal"), 220),
+        "stakes": _clean(raw.get("stakes"), 220),
+        "turning_point": _clean(raw.get("turning_point"), 240),
+        "payoff": _clean(raw.get("payoff"), 240),
         "hook": scenes[0]["narration"],
         "characters": characters,
         "scenes": scenes,
@@ -476,6 +498,10 @@ def _writer_view(story: dict) -> dict[str, Any]:
         "game_name": story.get("game_name"),
         "genre": story.get("genre"),
         "premise": story.get("premise"),
+        "story_goal": story.get("story_goal"),
+        "stakes": story.get("stakes"),
+        "turning_point": story.get("turning_point"),
+        "payoff": story.get("payoff"),
         "hook": story.get("hook"),
         "characters": [
             {
@@ -501,7 +527,7 @@ def _writer_view(story: dict) -> dict[str, Any]:
                 "sfx_cue": scene.get("sfx_cue"),
                 "motion_priority": scene.get("motion_priority"),
             }
-            for scene in (story.get("scenes") or [])[:11]
+            for scene in (story.get("scenes") or [])[:15]
         ],
     }
 
@@ -530,8 +556,8 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
     }
     max_words = max(scene_word_counts, default=0)
     total_words = len(re.findall(r"\b[\w'-]+\b", narration))
-    expected_min = max(42, round(target_seconds * 1.7))
-    expected_max = min(120, round(target_seconds * 2.8))
+    expected_min = max(82, round(target_seconds * 1.85))
+    expected_max = min(180, round(target_seconds * 2.50))
     banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
 
     line_starters = []
@@ -551,15 +577,34 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
         and not repeated_start_run
     )
 
+    roles = [str(scene.get("role") or "").lower() for scene in scenes]
+    reveal_indexes = [i for i, role in enumerate(roles) if role == "reveal"]
+    arc_structure_ok = (
+        bool(roles)
+        and roles[0] == "hook"
+        and roles[-1] == "payoff"
+        and "setup" in roles[: max(3, len(roles) // 2)]
+        and roles.count("build") >= 3
+        and bool(reveal_indexes)
+        and max(reveal_indexes) >= max(4, len(roles) // 2)
+    )
+
+    arc_fields_ok = all(
+        bool(str(story.get(key) or "").strip())
+        for key in ("story_goal", "stakes", "turning_point", "payoff")
+    )
+
     return {
-        "scene_count_ok": 7 <= len(scenes) <= 11,
-        "short_lines_ok": max_words <= 13,
+        "scene_count_ok": 10 <= len(scenes) <= 15,
+        "short_lines_ok": max_words <= 16,
+        "arc_structure_ok": arc_structure_ok,
+        "arc_fields_ok": arc_fields_ok,
         "word_count_ok": expected_min <= total_words <= expected_max,
         "single_narrator_ok": narrator_lines == len(scenes),
         "natural_flow_ok": natural_flow_ok,
         "mechanical_start_count": mechanical_start_count,
         "line_starters": line_starters,
-        "visual_variety_ok": len(unique_environments) >= 2 and len(unique_cameras) >= 4,
+        "visual_variety_ok": len(unique_environments) >= 4 and len(unique_cameras) >= 5,
         "unique_environment_count": len(unique_environments),
         "unique_camera_count": len(unique_cameras),
         "banned_phrase_ok": not banned_hits,
@@ -592,6 +637,9 @@ Score 0-100:
 - relatability: would Roblox players recognise the situation/emotion?
 - escalation: does something meaningfully change/get worse or better every few seconds?
 - payoff: does the ending reward watching?
+- coherence: is there one understandable central goal from setup through climax, with no random nonsense?
+- cause_effect: do important beats happen because of previous choices/game mechanics rather than coincidence?
+- setup_payoff: does the climax/payoff use something established earlier and directly resolve the opening problem?
 - dialogue: does the ONE narrator sound conversational and human rather than like an AI/documentary announcer?
 - movie_clarity: can every beat be understood visually?
 - character_consistency: are characters simple and reusable across shots?
@@ -607,6 +655,9 @@ Return:
   "relatability":0,
   "escalation":0,
   "payoff":0,
+  "coherence":0,
+  "cause_effect":0,
+  "setup_payoff":0,
   "dialogue":0,
   "movie_clarity":0,
   "character_consistency":0,
@@ -624,6 +675,9 @@ Return:
         "relatability",
         "escalation",
         "payoff",
+        "coherence",
+        "cause_effect",
+        "setup_payoff",
         "dialogue",
         "movie_clarity",
         "character_consistency",
@@ -633,23 +687,32 @@ Return:
     )
     scores = {k: max(0, min(100, int(float(result.get(k, 0) or 0)))) for k in keys}
     total = round(
-        scores["hook"] * 0.16
-        + scores["relatability"] * 0.16
-        + scores["escalation"] * 0.11
-        + scores["payoff"] * 0.14
-        + scores["dialogue"] * 0.10
-        + scores["movie_clarity"] * 0.08
-        + scores["character_consistency"] * 0.05
-        + scores["visual_variety"] * 0.08
-        + scores["game_specificity"] * 0.10
-        + scores["cringe_avoidance"] * 0.07,
+        scores["hook"] * 0.11
+        + scores["relatability"] * 0.10
+        + scores["escalation"] * 0.09
+        + scores["payoff"] * 0.11
+        + scores["coherence"] * 0.09
+        + scores["cause_effect"] * 0.07
+        + scores["setup_payoff"] * 0.05
+        + scores["dialogue"] * 0.08
+        + scores["movie_clarity"] * 0.06
+        + scores["character_consistency"] * 0.04
+        + scores["visual_variety"] * 0.07
+        + scores["game_specificity"] * 0.09
+        + scores["cringe_avoidance"] * 0.04,
         1,
     )
     problems = list(result.get("problems") or [])
     rewrite_instructions = list(result.get("rewrite_instructions") or [])
     if not mechanical["short_lines_ok"]:
         problems.append(f"Some spoken beats are too long ({mechanical['max_scene_words']} words).")
-        rewrite_instructions.append("Keep every spoken beat at 13 words or fewer; most should be 5-12 words.")
+        rewrite_instructions.append("Keep every spoken beat at 16 words or fewer; most should be 6-14 words.")
+    if not mechanical["arc_structure_ok"] or not mechanical["arc_fields_ok"]:
+        problems.append("The story does not have a complete goal → obstacle → turn → climax → payoff arc.")
+        rewrite_instructions.append(
+            "Rebuild the plot around one central goal. Establish stakes, make setbacks causal, create a turning point, "
+            "then resolve the original problem through a character choice or verified game mechanic."
+        )
     if not mechanical["single_narrator_ok"]:
         problems.append("Story switches speakers even though this format uses one consistent narrator.")
         rewrite_instructions.append("Use narrator as the speaker for every beat; let characters act visually.")
@@ -666,7 +729,7 @@ Return:
             f"{mechanical['unique_camera_count']} camera framings)."
         )
         rewrite_instructions.append(
-            "Use at least 2 clearly different in-game areas/set-pieces and 4 different camera framings. "
+            "Use at least 4 clearly different in-game areas/set-pieces and 5 different camera framings. "
             "No two adjacent scenes should look like the same shot."
         )
     if not mechanical["word_count_ok"]:
@@ -683,7 +746,10 @@ Return:
         total >= 82
         and scores["hook"] >= 84
         and scores["relatability"] >= 80
-        and scores["payoff"] >= 80
+        and scores["payoff"] >= 84
+        and scores["coherence"] >= 84
+        and scores["cause_effect"] >= 80
+        and scores["setup_payoff"] >= 82
         and scores["dialogue"] >= 82
         and scores["game_specificity"] >= 82
         and scores["cringe_avoidance"] >= 85
@@ -693,6 +759,8 @@ Return:
                 "scene_count_ok",
                 "short_lines_ok",
                 "word_count_ok",
+                "arc_structure_ok",
+                "arc_fields_ok",
                 "single_narrator_ok",
                 "natural_flow_ok",
                 "visual_variety_ok",
@@ -796,14 +864,15 @@ Hard rules:
 - Every shot must visibly communicate its narration beat.
 - Use only locations, mechanics, props, enemies or objectives supported by VERIFIED GAME CONTEXT.
 - The movie happens in one continuous game session, but it must VISIBLY MOVE FORWARD.
-- Prefer 3-5 distinct game areas/set-pieces across the Short when the verified game supports them.
+- Prefer 4-7 distinct game areas/set-pieces across the longer Short when the verified game supports them.
 - Never give adjacent shots the same environment + camera combination.
-- Use at least 5 camera/framing changes across the Short.
+- Use at least 6 camera/framing changes across the Short.
+- Backgrounds must look like real Roblox game environments, not Minecraft voxel maps and not photoreal real-world film sets. Use Roblox-scale geometry, stylized materials, readable obstacle/gameplay layout and game-like lighting.
 - Alternate useful visual scale: establishing/wide, medium action, close-up reaction/detail, follow/over-shoulder.
 - Reuse an environment only when the story logically returns there, and then change angle/action/composition.
 - Do not design text cards, fake UI, signs with writing, usernames or menus. Any sign/screen must be blank or pictorial.
 - Do not ask the image/video model to spell anything.
-- Keep actions simple enough for a 2-4 second AI-video shot.
+- Keep actions simple enough for a 2-4 second AI-video shot. Longer scenes can continue on a still/keyframe with editor motion rather than asking the video model to invent extra action.
 - Avoid vague directions like "he looks shocked"; include a physical action or visible game event.
 
 Return exactly:
