@@ -778,6 +778,107 @@ def _fallback_scene_scaffold(
     return scenes
 
 
+def _generate_scene_batches(
+    *,
+    target_seconds: int,
+    game_context: dict[str, Any],
+    genre: str,
+    arc_plan: dict[str, Any],
+    existing: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Generate a longer screenplay in small batches so an 8B local model cannot truncate the whole JSON."""
+    minimum, desired = _required_scene_count(target_seconds)
+    scaffold = _fallback_scene_scaffold(
+        desired=desired,
+        game_context=game_context,
+        arc_plan=arc_plan,
+    )
+    collected: list[dict[str, Any]] = []
+    existing = [
+        _coerce_writer_scene(scene, idx)
+        for idx, scene in enumerate(existing or [])
+        if isinstance(scene, (dict, str))
+    ]
+
+    # Three compact calls are slower, but dramatically more reliable than asking
+    # Qwen 8B for a large 12-14 scene JSON object in one response.
+    batch_size = 4
+    for start in range(0, desired, batch_size):
+        end = min(desired, start + batch_size)
+        count = end - start
+        previous = collected[-2:] if collected else existing[-2:]
+        fallback_batch = scaffold[start:end]
+        try:
+            result = chat_json(
+                "You write one compact section of a coherent Roblox screenplay. Return JSON only.",
+                f"""
+TARGET RUNTIME: {target_seconds} seconds
+GAME: {game_context.get("game_name")}
+GENRE: {genre}
+THIS BATCH: scenes {start + 1}-{end} of {desired}
+RETURN EXACTLY: {count} scenes
+
+VERIFIED GAME CONTEXT:
+{story_game_prompt_context(game_context)}
+
+POWER/FANTASY RULES:
+{_power_story_rules(genre)}
+
+LOCKED CAUSAL ARC:
+{json.dumps(arc_plan, ensure_ascii=False)}
+
+PREVIOUS TWO SCENES FOR CONTINUITY:
+{json.dumps(previous, ensure_ascii=False)}
+
+FALLBACK BEAT INTENT FOR THIS SECTION:
+{json.dumps(fallback_batch, ensure_ascii=False)}
+
+Write ONLY this section of the same story.
+
+Each scene must contain:
+role, speaker, narration, characters, environment, action, because_of, changes,
+camera, emotion, on_screen_emphasis, sfx_cue, motion_priority.
+
+Rules:
+- narration is natural spoken English, normally 6-14 words;
+- speaker is narrator;
+- use recurring ids max, mia, kai;
+- every beat is caused by an earlier action, choice, mistake or verified mechanic;
+- keep the one central goal and locked payoff;
+- use real verified game locations/mechanics; powers only when POWER/FANTASY RULES allow them;
+- no filler, coincidence, fake lore, random secrets or unrelated twists;
+- continue naturally from PREVIOUS TWO SCENES;
+- vary camera and visual action;
+- do not return title, explanation, markdown or derived visual prompts.
+
+Return exactly {{"scenes":[...]}}.
+""",
+                temperature=0.26,
+            )
+            batch = _coerce_writer_object(result).get("scenes") or []
+            batch = [
+                _coerce_writer_scene(scene, start + idx)
+                for idx, scene in enumerate(batch[:count])
+            ]
+            batch = [
+                scene for scene in batch
+                if scene and _clean(scene.get("narration"), 240)
+            ]
+        except Exception:
+            batch = []
+
+        # Never let one malformed local-model batch destroy the entire story.
+        # Fill only the missing slots with the deterministic causal scaffold;
+        # later editor + logic passes must still rewrite/approve them.
+        if len(batch) < count:
+            batch.extend(fallback_batch[len(batch):count])
+        collected.extend(batch[:count])
+
+    if len(collected) < minimum:
+        collected = scaffold[:desired]
+    return collected[:desired]
+
+
 def _repair_scene_count(
     raw: dict[str, Any],
     *,
@@ -795,7 +896,8 @@ def _repair_scene_count(
     arc = arc_plan or {}
     existing = current.get("scenes") if isinstance(current.get("scenes"), list) else []
 
-    for _ in range(2):
+    # One compact whole-array repair is cheap enough to try first.
+    try:
         repaired = chat_json(
             "You repair only the scene array of a Roblox screenplay. Return compact JSON only.",
             f"""
@@ -817,26 +919,15 @@ EXISTING USABLE SCENES:
 {json.dumps(existing[:14], ensure_ascii=False)}
 
 Create the COMPLETE scene array from scene 1 through scene {desired}.
+Keep fields compact: role, speaker, narration, characters, environment, action,
+because_of, changes, camera, emotion, on_screen_emphasis, sfx_cue, motion_priority.
 
-Each scene MUST contain exactly these useful fields:
-role, speaker, narration, characters, environment, action, because_of, changes,
-camera, emotion, on_screen_emphasis, sfx_cue, motion_priority.
-
-Rules:
-- Every narration value must be a non-empty natural spoken English string.
-- 6-14 spoken words per narration line where possible.
-- Scene 1 is hook. Final scene is payoff.
-- Preserve ONE central goal from the locked arc.
-- Build real cause -> consequence -> new decision progression.
-- No filler and no coincidence.
-- Use only verified game locations/mechanics/items/enemies, except approved fictional powers when power mode allows them.
-- Use 4-8 visually distinct verified areas/set-pieces across the whole story, not a new random world every scene.
-- Use only these cameras: wide, medium, close-up, over-shoulder, follow, low-angle, high-angle.
-- speaker is always narrator.
-- characters should use recurring ids max, mia, kai.
-- Return ONLY {{"scenes":[...]}}. Do not return title, explanation, markdown, visual prompts or scoring.
+Every narration must be non-empty natural English, normally 6-14 words.
+Scene 1 is hook; final scene is payoff. One central goal. Real cause-and-effect.
+No filler/coincidence. Use verified game facts and approved powers only.
+Return ONLY {{"scenes":[...]}}.
 """,
-            temperature=0.28,
+            temperature=0.24,
         )
         repaired = _coerce_writer_object(repaired)
         repaired_scenes = repaired.get("scenes") if isinstance(repaired.get("scenes"), list) else []
@@ -845,13 +936,17 @@ Rules:
             existing = current["scenes"]
         if _usable_raw_scene_count(current) >= minimum:
             return current
+    except Exception:
+        pass
 
-    # Never turn a good locked arc into a hard 0-scene failure. This scaffold
-    # still has to survive the normal story scorer + independent logic audit.
-    current["scenes"] = _fallback_scene_scaffold(
-        desired=desired,
+    # If the local model truncated the long array (including producing zero
+    # usable scenes), rebuild it in several small continuity-aware batches.
+    current["scenes"] = _generate_scene_batches(
+        target_seconds=target_seconds,
         game_context=game_context,
+        genre=genre,
         arc_plan=arc,
+        existing=existing,
     )
     current.setdefault("game_name", game_context.get("game_name"))
     current.setdefault("genre", genre)
@@ -1899,7 +1994,7 @@ def _finalize_story_quality(
     best_score: dict[str, Any] | None = None
 
     # Longer stories need enough chances to fix writing, narration and shot planning.
-    for attempt in range(4):
+    for attempt in range(7):
         candidate = _direct_story_shots(
             working_story,
             game_context=game_context,
@@ -1971,7 +2066,7 @@ def _finalize_story_quality(
 
         # Last attempt: make the hook/payoff mechanically explicit rather than
         # repeatedly returning an almost-good script that fails on the same weakness.
-        if attempt == 2:
+        if attempt in {3, 5}:
             scenes = working_story.get("scenes") or []
             if scenes:
                 arc = working_story.get("arc_plan") or {}
@@ -2057,7 +2152,7 @@ def create_story(
     if selected_idea:
         story["idea_selection"] = selected_idea
 
-    for _ in range(2):
+    for _ in range(3):
         score = _score_story(story, audience, target_seconds, game_context)
         if score["passed"]:
             return _finalize_story_quality(
