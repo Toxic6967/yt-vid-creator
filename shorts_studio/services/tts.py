@@ -276,22 +276,33 @@ def render_scene(
     output_path: Path,
     *,
     role: str = "",
+    require_human: bool = False,
 ) -> dict[str, Any]:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if human_voice_health()["ready"] and voice.startswith(
-        ("auto-youthful-", "human-story-", "character-")
-    ):
+    voice_state = human_voice_health()
+    kokoro_voice = voice.startswith(("auto-youthful-", "human-story-", "character-"))
+
+    if voice_state["ready"] and kokoro_voice:
         try:
             return _render_kokoro(text, voice, output_path, role=role)
         except Exception as exc:
-            # Preserve a useful reason in the fallback metadata rather than
-            # taking down non-Story legacy workflows.
+            if require_human:
+                raise RuntimeError(
+                    f"Kokoro human narration failed: {exc}. "
+                    "Story Studio will not silently replace it with the robotic fallback voice."
+                ) from exc
             result = asyncio.run(
                 _render_edge_async(text, voice, output_path, role=role)
             )
             result["kokoro_error"] = str(exc)
             return result
+
+    if require_human:
+        raise RuntimeError(
+            "Human narration backend is not ready. Run install_human_voice.bat "
+            "and restart Shorts Studio."
+        )
 
     return asyncio.run(
         _render_edge_async(
