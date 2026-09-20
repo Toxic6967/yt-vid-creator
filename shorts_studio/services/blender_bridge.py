@@ -7,6 +7,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import imageio_ffmpeg
+
 from ..config import ROOT_DIR, settings
 
 
@@ -55,6 +57,39 @@ def health() -> dict[str, Any]:
         "executable": str(exe) if exe else None,
         "install_hint": "Run install_animation_engine.bat" if not exe else None,
     }
+
+
+def _validate_rendered_clip(path: Path) -> tuple[bool, str]:
+    if not path.exists():
+        return False, "file missing"
+    size = path.stat().st_size
+    if size < 4096:
+        return False, f"file too small ({size} bytes)"
+
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    probe = subprocess.run(
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(path),
+            "-map",
+            "0:v:0",
+            "-frames:v",
+            "3",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if probe.returncode != 0:
+        return False, (probe.stderr or probe.stdout or "FFmpeg could not decode the clip")[-900:]
+    return True, "ok"
 
 
 def render_animation_plan(
@@ -112,8 +147,40 @@ def render_animation_plan(
     for shot in plan.get("shots") or []:
         index = int(shot.get("index", len(visuals))) + 1
         clip = clips_dir / f"scene_{index:02d}.mp4"
-        if not clip.exists() or clip.stat().st_size < 10_000:
-            raise RuntimeError(f"Blender did not produce a usable clip for scene {index}.")
+        valid, reason = _validate_rendered_clip(clip)
+        if not valid:
+            files = ", ".join(
+                f"{path.name} ({path.stat().st_size} bytes)"
+                for path in sorted(clips_dir.glob("*"))
+                if path.is_file()
+            )
+            report_path = clips_dir / f"scene_{index:02d}.json"
+            report = ""
+            if report_path.exists():
+                try:
+                    report = report_path.read_text(encoding="utf-8")[-1600:]
+                except Exception:
+                    report = ""
+            log_tail = ""
+            try:
+                log_tail = log.read_text(encoding="utf-8", errors="replace")[-1800:]
+            except Exception:
+                pass
+            raise RuntimeError(
+                f"Blender scene {index} did not pass video validation: {reason}. "
+                f"Files: {files or 'none'}. "
+                + (f"Scene report: {report}. " if report else "")
+                + (f"Blender log tail: {log_tail}" if log_tail else "")
+            )
+
+        report_path = clips_dir / f"scene_{index:02d}.json"
+        render_report: dict[str, Any] = {}
+        if report_path.exists():
+            try:
+                render_report = json.loads(report_path.read_text(encoding="utf-8"))
+            except Exception:
+                render_report = {}
+
         visuals.append(
             {
                 "path": str(clip),
@@ -128,6 +195,8 @@ def render_animation_plan(
                     for actor in (shot.get("actors") or [])
                     if actor.get("power_effect") not in {None, "", "none"}
                 ],
+                "render_report": render_report,
+                "validated_video": True,
             }
         )
     return visuals
