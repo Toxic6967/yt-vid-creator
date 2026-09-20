@@ -223,9 +223,10 @@ def _try_ai_scene(
                 result = generate_story_keyframe(
                     prompt=(
                         direction["prompt"]
-                        + " Treat the supplied reference image as the exact avatar/body-shape and continuity reference. "
-                        "Keep the Roblox R15 body geometry and outfit identity, but change pose, camera and environment "
-                        "to match this scene. Do not copy any text from the reference."
+                        + " The supplied reference is a neutral cast sheet, not the scene background. "
+                        "Use it only to preserve which Roblox avatars are present, their R15 proportions, hair and outfit colours. "
+                        "Do not copy the reference pose or background. Build a fresh scene matching this shot's environment, action and camera. "
+                        "Every surface that could contain writing must stay blank because all English text is added later in editing."
                     ),
                     reference_path=reference_image,
                     identity_reference_path=identity_reference,
