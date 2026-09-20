@@ -38,6 +38,9 @@ CACHE_DIR = DATA_DIR / "cache"
 MEDIA_OUTPUT_DIR = OUTPUT_DIR / "media"
 WORKFLOW_DIR = ROOT_DIR / "workflows"
 DB_PATH = DATA_DIR / "shorts_studio.db"
+VOICE_ROOT = (STORAGE_ROOT / "voice") if STORAGE_ROOT else (ASSET_DIR / "voice")
+CHATTERBOX_DIR = VOICE_ROOT / "chatterbox"
+CHATTERBOX_PYTHON = CHATTERBOX_DIR / ".venv" / "Scripts" / "python.exe"
 
 for path in (DATA_DIR, OUTPUT_DIR, MEDIA_OUTPUT_DIR, ASSET_DIR, MUSIC_DIR, SFX_DIR, KOKORO_DIR, CACHE_DIR, WORKFLOW_DIR):
     path.mkdir(parents=True, exist_ok=True)
@@ -68,6 +71,14 @@ class Settings:
     kokoro_voices_path: str = os.getenv(
         "SHORTS_STUDIO_KOKORO_VOICES",
         str(KOKORO_DIR / "voices-v1.0.bin"),
+    )
+    chatterbox_python: str = os.getenv(
+        "SHORTS_STUDIO_CHATTERBOX_PYTHON",
+        str(CHATTERBOX_PYTHON),
+    )
+    chatterbox_device: str = os.getenv(
+        "SHORTS_STUDIO_CHATTERBOX_DEVICE",
+        "cpu",
     )
     max_source_chars: int = int(os.getenv("SHORTS_STUDIO_MAX_SOURCE_CHARS", "2400"))
     user_agent: str = os.getenv(
