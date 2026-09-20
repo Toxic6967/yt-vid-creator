@@ -619,7 +619,7 @@ def run_pipeline(job_id: str) -> None:
             ),
             "environment_plate_count": environment_plate_count,
             "environment_variety_ok": (
-                environment_plate_count >= 4 if content_type == "story" else True
+                4 <= environment_plate_count <= 8 if content_type == "story" else True
             ),
             "visual_content_ok": len(fallback_visuals) == 0 and (
                 (
