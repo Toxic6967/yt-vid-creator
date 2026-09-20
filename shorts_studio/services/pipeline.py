@@ -107,6 +107,12 @@ def _environment_key(value: str) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
 
+def _scene_environment_key(scene: dict) -> str:
+    return _environment_key(
+        str(scene.get("environment_key") or scene.get("environment") or "")
+    )
+
+
 def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, str]:
     from .comfyui_client import generate_story_keyframe
 
@@ -122,7 +128,7 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
 
     for idx, scene in enumerate(scenes, start=1):
         environment = str(scene.get("environment") or "").strip()
-        key = _environment_key(environment)
+        key = _scene_environment_key(scene)
         if not key or key in plates:
             continue
 
@@ -402,7 +408,7 @@ def run_pipeline(job_id: str) -> None:
             environment_reference = None
             if content_type == "story":
                 environment_reference = environment_plates.get(
-                    _environment_key(str(scene.get("environment") or ""))
+                    _scene_environment_key(scene)
                 )
 
             visual = prepare_visual(
