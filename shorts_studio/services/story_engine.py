@@ -2039,6 +2039,109 @@ Return ONLY the repaired compact story JSON.
     return repaired
 
 
+def _production_safe_score(score: dict[str, Any]) -> bool:
+    """Minimum structural bar for V3 test renders; soft creative scores stay visible as warnings."""
+    mechanical = score.get("mechanical") or {}
+    logic = score.get("logic_audit") or {}
+    logic_scores = logic.get("scores") or {}
+    scores = score.get("scores") or {}
+
+    hard_structure = all(
+        bool(mechanical.get(key))
+        for key in (
+            "scene_count_ok",
+            "arc_structure_ok",
+            "arc_fields_ok",
+            "single_narrator_ok",
+            "banned_phrase_ok",
+        )
+    )
+    no_severe_logic = not (
+        float(logic_scores.get("causal_logic") or 100) < 46
+        or float(logic_scores.get("game_truth") or 100) < 52
+        or float(logic_scores.get("central_goal") or 100) < 46
+        or float(logic_scores.get("ending_logic") or 100) < 46
+    )
+    return (
+        hard_structure
+        and no_severe_logic
+        and float(score.get("total") or 0) >= 52
+        and float(scores.get("coherence") or 0) >= 50
+        and float(scores.get("game_specificity") or 0) >= 58
+        and float(scores.get("cringe_avoidance") or 0) >= 58
+    )
+
+
+def _deterministic_story_cleanup(
+    story: dict[str, Any],
+    *,
+    game_context: dict[str, Any],
+) -> dict[str, Any]:
+    """Fix mechanical rough edges without changing the plot."""
+    scenes = story.get("scenes") or []
+    if not scenes:
+        return story
+
+    setpieces = [
+        _clean(item.get("name") or item.get("description"), 160)
+        for item in [
+            *(game_context.get("visual_setpieces") or []),
+            *(game_context.get("locations") or []),
+        ]
+        if isinstance(item, dict)
+        and _clean(item.get("name") or item.get("description"), 160)
+    ]
+    setpieces = list(dict.fromkeys(x for x in setpieces if x))[:8]
+
+    random_replacements = {
+        "out of nowhere": "right after that",
+        "all of a sudden": "seconds later",
+        "for no reason": "because of the last mistake",
+        "somehow": "after another attempt",
+        "randomly": "during the next move",
+    }
+
+    for idx, scene in enumerate(scenes):
+        line = re.sub(r"\s+", " ", str(scene.get("narration") or "")).strip()
+        lower = line.lower()
+        for bad, good in random_replacements.items():
+            if bad in lower:
+                line = re.sub(re.escape(bad), good, line, flags=re.I)
+                lower = line.lower()
+        scene["narration"] = line
+
+        if idx == 0:
+            scene["role"] = "hook"
+            scene["because_of"] = "opening situation"
+        elif not _clean(scene.get("because_of"), 180):
+            previous = scenes[idx - 1]
+            scene["because_of"] = _clean(
+                previous.get("changes") or previous.get("action") or previous.get("narration"),
+                180,
+            )
+
+        if not _clean(scene.get("changes"), 200):
+            if idx + 1 < len(scenes):
+                nxt = scenes[idx + 1]
+                scene["changes"] = _clean(
+                    f"This creates the next problem: {nxt.get('action') or nxt.get('narration')}",
+                    200,
+                )
+            else:
+                scene["changes"] = "The opening problem is resolved."
+
+        if setpieces and not _clean(scene.get("environment"), 180):
+            scene["environment"] = setpieces[idx % len(setpieces)]
+
+    scenes[-1]["role"] = "payoff"
+    story["scenes"] = scenes
+    story["hook"] = scenes[0].get("narration") or story.get("hook")
+    narration = " ".join(str(s.get("narration") or "").strip() for s in scenes).strip()
+    story["narration"] = narration
+    story["word_count"] = len(re.findall(r"\b[\w'-]+\b", narration))
+    return story
+
+
 def _finalize_story_quality(
     story: dict[str, Any],
     *,
@@ -2054,7 +2157,11 @@ def _finalize_story_quality(
     # Aim for the strong quality target, but do not endlessly reject a usable
     # story. Two focused repair cycles are enough before we accept a production-
     # safe script and let the user judge the actual rendered result.
-    for attempt in range(3):
+    for attempt in range(5):
+        working_story = _deterministic_story_cleanup(
+            working_story,
+            game_context=game_context,
+        )
         candidate = _direct_story_shots(
             working_story,
             game_context=game_context,
@@ -2100,11 +2207,20 @@ def _finalize_story_quality(
         if strong_target_met:
             return candidate
 
-        # If it is already safe enough to render, give the editor one chance to
-        # improve it toward the strong target. After that, stop self-rewriting
-        # and let V3 render the usable story instead of looping forever.
+        # Once we've given the editor a couple of real rewrite attempts, allow a
+        # structurally sound screenplay through for a V3 render even when the
+        # subjective critic is still asking for more polish. Keep all warnings.
+        if attempt >= 2 and _production_safe_score(score):
+            score["passed"] = True
+            score["accepted_below_target"] = True
+            score["production_safe"] = True
+            candidate["story_score"] = score
+            return candidate
+
+        # If both normal gates already pass, one improvement pass is enough.
         if score.get("passed") and logic_audit.get("passed") and attempt >= 1:
             score["accepted_below_target"] = True
+            score["production_safe"] = True
             candidate["story_score"] = score
             return candidate
 
@@ -2138,7 +2254,7 @@ def _finalize_story_quality(
 
         # Last attempt: make the hook/payoff mechanically explicit rather than
         # repeatedly returning an almost-good script that fails on the same weakness.
-        if attempt in {3, 5}:
+        if attempt in {2, 4}:
             scenes = working_story.get("scenes") or []
             if scenes:
                 arc = working_story.get("arc_plan") or {}
@@ -2173,6 +2289,11 @@ def _finalize_story_quality(
         best_story["story_score"]["accepted_below_target"] = not bool(
             best_story["story_score"].get("quality_target_met")
         )
+        best_story["story_score"]["production_safe"] = True
+    elif _production_safe_score(best_story["story_score"]):
+        best_story["story_score"]["passed"] = True
+        best_story["story_score"]["accepted_below_target"] = True
+        best_story["story_score"]["production_safe"] = True
     return best_story
 
 
