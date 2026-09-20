@@ -48,6 +48,7 @@ from .services.image_studio import create_graphic
 from .services.ollama_client import health as ollama_health
 from .services.pipeline import run_pipeline
 from .services.topic_radar import run_radar_job
+from .services.tts import human_voice_health
 
 app = FastAPI(title=settings.app_name, docs_url="/docs", redoc_url=None)
 WEB_DIR = ROOT_DIR / "shorts_studio" / "web"
@@ -72,10 +73,19 @@ def api_health() -> dict:
         "ollama": ollama_health(),
         "ffmpeg": ffmpeg_health(),
         "comfyui": comfyui_health(),
+        "voice": human_voice_health(),
     }
 
 
 def _ensure_story_backend_ready() -> None:
+    voice_state = human_voice_health()
+    if not voice_state.get("ready"):
+        raise HTTPException(
+            409,
+            "Story Studio now requires the local human voice backend. "
+            "Run install_human_voice.bat, restart Shorts Studio, then try again.",
+        )
+
     state = comfyui_health()
     if not state.get("ok"):
         raise HTTPException(
