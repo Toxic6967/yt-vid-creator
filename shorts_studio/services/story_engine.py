@@ -372,6 +372,8 @@ NON-NEGOTIABLE:
   7) CLIMAX: one decisive game action resolves the central problem.
   8) PAYOFF: directly answer the hook with a satisfying result, reversal or punchline.
 - Every scene must CAUSE or ENABLE the next important beat. If a scene can be removed without changing the story, remove it.
+- Fill because_of and changes for every scene. Scene 2+ must be causally traceable to an earlier choice, event or verified game mechanic.
+- Never use "randomly", "somehow", "out of nowhere", "for no reason" or coincidence to move the plot forward.
 - Tell it like a creator recounting something that just happened in the game, not like a movie trailer.
 - Keep it inside ONE continuous game session, but the VIDEO must visibly progress.
 - Use at least 4 visually different rooms, areas, obstacles, set-pieces or background compositions from the same game when the verified context allows it.
@@ -432,6 +434,8 @@ Return JSON exactly:
       "characters":["character ids visible in shot"],
       "environment":"specific verified in-game area/background for THIS shot; avoid repeating the previous shot",
       "action":"what physically happens during this shot",
+      "because_of":"brief cause from the previous beat/choice/mechanic; for the hook use 'opening situation'",
+      "changes":"what is now different after this beat and what pressure/opportunity it creates next",
       "camera":"wide|medium|close-up|over-shoulder|follow|low-angle|high-angle",
       "emotion":"...",
       "on_screen_emphasis":"0-4 words only",
@@ -481,6 +485,8 @@ def _normalise_story(
         game_name = _clean(raw.get("game_name") or game_context.get("game_name"), 80)
         environment = _clean(item.get("environment"), 180) or f"recognisable {game_name} Roblox gameplay area"
         action = _clean(item.get("action"), 220) or _clean(item.get("narration"), 220)
+        because_of = _clean(item.get("because_of"), 180)
+        changes = _clean(item.get("changes"), 200)
         camera = _clean(item.get("camera"), 60) or "medium"
         allowed_cameras = ("wide", "medium", "close-up", "over-shoulder", "follow", "low-angle", "high-angle")
         if camera not in allowed_cameras:
@@ -528,6 +534,8 @@ def _normalise_story(
                 "game_name": game_name,
                 "environment": environment,
                 "action": action,
+                "because_of": because_of,
+                "changes": changes,
                 "camera": camera,
                 "emotion": emotion,
                 "visual_query": keyframe_prompt,
@@ -542,7 +550,7 @@ def _normalise_story(
             }
         )
 
-    if len(scenes) < 10:
+    if len(scenes) < 12:
         raise RuntimeError("Story writer did not create enough usable scenes for a proper longer mini-movie.")
 
     scenes[0]["role"] = "hook"
@@ -609,6 +617,8 @@ def _writer_view(story: dict) -> dict[str, Any]:
                 "characters": scene.get("characters") or [],
                 "environment": scene.get("environment"),
                 "action": scene.get("action"),
+                "because_of": scene.get("because_of"),
+                "changes": scene.get("changes"),
                 "camera": scene.get("camera"),
                 "emotion": scene.get("emotion"),
                 "on_screen_emphasis": scene.get("on_screen_emphasis"),
@@ -692,12 +702,34 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
         for key in ("story_goal", "stakes", "turning_point", "payoff")
     )
 
+    causal_links = [
+        bool(str(scene.get("because_of") or "").strip())
+        and bool(str(scene.get("changes") or "").strip())
+        for scene in scenes
+    ]
+    causal_chain_ok = bool(causal_links) and all(causal_links)
+    random_bridge_terms = (
+        "randomly",
+        "somehow",
+        "out of nowhere",
+        "for no reason",
+        "all of a sudden",
+    )
+    random_bridge_hits = [
+        phrase for phrase in random_bridge_terms
+        if phrase in lower
+    ]
+    coincidence_free_ok = not random_bridge_hits
+
     return {
         "scene_count_ok": required_scene_min <= len(scenes) <= required_scene_max,
         "required_scene_range": [required_scene_min, required_scene_max],
         "short_lines_ok": max_words <= 16,
         "arc_structure_ok": arc_structure_ok,
         "arc_fields_ok": arc_fields_ok,
+        "causal_chain_ok": causal_chain_ok,
+        "coincidence_free_ok": coincidence_free_ok,
+        "random_bridge_hits": random_bridge_hits,
         "word_count_ok": expected_min <= total_words <= expected_max,
         "single_narrator_ok": narrator_lines == len(scenes),
         "natural_flow_ok": natural_flow_ok,
@@ -827,6 +859,16 @@ Return:
             "Rebuild the plot around one central goal. Establish stakes, make setbacks causal, create a turning point, "
             "then resolve the original problem through a character choice or verified game mechanic."
         )
+    if not mechanical["causal_chain_ok"]:
+        problems.append("One or more story beats are disconnected instead of being caused by the previous action/mechanic.")
+        rewrite_instructions.append(
+            "Give every scene a concrete because_of and changes field. Make each beat create the next problem, clue, opportunity or decision."
+        )
+    if not mechanical["coincidence_free_ok"]:
+        problems.append("The plot uses coincidence/randomness as a bridge: " + ", ".join(mechanical["random_bridge_hits"]))
+        rewrite_instructions.append(
+            "Replace coincidence with a character choice, established setup or verified game mechanic."
+        )
     if not mechanical["single_narrator_ok"]:
         problems.append("Story switches speakers even though this format uses one consistent narrator.")
         rewrite_instructions.append("Use narrator as the speaker for every beat; let characters act visually.")
@@ -877,6 +919,8 @@ Return:
                 "word_count_ok",
                 "arc_structure_ok",
                 "arc_fields_ok",
+                "causal_chain_ok",
+                "coincidence_free_ok",
                 "single_narrator_ok",
                 "natural_flow_ok",
                 "visual_variety_ok",
