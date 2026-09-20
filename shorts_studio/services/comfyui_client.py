@@ -500,7 +500,7 @@ def _story_i2v_workflow(
             "__WIDTH__": width,
             "__HEIGHT__": height,
             "__FRAMES__": frames,
-            "__I2V_STRENGTH__": 0.94,
+            "__I2V_STRENGTH__": 0.97,
         },
     )
 
