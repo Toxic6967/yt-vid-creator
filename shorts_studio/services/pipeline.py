@@ -277,7 +277,7 @@ def run_pipeline(job_id: str) -> None:
         "content_type": job.get("content_type", "auto"),
         "story_genre": job.get("story_genre", "auto"),
         "visual_mode": visual_mode,
-        "pipeline_version": "3.0.0",
+        "pipeline_version": "3.2.0",
     }
 
     try:
@@ -312,21 +312,58 @@ def run_pipeline(job_id: str) -> None:
             idea_hint = None if selected_topic.startswith("Auto-generated") else selected_topic
             research = research_story_game(idea_hint)
 
-            _stage(job_id, f"Writing story inside {research.get('game_name','Roblox')}", 30)
             story_tone = (
                 "Natural conversational Roblox story told like a real young gaming creator recounting "
                 "what just happened to a friend; casual, specific, lightly expressive, never documentary, "
                 "never announcer-like and never fake-hype."
             )
-            script = create_story(
-                idea_hint,
-                audience=audience,
-                tone=story_tone,
-                target_seconds=int(job["target_seconds"]),
-                game_context=research,
-                genre=job.get("story_genre", "auto"),
-            )
             manifest["story_tone"] = story_tone
+
+            # Quality is more important than speed. A single local-model attempt can
+            # still produce a weak premise or malformed screenplay, so allow several
+            # completely independent Story builds before any expensive media work starts.
+            story_attempt_summaries: list[dict] = []
+            script = None
+            best_total = -1.0
+            for story_attempt in range(1, 4):
+                _stage(
+                    job_id,
+                    f"Writing + repairing Story pass {story_attempt}/3 inside {research.get('game_name','Roblox')}",
+                    24 + story_attempt * 3,
+                )
+                candidate = create_story(
+                    idea_hint,
+                    audience=audience,
+                    tone=story_tone,
+                    target_seconds=int(job["target_seconds"]),
+                    game_context=research,
+                    genre=job.get("story_genre", "auto"),
+                )
+                candidate_score = candidate.get("story_score") or {}
+                candidate_total = float(candidate_score.get("total") or 0)
+                story_attempt_summaries.append(
+                    {
+                        "attempt": story_attempt,
+                        "passed": bool(candidate_score.get("passed")),
+                        "total": candidate_total,
+                        "title": candidate.get("title"),
+                        "premise": candidate.get("premise"),
+                        "problems": (candidate_score.get("problems") or [])[:6],
+                    }
+                )
+
+                if script is None or candidate_total > best_total:
+                    script = candidate
+                    best_total = candidate_total
+
+                if candidate_score.get("passed"):
+                    script = candidate
+                    break
+
+            manifest["story_attempts"] = story_attempt_summaries
+            if script is None:
+                raise RuntimeError("Story Studio could not produce any screenplay candidate.")
+
             selected_topic = (
                 f"{script.get('game_name')}: {script.get('title')}"
                 if script.get("game_name")
@@ -336,10 +373,11 @@ def run_pipeline(job_id: str) -> None:
             story_score = script.get("story_score") or {}
             story_scores = story_score.get("scores") or {}
             if not story_score.get("passed"):
-                problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:5])
+                problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:6])
                 raise RuntimeError(
-                    "Story writing/directing quality gate did not pass, so expensive media generation was stopped. "
-                    + (f"Problems: {problems}" if problems else "The script needs another rewrite.")
+                    "Story Studio tried three full screenplay builds plus their internal repair passes, "
+                    "but none met the quality gate. Expensive voice/visual rendering was correctly stopped. "
+                    + (f"Best remaining problems: {problems}" if problems else "The story still needs rewriting.")
                 )
             script["retention"] = {
                 "passed": bool(story_score.get("passed")),
