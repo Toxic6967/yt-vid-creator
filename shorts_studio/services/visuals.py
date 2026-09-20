@@ -340,7 +340,7 @@ def prepare_visual(
             wants_video = (
                 role in {"hook", "reveal", "payoff"}
                 or priority == "high"
-                or (priority == "medium" and index % 3 == 0)
+                or (priority == "medium" and index % 2 == 0)
             )
 
             # Story mode is keyframe-first: create the exact character/shot first,
