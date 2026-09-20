@@ -38,8 +38,14 @@ if ($LASTEXITCODE -ne 0) {
     throw "Could not install uv."
 }
 
+$uvExe = (& py -c "import shutil,sysconfig,os; p=shutil.which('uv'); print(p if p else os.path.join(sysconfig.get_path('scripts'),'uv.exe'))").Trim()
+if (-not (Test-Path $uvExe)) {
+    throw "uv was installed, but uv.exe could not be found."
+}
+Write-Host "uv: $uvExe" -ForegroundColor Green
+
 Write-Host "Ensuring Python 3.11 is available for Chatterbox..." -ForegroundColor Yellow
-& py -m uv python install 3.11
+& $uvExe python install 3.11
 if ($LASTEXITCODE -ne 0) {
     throw "Could not install the isolated Python 3.11 runtime."
 }
@@ -48,14 +54,14 @@ $venv = Join-Path $voiceRoot ".venv"
 $venvPython = Join-Path $venv "Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {
     Write-Host "Creating isolated Chatterbox environment..." -ForegroundColor Yellow
-    & py -m uv venv $venv --python 3.11
+    & $uvExe venv $venv --python 3.11
     if ($LASTEXITCODE -ne 0) {
         throw "Could not create the Chatterbox virtual environment."
     }
 }
 
 Write-Host "Installing Chatterbox TTS..." -ForegroundColor Yellow
-& py -m uv pip install --python $venvPython --upgrade chatterbox-tts
+& $uvExe pip install --python $venvPython --upgrade chatterbox-tts
 if ($LASTEXITCODE -ne 0) {
     throw "Could not install Chatterbox TTS."
 }
