@@ -41,7 +41,7 @@ def _ensure_polished_story_cast(
     """Create reusable FLUX-refined R15 identity sheets instead of feeding crude geometry into every scene."""
     from .comfyui_client import generate_story_keyframe
 
-    persistent_dir = ASSET_DIR / "cast" / "r15_v4"
+    persistent_dir = ASSET_DIR / "cast" / "r15_v5"
     persistent_dir.mkdir(parents=True, exist_ok=True)
     local_ref_dir = job_dir / "reference"
     local_ref_dir.mkdir(parents=True, exist_ok=True)
@@ -58,8 +58,8 @@ def _ensure_polished_story_cast(
                 [character],
                 local_ref_dir / f"{cid}_r15_skeleton.png",
             )
-            seed = zlib.crc32(f"shorts-studio-r15-v4:{cid}".encode("utf-8")) & 0x7FFFFFFF
-            result = generate_story_keyframe(
+            seed = zlib.crc32(f"shorts-studio-r15-v5:{cid}".encode("utf-8")) & 0x7FFFFFFF
+            first_pass = generate_story_keyframe(
                 prompt=(
                     "Create a polished full-body CHARACTER REFERENCE for one authentic current Roblox R15 player avatar. "
                     "This is a Roblox Studio/game avatar sheet, NOT a human portrait and NOT a movie scene. "
@@ -75,9 +75,21 @@ def _ensure_polished_story_cast(
                 ),
                 reference_path=skeleton,
                 seed=seed,
-                job_id=f"castref_{cid}_v4",
+                job_id=f"castref_{cid}_v5a",
             )
-            shutil.copy2(result["path"], persistent)
+            second_pass = generate_story_keyframe(
+                prompt=(
+                    "Audit and repair this avatar into an unmistakable polished Roblox R15 character reference. "
+                    "Preserve the exact hair, outfit colours and overall identity. Correct any Minecraft/voxel, LEGO, human or Pixar drift. "
+                    "Use classic Roblox face-decal styling, R15 torso proportions, visibly segmented upper/lower limbs and Roblox joints, "
+                    "simple game-avatar hands without fingers, Roblox catalog hair/clothing and smooth game-plastic materials. "
+                    "Keep a neutral light-grey studio background and the whole body visible. No text, username, logo, UI or props."
+                ),
+                reference_path=first_pass["path"],
+                seed=(seed + 1709) & 0x7FFFFFFF,
+                job_id=f"castref_{cid}_v5b",
+            )
+            shutil.copy2(second_pass["path"], persistent)
 
         refs[cid] = str(persistent)
 
@@ -133,7 +145,7 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
             continue
 
         seed = zlib.crc32(f"roblox-env-v2|{game_name}|{key}".encode("utf-8")) & 0x7FFFFFFF
-        result = generate_story_keyframe(
+        first_plate = generate_story_keyframe(
             prompt=(
                 f"Empty Roblox gameplay environment for {game_name}. "
                 f"Location: {environment}. "
@@ -145,10 +157,22 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
             ),
             reference_path=seed_ref,
             seed=seed,
-            job_id=f"envplate_{idx}_{seed % 10000}",
+            job_id=f"envplate_{idx}_{seed % 10000}_a",
+        )
+        polished_plate = generate_story_keyframe(
+            prompt=(
+                f"Polish this exact empty {game_name} Roblox environment plate for a cinematic gameplay scene. "
+                f"The intended set-piece is: {environment}. Preserve the layout and recognisable landmarks, but make the materials, "
+                "lighting, proportions and props look like a high-quality current Roblox Studio game map. "
+                "Keep geometry readable and stylized, not Minecraft/voxel and not photoreal. No characters. "
+                "All signs/screens/boards stay blank or pictorial; no letters, numbers, usernames, UI, logos or watermarks."
+            ),
+            reference_path=first_plate["path"],
+            seed=(seed + 2309) & 0x7FFFFFFF,
+            job_id=f"envplate_{idx}_{seed % 10000}_b",
         )
         destination = plate_dir / f"env_{len(plates) + 1:02d}.png"
-        shutil.copy2(result["path"], destination)
+        shutil.copy2(polished_plate["path"], destination)
         plates[key] = str(destination)
 
     if not plates:
