@@ -24,7 +24,6 @@ from .tts import render_scene, render_story_narration
 from .visuals import prepare_visual, visual_similarity
 from .roblox_reference import (
     build_cast_reference,
-    build_scene_cast_reference,
     compose_character_reference_sheet,
 )
 
@@ -453,6 +452,12 @@ def run_pipeline(job_id: str) -> None:
         fallback_visuals = [v for v in visuals if v.get("kind") == "storyboard_fallback"]
         ai_visuals = [v for v in visuals if v.get("kind") == "ai_generated_scene"]
         ai_videos = [v for v in visuals if v.get("kind") == "ai_generated_video"]
+        adjacent_similarities = [
+            float(v.get("previous_frame_similarity", 0.0))
+            for v in visuals
+            if v.get("previous_frame_similarity") is not None
+        ]
+        max_adjacent_similarity = max(adjacent_similarities, default=0.0)
         quality = {
             "duration_ok": 20 <= duration <= 45,
             "duration_seconds": duration,
@@ -466,6 +471,15 @@ def run_pipeline(job_id: str) -> None:
             "ai_video_count": len(ai_videos),
             "cinematic_i2v_count": sum(1 for v in ai_videos if v.get("backend") == "ltx_i2v"),
             "fallback_visual_count": len(fallback_visuals),
+            "max_adjacent_visual_similarity": round(max_adjacent_similarity, 3),
+            "visual_variety_ok": (
+                max_adjacent_similarity < 0.84 if content_type == "story" else True
+            ),
+            "polished_cast_ok": (
+                bool(manifest.get("polished_cast_references"))
+                if content_type == "story"
+                else True
+            ),
             "visual_content_ok": len(fallback_visuals) == 0 and (
                 (
                     content_type == "story"
@@ -493,6 +507,8 @@ def run_pipeline(job_id: str) -> None:
                 "scene_citations_ok",
                 "visual_rights_ok",
                 "visual_content_ok",
+                "visual_variety_ok",
+                "polished_cast_ok",
                 "retention_ok",
                 "output_exists",
             )
