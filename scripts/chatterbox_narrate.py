@@ -6,6 +6,17 @@ from pathlib import Path
 
 import torch
 import torchaudio as ta
+import perth
+
+# On some Windows installs resemble-perth imports successfully but its optional
+# neural watermarker fails to import, leaving PerthImplicitWatermarker = None.
+# Chatterbox constructs that class unconditionally and crashes before synthesis.
+# Perth ships an official DummyWatermarker for exactly this kind of fallback.
+# Use it only when the real implementation is unavailable; speech generation is
+# otherwise unchanged.
+if getattr(perth, "PerthImplicitWatermarker", None) is None:
+    perth.PerthImplicitWatermarker = perth.DummyWatermarker
+
 from chatterbox.tts import ChatterboxTTS
 
 
