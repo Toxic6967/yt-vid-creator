@@ -132,7 +132,7 @@ def normalise_animation_plan(
                     "power_effect": normalise_power_effect(
                         proposed.get("power_effect"),
                         allow_powers=allow_powers,
-                        action=str(scene.get("action") or ""),
+                        action=(str(scene.get("action") or "") if actor_index == 0 else ""),
                     ),
                 }
             )
