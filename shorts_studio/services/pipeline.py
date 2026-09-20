@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 import traceback
+import zlib
 from pathlib import Path
 
-from ..config import OUTPUT_DIR
+from ..config import OUTPUT_DIR, ASSET_DIR
 from ..db import get_channel_profile, get_job, set_manifest, update_job
 from .editor import render
 from .research import (
@@ -20,11 +22,81 @@ from .story_game import research_story_game
 from .ollama_client import unload_model
 from .tts import render_scene, render_story_narration
 from .visuals import prepare_visual, visual_similarity
-from .roblox_reference import build_cast_reference, build_scene_cast_reference
+from .roblox_reference import (
+    build_cast_reference,
+    build_scene_cast_reference,
+    compose_character_reference_sheet,
+)
 
 
 def _stage(job_id: str, name: str, progress: int) -> None:
     update_job(job_id, status="running", stage=name, progress=progress, error=None)
+
+
+def _ensure_polished_story_cast(
+    job_dir: Path,
+    characters: list[dict],
+) -> dict[str, str]:
+    """Create reusable FLUX-refined R15 identity sheets instead of feeding crude geometry into every scene."""
+    from .comfyui_client import generate_story_keyframe
+
+    persistent_dir = ASSET_DIR / "cast" / "r15_v3"
+    persistent_dir.mkdir(parents=True, exist_ok=True)
+    local_ref_dir = job_dir / "reference"
+    local_ref_dir.mkdir(parents=True, exist_ok=True)
+
+    refs: dict[str, str] = {}
+    for character in characters[:3]:
+        cid = str(character.get("id") or "").strip().lower()
+        if not cid:
+            continue
+
+        persistent = persistent_dir / f"{cid}.png"
+        if not persistent.exists():
+            skeleton = build_cast_reference(
+                [character],
+                local_ref_dir / f"{cid}_r15_skeleton.png",
+            )
+            seed = zlib.crc32(f"shorts-studio-r15-v3:{cid}".encode("utf-8")) & 0x7FFFFFFF
+            result = generate_story_keyframe(
+                prompt=(
+                    "Create a clean full-body CHARACTER REFERENCE for one authentic modern Roblox R15 player avatar. "
+                    "This is not a movie scene. Neutral light-grey studio background, full body visible head-to-feet, "
+                    "slight three-quarter game-render angle, relaxed neutral pose. "
+                    "The anatomy must unmistakably match Roblox R15: softly beveled plastic head, classic simple Roblox "
+                    "face decal, R15 torso, separate upper/lower arm and leg pieces with visible Roblox joints, blocky-but-not-voxel proportions. "
+                    f"Character identity/outfit: {character.get('visual_identity','')}. "
+                    "Preserve the reference body's Roblox proportions while making it look like a polished current Roblox avatar render. "
+                    "No Minecraft/voxel character, no LEGO, no human child, no realistic fingers, nose or mouth. "
+                    "No scene props. No writing, letters, numbers, username, logo, UI, watermark or caption anywhere."
+                ),
+                reference_path=skeleton,
+                seed=seed,
+                job_id=f"castref_{cid}_v3",
+            )
+            shutil.copy2(result["path"], persistent)
+
+        refs[cid] = str(persistent)
+
+    if not refs:
+        raise RuntimeError("Could not build the persistent Roblox R15 cast references.")
+    return refs
+
+
+def _scene_polished_reference(
+    scene: dict,
+    polished_refs: dict[str, str],
+    destination: Path,
+) -> str:
+    visible = [
+        str(cid).lower()
+        for cid in (scene.get("characters") or [])
+        if str(cid).lower() in polished_refs
+    ]
+    if not visible:
+        visible = list(polished_refs.keys())[:1]
+    paths = [polished_refs[cid] for cid in visible[:3]]
+    return str(compose_character_reference_sheet(paths, destination))
 
 
 def run_pipeline(job_id: str) -> None:
@@ -231,16 +303,22 @@ def run_pipeline(job_id: str) -> None:
                     + (f" Missing: {missing_story}." if missing_story else "")
                 )
 
-        _stage(job_id, "Generating game-specific cinematic scenes", 70)
+        _stage(job_id, "Building polished Roblox R15 cast + cinematic scenes", 70)
         visuals = []
         channel_cast_reference = None
+        polished_cast_refs: dict[str, str] = {}
         if content_type == "story":
+            polished_cast_refs = _ensure_polished_story_cast(
+                job_dir,
+                script.get("characters", []),
+            )
             channel_cast_reference = str(
-                build_cast_reference(
-                    script.get("characters", []),
+                compose_character_reference_sheet(
+                    list(polished_cast_refs.values()),
                     job_dir / "reference" / "channel_cast_reference.png",
                 )
             )
+            manifest["polished_cast_references"] = polished_cast_refs
 
         previous_story_frame = None
         duplicate_retry_count = 0
@@ -248,12 +326,10 @@ def run_pipeline(job_id: str) -> None:
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
             scene_reference = None
             if content_type == "story":
-                scene_reference = str(
-                    build_scene_cast_reference(
-                        scene,
-                        script.get("characters", []),
-                        job_dir / "reference" / f"scene_{idx:02d}_cast.png",
-                    )
+                scene_reference = _scene_polished_reference(
+                    scene,
+                    polished_cast_refs,
+                    job_dir / "reference" / f"scene_{idx:02d}_cast.png",
                 )
 
             visual = prepare_visual(
