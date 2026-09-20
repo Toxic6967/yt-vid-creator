@@ -191,13 +191,18 @@ def _try_ai_scene(
             direction = {
                 "prompt": (
                     base_prompt
-                    + " Modern cinematic Roblox-style 3D render, polished PBR-like materials, "
-                    "clean global illumination, strong depth, expressive blocky poses, current-game visual quality."
+                    + " Authentic Roblox R15 gameplay render. Square block head, simple Roblox face, rectangular torso, "
+                    "segmented block arms and legs, classic Roblox plastic avatar proportions. Crisp current Roblox-engine "
+                    "look, polished lighting and depth, but still unmistakably Roblox rather than a generic 3D cartoon. "
+                    "Keep all important action below the top safe area."
                 ),
                 "negative_prompt": (
-                    "text, logo, watermark, old low-poly 2010s look, flat lighting, blurry, low detail, "
-                    "photoreal human anatomy, extra limbs, duplicate character, changed clothes, changed hair, "
-                    "deformed face, cluttered composition"
+                    "words, letters, numbers, typography, subtitles, captions, title card, fake game title, signs, "
+                    "logo, watermark, UI text, gibberish writing, random symbols, "
+                    "human body, realistic human, Pixar, Disney, clay, Playmobil, LEGO, minifigure, Minecraft, voxel person, "
+                    "Funko, chibi, doll, generic mobile game character, rounded human head, realistic hands, fingers, "
+                    "old low-poly 2010s look, flat lighting, blurry, low detail, extra limbs, duplicate character, "
+                    "changed clothes, changed hair, deformed face, cluttered composition"
                 ),
             }
         else:
@@ -211,14 +216,16 @@ def _try_ai_scene(
         stable_seed = zlib.crc32(character_key.encode("utf-8")) & 0x7FFFFFFF
 
         if is_story and reference_image and Path(reference_image).exists():
+            ref_path = Path(reference_image)
+            first_cast_reference = ref_path.name.lower().startswith("cast_reference")
             result = generate_ai_image_from_reference(
                 prompt=direction["prompt"],
                 negative_prompt=direction["negative_prompt"],
                 reference_path=reference_image,
                 aspect="9:16",
-                steps=26,
-                cfg=6.0,
-                denoise=0.64,
+                steps=30 if first_cast_reference else 26,
+                cfg=6.2,
+                denoise=0.80 if first_cast_reference else 0.60,
                 seed=stable_seed,
                 job_id=f"storyframe_{index}_{random.randint(1000,9999)}",
             )
@@ -356,13 +363,17 @@ def prepare_visual(
                 direction = {
                     "prompt": (
                         scene_video_prompt(scene, topic)
-                        + " Animate from the supplied keyframe. Preserve the exact avatar face, hair, clothing, "
-                        "colours, body proportions and environment. One controlled cinematic camera move, "
-                        "natural blocky game-character motion, modern polished lighting."
+                        + " Animate from the supplied keyframe like an actual Roblox gameplay cinematic. "
+                        "Preserve square Roblox heads, rectangular torsos and segmented R15 block limbs frame-to-frame. "
+                        "Preserve the exact avatar face, hair accessory, clothing textures, colours, body proportions "
+                        "and game environment. One controlled camera move and one readable action only. "
+                        "Movement should resemble Roblox character animation, not human motion capture."
                     ),
                     "negative_prompt": (
-                        "text, subtitles, logo, watermark, identity drift, changed clothes, changed hair, "
-                        "face morphing, duplicate character, extra limbs, flicker, camera teleport, old low-poly look"
+                        "words, letters, numbers, subtitles, captions, title, logo, watermark, UI text, "
+                        "human anatomy, realistic human, Pixar, clay, LEGO, Minecraft, generic cartoon person, "
+                        "rounded human face, fingers, identity drift, changed clothes, changed hair, face morphing, "
+                        "duplicate character, extra limbs, flicker, camera teleport, random object pop-in, old low-poly look"
                     ),
                 }
                 try:
