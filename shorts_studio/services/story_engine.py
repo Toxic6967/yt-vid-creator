@@ -934,6 +934,51 @@ Return exactly:
     return story
 
 
+def _finalize_story_quality(
+    story: dict[str, Any],
+    *,
+    audience: str,
+    target_seconds: int,
+    game_context: dict[str, Any],
+) -> dict[str, Any]:
+    """Final cheap polish loop before any expensive audio/image/video generation starts."""
+    best_story = story
+    best_score: dict[str, Any] | None = None
+
+    for _ in range(2):
+        candidate = _direct_story_shots(
+            best_story,
+            game_context=game_context,
+        )
+        candidate = _polish_narration(
+            candidate,
+            audience=audience,
+            game_context=game_context,
+        )
+        score = _score_story(
+            candidate,
+            audience,
+            target_seconds,
+            game_context,
+        )
+        candidate["story_score"] = score
+
+        if best_score is None or float(score.get("total") or 0) >= float(best_score.get("total") or 0):
+            best_story = candidate
+            best_score = score
+
+        if score.get("passed"):
+            return candidate
+
+    best_story["story_score"] = best_score or _score_story(
+        best_story,
+        audience,
+        target_seconds,
+        game_context,
+    )
+    return best_story
+
+
 def create_story(
     idea: str | None,
     *,
@@ -966,19 +1011,12 @@ def create_story(
     for _ in range(2):
         score = _score_story(story, audience, target_seconds, game_context)
         if score["passed"]:
-            story = _direct_story_shots(
-                story,
-                game_context=game_context,
-            )
-            story = _polish_narration(
+            return _finalize_story_quality(
                 story,
                 audience=audience,
+                target_seconds=target_seconds,
                 game_context=game_context,
             )
-            story["story_score"] = _score_story(
-                story, audience, target_seconds, game_context
-            )
-            return story
 
         rewritten = chat_json(
             "You are rewriting a Roblox mini-movie that failed a strict audience-retention review. Return JSON only.",
@@ -1011,14 +1049,9 @@ retention, claims, warnings, source_ids, edit_instruction, pattern_interrupt or 
         if retained_idea:
             story["idea_selection"] = retained_idea
 
-    story = _direct_story_shots(
-        story,
-        game_context=game_context,
-    )
-    story = _polish_narration(
+    return _finalize_story_quality(
         story,
         audience=audience,
+        target_seconds=target_seconds,
         game_context=game_context,
     )
-    story["story_score"] = _score_story(story, audience, target_seconds, game_context)
-    return story
