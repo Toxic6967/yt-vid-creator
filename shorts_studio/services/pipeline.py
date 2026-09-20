@@ -243,11 +243,17 @@ def run_pipeline(job_id: str) -> None:
             1 for v in visuals
             if v.get("kind") == "ai_generated_video" and v.get("backend") == "ltx_i2v"
         )
-        if content_type == "story" and ltx_video_count < 3:
-            raise RuntimeError(
-                "Story render stopped because fewer than 3 cinematic keyframe-to-video shots completed. "
-                "This prevents a weak slideshow or old-looking fallback video from being marked finished."
+        if content_type == "story":
+            required_story_motion = max(
+                4,
+                min(6, round(len(script.get("scenes", [])) * 0.55)),
             )
+            if ltx_video_count < required_story_motion:
+                raise RuntimeError(
+                    f"Story render stopped because only {ltx_video_count} cinematic motion shots completed; "
+                    f"this story needs at least {required_story_motion}. "
+                    "This prevents a slideshow or weak fallback video from being marked finished."
+                )
         if content_type != "story" and "roblox" in job["niche"].lower() and real_video_count < 3:
             from .comfyui_client import health as comfyui_health
             media_state = comfyui_health()
