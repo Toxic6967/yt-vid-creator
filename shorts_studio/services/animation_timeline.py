@@ -104,8 +104,22 @@ def normalise_animation_plan(
                     str(scene.get("role") or ""),
                 )
 
-            start_lane = float(proposed.get("start_lane", lanes[actor_index]))
-            end_lane = float(proposed.get("end_lane", start_lane))
+            try:
+                start_lane = float(proposed.get("start_lane", lanes[actor_index]))
+            except Exception:
+                start_lane = float(lanes[actor_index])
+            try:
+                end_lane = float(proposed.get("end_lane", start_lane))
+            except Exception:
+                end_lane = start_lane
+
+            # Locomotion should actually cross screen instead of running in place
+            # when the planner omits lane movement.
+            if abs(end_lane - start_lane) < 0.15 and clip in {"walk", "run", "dash"}:
+                direction = -1.0 if actor_index % 2 else 1.0
+                travel = 0.8 if clip == "walk" else (1.25 if clip == "run" else 1.65)
+                end_lane = start_lane + direction * travel
+
             actors.append(
                 {
                     "id": cid,
@@ -118,6 +132,7 @@ def normalise_animation_plan(
                     "power_effect": normalise_power_effect(
                         proposed.get("power_effect"),
                         allow_powers=allow_powers,
+                        action=str(scene.get("action") or ""),
                     ),
                 }
             )
