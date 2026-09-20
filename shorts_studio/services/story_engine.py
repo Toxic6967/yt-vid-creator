@@ -359,7 +359,7 @@ moment, server moment, obby moment or friendship moment they can recognise.
 
 NON-NEGOTIABLE:
 - Hook in the FIRST 1-2 seconds. Start inside the problem; no introduction.
-- Use 10-14 purposeful scenes. Maximum 3 characters.
+- Use 12-16 purposeful scenes for a normal ~58 second Story. Scale within that range for the requested runtime. Maximum 3 characters.
 - Each narration line should usually be 6-14 spoken words. The longer runtime is for MORE STORY, not filler.
 - Follow the LOCKED CAUSAL STORY ARC above. Do not replace it with a different plot.
 - Build a real cause-and-effect story arc:
@@ -615,7 +615,7 @@ def _writer_view(story: dict) -> dict[str, Any]:
                 "sfx_cue": scene.get("sfx_cue"),
                 "motion_priority": scene.get("motion_priority"),
             }
-            for scene in (story.get("scenes") or [])[:15]
+            for scene in (story.get("scenes") or [])[:16]
         ],
     }
 
@@ -644,6 +644,7 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
     }
     max_words = max(scene_word_counts, default=0)
     total_words = len(re.findall(r"\b[\w'-]+\b", narration))
+    required_scene_min = max(11, min(14, round(target_seconds / 5)))
     expected_min = max(82, round(target_seconds * 1.85))
     expected_max = min(180, round(target_seconds * 2.50))
     banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
@@ -683,7 +684,8 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
     )
 
     return {
-        "scene_count_ok": 10 <= len(scenes) <= 15,
+        "scene_count_ok": required_scene_min <= len(scenes) <= 16,
+        "required_scene_range": [required_scene_min, 16],
         "short_lines_ok": max_words <= 16,
         "arc_structure_ok": arc_structure_ok,
         "arc_fields_ok": arc_fields_ok,
@@ -799,6 +801,14 @@ Return:
     )
     problems = list(result.get("problems") or [])
     rewrite_instructions = list(result.get("rewrite_instructions") or [])
+    if not mechanical["scene_count_ok"]:
+        problems.append(
+            f"Story has {len(story.get('scenes') or [])} scenes; this runtime needs "
+            f"{mechanical['required_scene_range'][0]}-{mechanical['required_scene_range'][1]} purposeful scenes."
+        )
+        rewrite_instructions.append(
+            "Add or consolidate causal story beats so each scene advances the same goal; do not add filler."
+        )
     if not mechanical["short_lines_ok"]:
         problems.append(f"Some spoken beats are too long ({mechanical['max_scene_words']} words).")
         rewrite_instructions.append("Keep every spoken beat at 16 words or fewer; most should be 6-14 words.")
