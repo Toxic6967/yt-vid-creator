@@ -179,6 +179,12 @@ def run_pipeline(job_id: str) -> None:
             update_job(job_id, selected_topic=selected_topic)
             story_score = script.get("story_score") or {}
             story_scores = story_score.get("scores") or {}
+            if not story_score.get("passed"):
+                problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:5])
+                raise RuntimeError(
+                    "Story writing/directing quality gate did not pass, so expensive media generation was stopped. "
+                    + (f"Problems: {problems}" if problems else "The script needs another rewrite.")
+                )
             script["retention"] = {
                 "passed": bool(story_score.get("passed")),
                 "total": story_score.get("total"),
