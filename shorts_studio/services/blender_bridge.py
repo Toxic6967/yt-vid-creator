@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import imageio_ffmpeg
+from PIL import Image, ImageChops, ImageStat
 
 from ..config import ROOT_DIR, settings
 
@@ -90,6 +91,68 @@ def _validate_rendered_clip(path: Path) -> tuple[bool, str]:
     if probe.returncode != 0:
         return False, (probe.stderr or probe.stdout or "FFmpeg could not decode the clip")[-900:]
     return True, "ok"
+
+
+def _sample_visual_quality(
+    path: Path,
+    sample_dir: Path,
+    *,
+    expected_motion: bool,
+) -> dict[str, Any]:
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    first = sample_dir / (path.stem + "_first.png")
+    last = sample_dir / (path.stem + "_last.png")
+
+    commands = (
+        [
+            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+            "-ss", "0.15", "-i", str(path),
+            "-frames:v", "1", "-vf", "scale=180:-2", str(first),
+        ],
+        [
+            ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
+            "-sseof", "-0.20", "-i", str(path),
+            "-frames:v", "1", "-vf", "scale=180:-2", str(last),
+        ],
+    )
+    try:
+        for command in commands:
+            result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                return {
+                    "passed": False,
+                    "reason": (result.stderr or result.stdout or "frame sample failed")[-700:],
+                }
+
+        with Image.open(first) as first_image, Image.open(last) as last_image:
+            a = first_image.convert("L")
+            b = last_image.convert("L")
+            brightness = (
+                float(ImageStat.Stat(a).mean[0])
+                + float(ImageStat.Stat(b).mean[0])
+            ) / (2.0 * 255.0)
+            difference = ImageChops.difference(a, b)
+            motion_score = float(ImageStat.Stat(difference).mean[0]) / 255.0
+
+        brightness_ok = 0.015 <= brightness <= 0.985
+        motion_ok = (motion_score >= 0.0025) if expected_motion else True
+        return {
+            "passed": bool(brightness_ok and motion_ok),
+            "brightness": round(brightness, 4),
+            "motion_score": round(motion_score, 4),
+            "brightness_ok": brightness_ok,
+            "motion_ok": motion_ok,
+            "expected_motion": expected_motion,
+        }
+    except Exception as exc:
+        return {"passed": False, "reason": str(exc)}
+    finally:
+        for sample in (first, last):
+            try:
+                sample.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 def render_animation_plan(
@@ -181,6 +244,33 @@ def render_animation_plan(
             except Exception:
                 render_report = {}
 
+        actor_clips = {
+            str(actor.get("clip") or "idle")
+            for actor in (shot.get("actors") or [])
+        }
+        strong_motion = {
+            "walk", "run", "dash", "jump", "stumble", "fall", "attack",
+            "power_cast", "ground_slam", "celebrate",
+        }
+        expected_motion = (
+            bool(actor_clips & strong_motion)
+            or str(shot.get("camera_motion") or "static") != "static"
+            or any(
+                actor.get("power_effect") not in {None, "", "none"}
+                for actor in (shot.get("actors") or [])
+            )
+        )
+        visual_quality = _sample_visual_quality(
+            clip,
+            animation_dir / "validation",
+            expected_motion=expected_motion,
+        )
+        if not visual_quality.get("passed"):
+            raise RuntimeError(
+                f"Blender scene {index} rendered, but visual validation rejected it: "
+                f"{json.dumps(visual_quality, ensure_ascii=False)}"
+            )
+
         visuals.append(
             {
                 "path": str(clip),
@@ -196,6 +286,7 @@ def render_animation_plan(
                     if actor.get("power_effect") not in {None, "", "none"}
                 ],
                 "render_report": render_report,
+                "visual_quality": visual_quality,
                 "validated_video": True,
             }
         )
