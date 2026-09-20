@@ -542,13 +542,200 @@ def _required_scene_count(target_seconds: int) -> tuple[int, int]:
     return minimum, desired
 
 
+def _scene_list_from_writer(raw: Any) -> list[dict[str, Any]]:
+    """Accept harmless wrappers/aliases commonly emitted by small local models."""
+    if not isinstance(raw, dict):
+        return []
+
+    candidates: list[Any] = [
+        raw.get("scenes"),
+        raw.get("shots"),
+        raw.get("beats"),
+        raw.get("story_beats"),
+    ]
+    for wrapper in ("story", "screenplay", "script", "result", "output"):
+        nested = raw.get(wrapper)
+        if isinstance(nested, dict):
+            candidates.extend(
+                [
+                    nested.get("scenes"),
+                    nested.get("shots"),
+                    nested.get("beats"),
+                    nested.get("story_beats"),
+                ]
+            )
+
+    numbered = [
+        value
+        for key, value in sorted(raw.items())
+        if re.fullmatch(r"scene[_ -]?\d+", str(key), re.I)
+        and isinstance(value, dict)
+    ]
+    if numbered:
+        candidates.append(numbered)
+
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            return [item for item in candidate if isinstance(item, dict)]
+    return []
+
+
+def _coerce_writer_scene(scene: dict[str, Any], index: int) -> dict[str, Any]:
+    item = dict(scene)
+
+    if not _clean(item.get("narration"), 240):
+        for key in ("voiceover", "voice_over", "line", "dialogue", "spoken", "text"):
+            if _clean(item.get(key), 240):
+                item["narration"] = item.get(key)
+                break
+
+    if not _clean(item.get("environment"), 220):
+        for key in ("location", "setting", "area", "background"):
+            if _clean(item.get(key), 220):
+                item["environment"] = item.get(key)
+                break
+
+    if not _clean(item.get("action"), 260):
+        for key in ("visual", "visual_action", "event", "beat", "what_happens"):
+            if _clean(item.get(key), 260):
+                item["action"] = item.get(key)
+                break
+
+    if not _clean(item.get("because_of"), 180):
+        for key in ("cause", "caused_by", "because", "reason"):
+            if _clean(item.get(key), 180):
+                item["because_of"] = item.get(key)
+                break
+
+    if not _clean(item.get("changes"), 200):
+        for key in ("result", "consequence", "effect", "outcome", "changes_next"):
+            if _clean(item.get(key), 200):
+                item["changes"] = item.get(key)
+                break
+
+    if not item.get("characters"):
+        for key in ("character", "actors", "players"):
+            value = item.get(key)
+            if isinstance(value, list):
+                item["characters"] = value
+                break
+            if isinstance(value, str) and value.strip():
+                item["characters"] = [value]
+                break
+
+    if not _clean(item.get("role"), 20):
+        item["role"] = "hook" if index == 0 else "build"
+
+    return item
+
+
+def _coerce_writer_object(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+
+    current = dict(raw)
+    for wrapper in ("story", "screenplay", "script", "result", "output"):
+        nested = current.get(wrapper)
+        if isinstance(nested, dict) and _scene_list_from_writer(nested):
+            merged = dict(current)
+            merged.update(nested)
+            current = merged
+            break
+
+    scenes = _scene_list_from_writer(current)
+    if scenes:
+        current["scenes"] = [
+            _coerce_writer_scene(scene, idx)
+            for idx, scene in enumerate(scenes[:18])
+        ]
+    return current
+
+
 def _usable_raw_scene_count(raw: dict[str, Any]) -> int:
-    scenes = raw.get("scenes") if isinstance(raw.get("scenes"), list) else []
+    current = _coerce_writer_object(raw)
     return sum(
         1
-        for scene in scenes
+        for scene in (current.get("scenes") or [])
         if isinstance(scene, dict) and _clean(scene.get("narration"), 240)
     )
+
+
+def _fallback_scene_scaffold(
+    *,
+    desired: int,
+    game_context: dict[str, Any],
+    arc_plan: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Last-resort causal scaffold. Later scoring/rewrites still have to approve it."""
+    beats = [
+        ("hook", arc_plan.get("hook_event")),
+        ("setup", arc_plan.get("central_goal")),
+        ("setup", arc_plan.get("setup")),
+        ("build", arc_plan.get("first_obstacle")),
+        ("build", arc_plan.get("first_obstacle")),
+        ("build", arc_plan.get("failed_attempt")),
+        ("build", arc_plan.get("failed_attempt")),
+        ("build", arc_plan.get("escalation")),
+        ("build", arc_plan.get("escalation")),
+        ("reveal", arc_plan.get("turning_point")),
+        ("build", arc_plan.get("turning_point")),
+        ("build", arc_plan.get("climax")),
+        ("reveal", arc_plan.get("climax")),
+        ("build", arc_plan.get("climax")),
+        ("payoff", arc_plan.get("payoff")),
+        ("payoff", arc_plan.get("payoff")),
+        ("payoff", arc_plan.get("payoff")),
+        ("payoff", arc_plan.get("payoff")),
+    ]
+    setpieces = [
+        _clean(item.get("name") or item.get("description"), 180)
+        for item in [
+            *(game_context.get("visual_setpieces") or []),
+            *(game_context.get("locations") or []),
+        ]
+        if isinstance(item, dict)
+        and _clean(item.get("name") or item.get("description"), 180)
+    ]
+    if not setpieces:
+        setpieces = [f"recognisable {game_context.get('game_name') or 'Roblox'} gameplay area"]
+
+    cameras = ("wide","medium","over-shoulder","follow","close-up","low-angle","high-angle")
+    scenes: list[dict[str, Any]] = []
+    previous = "opening situation"
+    for idx in range(desired):
+        role, beat = beats[min(idx, len(beats)-1)]
+        text = _clean(beat, 220) or _clean(arc_plan.get("central_goal"), 220) or "The run gets harder."
+        if idx and text == _clean(scenes[-1].get("narration"), 240):
+            if role == "payoff":
+                text = f"That finally settles it: {text}"
+            elif role == "reveal":
+                text = f"That changes the plan: {text}"
+            else:
+                text = f"That makes the next move harder: {text}"
+
+        environment = setpieces[idx % min(len(setpieces), 6)]
+        scenes.append(
+            {
+                "role": "hook" if idx == 0 else ("payoff" if idx == desired-1 else role),
+                "speaker": "narrator",
+                "narration": text,
+                "characters": ["max"],
+                "environment": environment,
+                "action": text,
+                "because_of": "opening situation" if idx == 0 else previous,
+                "changes": (
+                    _clean(beats[min(idx+1, len(beats)-1)][1], 180)
+                    or "the next decision becomes more urgent"
+                ),
+                "camera": cameras[idx % len(cameras)],
+                "emotion": "focused" if idx < desired-2 else "relieved",
+                "on_screen_emphasis": "",
+                "sfx_cue": "",
+                "motion_priority": "high" if idx in {0, desired-3, desired-1} else "medium",
+            }
+        )
+        previous = text
+    return scenes
 
 
 def _repair_scene_count(
@@ -559,22 +746,23 @@ def _repair_scene_count(
     genre: str,
     arc_plan: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Expand a valid-but-too-short writer response before strict normalization."""
+    """Repair scene count without repeatedly asking Qwen to regenerate a huge object."""
     minimum, desired = _required_scene_count(target_seconds)
-    current = raw if isinstance(raw, dict) else {}
+    current = _coerce_writer_object(raw)
     if _usable_raw_scene_count(current) >= minimum:
         return current
 
-    for _ in range(3):
-        current_count = _usable_raw_scene_count(current)
+    arc = arc_plan or {}
+    existing = current.get("scenes") if isinstance(current.get("scenes"), list) else []
+
+    for _ in range(2):
         repaired = chat_json(
-            "You are a Roblox screenplay continuity editor. Return compact JSON only.",
+            "You repair only the scene array of a Roblox screenplay. Return compact JSON only.",
             f"""
 TARGET RUNTIME: {target_seconds} seconds
-REQUIRED USABLE SCENES: at least {minimum}
-TARGET SCENE COUNT: exactly {desired}
-CURRENT USABLE SCENES: {current_count}
+RETURN EXACTLY: {desired} scenes
 GAME: {game_context.get("game_name")}
+GENRE: {genre}
 
 VERIFIED GAME CONTEXT:
 {story_game_prompt_context(game_context)}
@@ -583,45 +771,64 @@ POWER/FANTASY RULES:
 {_power_story_rules(genre)}
 
 LOCKED CAUSAL ARC:
-{json.dumps(arc_plan or {}, ensure_ascii=False)}
+{json.dumps(arc, ensure_ascii=False)}
 
-CURRENT WRITER JSON:
-{json.dumps(current, ensure_ascii=False)}
+EXISTING USABLE SCENES:
+{json.dumps(existing[:18], ensure_ascii=False)}
 
-The writer returned too few usable scenes. Rebuild/expand it into EXACTLY {desired} purposeful scenes.
+Create the COMPLETE scene array from scene 1 through scene {desired}.
 
-Important:
-- Keep ONE central goal and the same premise/characters.
-- Do not pad by splitting one sentence into meaningless fragments.
-- Add real intermediate cause-and-effect beats: decision -> consequence -> new pressure/opportunity.
-- Every scene needs non-empty narration, environment, action, because_of and changes.
-- Most narration lines should be 6-14 spoken words.
-- Use setup/build/reveal beats to earn the climax and payoff.
-- Move through visually distinct VERIFIED game locations/set-pieces where possible.
-- Do not invent fake game mechanics, items, enemies, rooms, UI or lore.
-- Preserve approved fictional powers only when POWER/FANTASY RULES allow them.
-- Scene 1 is hook; final scene is payoff.
-- Return the complete story object, not only the missing scenes.
-- Return ONLY compact writer JSON. No markdown and no derived visual fields.
+Each scene MUST contain exactly these useful fields:
+role, speaker, narration, characters, environment, action, because_of, changes,
+camera, emotion, on_screen_emphasis, sfx_cue, motion_priority.
+
+Rules:
+- Every narration value must be a non-empty natural spoken English string.
+- 6-14 spoken words per narration line where possible.
+- Scene 1 is hook. Final scene is payoff.
+- Preserve ONE central goal from the locked arc.
+- Build real cause -> consequence -> new decision progression.
+- No filler and no coincidence.
+- Use only verified game locations/mechanics/items/enemies, except approved fictional powers when power mode allows them.
+- Use 4-8 visually distinct verified areas/set-pieces across the whole story, not a new random world every scene.
+- Use only these cameras: wide, medium, close-up, over-shoulder, follow, low-angle, high-angle.
+- speaker is always narrator.
+- characters should use recurring ids max, mia, kai.
+- Return ONLY {{"scenes":[...]}}. Do not return title, explanation, markdown, visual prompts or scoring.
 """,
-            temperature=0.34,
+            temperature=0.28,
         )
-        if isinstance(repaired, dict):
-            current = repaired
+        repaired = _coerce_writer_object(repaired)
+        repaired_scenes = repaired.get("scenes") if isinstance(repaired.get("scenes"), list) else []
+        if repaired_scenes:
+            current["scenes"] = repaired_scenes[:18]
+            existing = current["scenes"]
         if _usable_raw_scene_count(current) >= minimum:
             return current
 
-    raise RuntimeError(
-        f"Story writer only produced {_usable_raw_scene_count(current)} usable scenes after automatic repair; "
-        f"this {target_seconds}-second Story needs at least {minimum}."
+    # Never turn a good locked arc into a hard 0-scene failure. This scaffold
+    # still has to survive the normal story scorer + independent logic audit.
+    current["scenes"] = _fallback_scene_scaffold(
+        desired=desired,
+        game_context=game_context,
+        arc_plan=arc,
     )
-
+    current.setdefault("game_name", game_context.get("game_name"))
+    current.setdefault("genre", genre)
+    current.setdefault("story_goal", arc.get("central_goal"))
+    current.setdefault("stakes", arc.get("stakes"))
+    current.setdefault("turning_point", arc.get("turning_point"))
+    current.setdefault("payoff", arc.get("payoff"))
+    current.setdefault("premise", arc.get("central_goal"))
+    current.setdefault("title", f"{game_context.get('game_name') or 'Roblox'} Story")
+    return current
 
 def _normalise_story(
     raw: dict,
     target_seconds: int,
     game_context: dict[str, Any],
 ) -> dict:
+    raw = _coerce_writer_object(raw)
     characters = _normalise_characters(raw.get("characters"))
     cmap = _character_map(characters)
 
@@ -720,8 +927,12 @@ def _normalise_story(
             }
         )
 
-    if len(scenes) < 12:
-        raise RuntimeError("Story writer did not create enough usable scenes for a proper longer mini-movie.")
+    required_minimum, _ = _required_scene_count(target_seconds)
+    if len(scenes) < required_minimum:
+        raise RuntimeError(
+            f"Story normalization only retained {len(scenes)} usable scenes; "
+            f"this {target_seconds}-second Story needs at least {required_minimum}."
+        )
 
     scenes[0]["role"] = "hook"
     scenes[-1]["role"] = "payoff"
