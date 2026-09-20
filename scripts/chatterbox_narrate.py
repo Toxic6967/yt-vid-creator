@@ -27,16 +27,31 @@ def main() -> None:
     if device == "cuda" and not torch.cuda.is_available():
         device = "cpu"
 
-    model = ChatterboxTTS.from_pretrained(device=device)
-    wav = model.generate(
-        text,
-        exaggeration=args.exaggeration,
-        cfg_weight=args.cfg_weight,
-        temperature=args.temperature,
-        repetition_penalty=1.15,
-        min_p=0.06,
-        top_p=0.95,
-    )
+    def synthesize(target_device: str):
+        model = ChatterboxTTS.from_pretrained(device=target_device)
+        wav = model.generate(
+            text,
+            exaggeration=args.exaggeration,
+            cfg_weight=args.cfg_weight,
+            temperature=args.temperature,
+            repetition_penalty=1.15,
+            min_p=0.06,
+            top_p=0.95,
+        )
+        return model, wav
+
+    try:
+        model, wav = synthesize(device)
+    except Exception:
+        if device != "cuda":
+            raise
+        # An 8 GB GPU can occasionally be too fragmented even after unloading
+        # the image/video stack. Retry on CPU rather than killing the Story.
+        try:
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+        model, wav = synthesize("cpu")
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
