@@ -68,10 +68,14 @@ Rules:
 - Prefer Roblox-like movement: run, jump, crouch, point, react, open, push, pickup, fall, celebrate.
 - Keep positions within lanes -2.4 to +2.4.
 - start_lane/end_lane are screen-space staging positions, not game coordinates.
-- Use camera movement sparingly; characters should be readable on a phone.
+- Use camera movement deliberately; characters must stay readable on a phone.
+- Prefer a subtle push, follow, track, reveal or orbit on important beats rather than freezing the camera.
 - Avoid every shot being centered/medium/static.
+- Do not repeat the same camera + motion combination more than twice in a row.
+- Running/walking/dashing actors should visibly travel across the staging lanes instead of running in place.
+- Reactions should use head/torso acting, not only arm movement.
 - If POWERS ALLOWED is false, every power_effect must be "none".
-- If POWERS ALLOWED is true, use power effects only where the existing action/story clearly calls for one.
+- If POWERS ALLOWED is true, use power effects only where the existing action/story clearly calls for one, but make sure the story contains at least two visible power-effect beats so the genre actually feels special.
 - Powers are stylized non-graphic VFX, not realistic violence.
 - Never add a new event just because an effect would look cool.
 
