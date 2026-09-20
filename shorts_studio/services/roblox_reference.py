@@ -321,3 +321,29 @@ def compose_character_reference_sheet(
 
     canvas.save(destination, quality=96)
     return destination
+
+
+
+def build_environment_seed(destination: Path) -> Path:
+    """Neutral text-free Roblox-like baseplate used only to start environment generation."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    width, height = 576, 1024
+    image = Image.new("RGB", (width, height), (115, 176, 226))
+    draw = ImageDraw.Draw(image)
+
+    # Simple horizon + baseplate gives FLUX a game-space composition without
+    # biasing it toward any specific room from a previous shot.
+    horizon = int(height * 0.55)
+    draw.rectangle((0, 0, width, horizon), fill=(115, 176, 226))
+    draw.rectangle((0, horizon, width, height), fill=(132, 145, 151))
+
+    # Subtle perspective guide lines; no text, no characters, no props.
+    vanishing_x = width // 2
+    vanishing_y = horizon + int(height * 0.02)
+    for x in range(-width, width * 2, 96):
+        draw.line((x, height, vanishing_x, vanishing_y), fill=(121, 132, 138), width=2)
+    for y in range(horizon + 90, height, 110):
+        draw.line((0, y, width, y), fill=(121, 132, 138), width=2)
+
+    image.save(destination, quality=95)
+    return destination
