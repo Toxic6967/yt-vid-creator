@@ -212,13 +212,15 @@ def run_pipeline(job_id: str) -> None:
         _stage(job_id, "Generating game-specific cinematic scenes", 70)
         visuals = []
         continuity_reference = None
+        identity_reference = None
         if content_type == "story":
-            continuity_reference = str(
+            identity_reference = str(
                 build_cast_reference(
                     script.get("characters", []),
                     job_dir / "reference" / "cast_reference.png",
                 )
             )
+            continuity_reference = identity_reference
 
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
             visual = prepare_visual(
@@ -228,6 +230,7 @@ def run_pipeline(job_id: str) -> None:
                 selected_topic,
                 duration=float(audio["duration"]),
                 reference_image=continuity_reference if content_type == "story" else None,
+                identity_reference=identity_reference if content_type == "story" else None,
             )
             visuals.append(visual)
 
