@@ -101,7 +101,9 @@ def health() -> dict[str, Any]:
         "video_models_resolved": {},
         "video_model_choices": {},
         "story_image_ready": False,
+        "story_dual_image_ready": False,
         "story_image_workflow": settings.comfyui_story_image_workflow,
+        "story_dual_image_workflow": settings.comfyui_story_dual_image_workflow,
         "story_image_models": {
             "diffusion": "flux-2-klein-4b-fp8.safetensors",
             "text_encoder": "qwen_3_4b_fp4_flux2.safetensors",
@@ -215,6 +217,10 @@ def health() -> dict[str, Any]:
                     result["story_image_models_resolved"] = resolved_story_image
                     result["missing_story_image_models"] = missing_story_image
                     result["story_image_ready"] = not missing_story_image
+                    result["story_dual_image_ready"] = (
+                        result["story_image_ready"]
+                        and Path(settings.comfyui_story_dual_image_workflow).exists()
+                    )
                 except Exception as exc:
                     result["story_image_check_error"] = str(exc)
 
