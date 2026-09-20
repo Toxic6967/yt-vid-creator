@@ -257,6 +257,30 @@ def _try_ai_scene(
                 seed=stable_seed if is_story else None,
                 job_id=f"shortscene_{index}_{random.randint(1000,9999)}",
             )
+        if (
+            is_story
+            and state.get("story_image_ready")
+            and str(result.get("backend", "")).startswith("flux2")
+        ):
+            try:
+                cleaned = generate_story_keyframe(
+                    prompt=(
+                        "Keep this exact Roblox R15 movie frame, characters, pose, camera, lighting and environment. "
+                        "Remove every piece of generated typography or pseudo-typography. Make signs, screens, posters, "
+                        "labels and boards blank or purely pictorial. Do not add any letters, numbers, usernames, logos, "
+                        "captions or symbols. Preserve the Roblox avatars exactly."
+                    ),
+                    reference_path=result["path"],
+                    identity_reference_path=identity_reference or reference_image,
+                    seed=(stable_seed + 991) & 0x7FFFFFFF,
+                    job_id=f"storyclean_{index}_{random.randint(1000,9999)}",
+                )
+                cleaned["text_cleanup_pass"] = True
+                result = cleaned
+            except Exception:
+                # The first clean keyframe is still usable if a cleanup pass fails.
+                pass
+
         source = Path(result["path"])
         image = Image.open(source).convert("RGB")
         image.save(destination, quality=94)
