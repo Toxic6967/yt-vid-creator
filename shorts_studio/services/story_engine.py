@@ -448,7 +448,9 @@ moment, server moment, obby moment or friendship moment they can recognise.
 
 NON-NEGOTIABLE:
 - Hook in the FIRST 1-2 seconds. Start inside the problem; no introduction.
-- Use 14-18 purposeful scenes for a normal ~65 second Story. Scale within that range for the requested runtime. Maximum 3 characters.
+- Use about 10-13 purposeful scenes for a normal ~65 second Story. Scale with runtime. Maximum 3 characters.
+- Think in six macro beats first: hook/problem → goal/setup → first setback → escalation → turning point/climax → payoff.
+- Do not split one event into multiple filler scenes just to hit a scene count.
 - Each narration line should usually be 6-14 spoken words. The longer runtime is for MORE STORY, not filler.
 - Follow the LOCKED CAUSAL STORY ARC above. Do not replace it with a different plot.
 - Build a real cause-and-effect story arc:
@@ -537,8 +539,11 @@ Return JSON exactly:
 
 
 def _required_scene_count(target_seconds: int) -> tuple[int, int]:
-    minimum = max(12, min(15, round(target_seconds / 4.8)))
-    desired = min(18, max(minimum, round(target_seconds / 4.1)))
+    # A coherent 65-second story is better with ~11-13 meaningful shots than
+    # 14-18 tiny AI fragments. Fewer beats gives the local writer more room
+    # for cause/effect, natural narration and a real payoff.
+    minimum = max(9, min(12, round(target_seconds / 6.0)))
+    desired = min(14, max(minimum + 2, round(target_seconds / 5.0)))
     return minimum, desired
 
 
@@ -774,7 +779,7 @@ LOCKED CAUSAL ARC:
 {json.dumps(arc, ensure_ascii=False)}
 
 EXISTING USABLE SCENES:
-{json.dumps(existing[:18], ensure_ascii=False)}
+{json.dumps(existing[:14], ensure_ascii=False)}
 
 Create the COMPLETE scene array from scene 1 through scene {desired}.
 
@@ -801,7 +806,7 @@ Rules:
         repaired = _coerce_writer_object(repaired)
         repaired_scenes = repaired.get("scenes") if isinstance(repaired.get("scenes"), list) else []
         if repaired_scenes:
-            current["scenes"] = repaired_scenes[:18]
+            current["scenes"] = repaired_scenes[:14]
             existing = current["scenes"]
         if _usable_raw_scene_count(current) >= minimum:
             return current
@@ -835,7 +840,7 @@ def _normalise_story(
     scenes_raw = raw.get("scenes") if isinstance(raw.get("scenes"), list) else []
     scenes: list[dict[str, Any]] = []
 
-    for idx, item in enumerate(scenes_raw[:18]):
+    for idx, item in enumerate(scenes_raw[:14]):
         if not isinstance(item, dict):
             continue
         role = _clean(item.get("role"), 20).lower()
@@ -1006,7 +1011,7 @@ def _writer_view(story: dict) -> dict[str, Any]:
                 "sfx_cue": scene.get("sfx_cue"),
                 "motion_priority": scene.get("motion_priority"),
             }
-            for scene in (story.get("scenes") or [])[:18]
+            for scene in (story.get("scenes") or [])[:14]
         ],
     }
 
@@ -1043,10 +1048,10 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
     }
     max_words = max(scene_word_counts, default=0)
     total_words = len(re.findall(r"\b[\w'-]+\b", narration))
-    required_scene_min = max(12, min(15, round(target_seconds / 4.8)))
-    required_scene_max = min(18, max(15, round(target_seconds / 3.8)))
-    expected_min = max(90, round(target_seconds * 1.95))
-    expected_max = min(190, round(target_seconds * 2.45))
+    required_scene_min, desired_scene_count = _required_scene_count(target_seconds)
+    required_scene_max = min(14, max(desired_scene_count + 2, required_scene_min))
+    expected_min = max(80, round(target_seconds * 1.65))
+    expected_max = min(175, round(target_seconds * 2.30))
     banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
 
     line_starters = []
@@ -1280,31 +1285,31 @@ Return:
         problems.append("Banned cringe/filler phrasing: " + ", ".join(mechanical["banned_hits"]))
         rewrite_instructions.append("Remove canned creator phrases, forced morals and generic AI filler.")
 
+    # "passed" is intentionally demanding, but not perfection-only. The old
+    # thresholds caused endless rewrites where an otherwise understandable
+    # story was thrown away for one 79/100 sub-score.
     passed = (
-        total >= 82
-        and scores["hook"] >= 84
-        and scores["relatability"] >= 80
-        and scores["payoff"] >= 84
-        and scores["coherence"] >= 84
-        and scores["cause_effect"] >= 80
-        and scores["setup_payoff"] >= 82
-        and scores["arc_fidelity"] >= 85
-        and scores["dialogue"] >= 82
-        and scores["game_specificity"] >= 82
-        and scores["cringe_avoidance"] >= 85
+        total >= 78
+        and scores["hook"] >= 78
+        and scores["payoff"] >= 78
+        and scores["coherence"] >= 80
+        and scores["cause_effect"] >= 78
+        and scores["setup_payoff"] >= 76
+        and scores["arc_fidelity"] >= 80
+        and scores["dialogue"] >= 76
+        and scores["game_specificity"] >= 80
+        and scores["cringe_avoidance"] >= 82
         and all(
             mechanical[key]
             for key in (
                 "scene_count_ok",
                 "short_lines_ok",
-                "word_count_ok",
                 "arc_structure_ok",
                 "arc_fields_ok",
                 "causal_chain_ok",
                 "coincidence_free_ok",
                 "single_narrator_ok",
                 "natural_flow_ok",
-                "visual_variety_ok",
                 "banned_phrase_ok",
             )
         )
@@ -1393,14 +1398,14 @@ For player_behavior, 100 means believable decisions.
     ][:6]
     passed = (
         not fatal
-        and scores["causal_logic"] >= 84
-        and scores["player_behavior"] >= 80
-        and scores["game_truth"] >= 86
-        and scores["central_goal"] >= 84
-        and scores["escalation"] >= 80
-        and scores["turning_point"] >= 80
-        and scores["ending_logic"] >= 84
-        and scores["filler"] >= 82
+        and scores["causal_logic"] >= 78
+        and scores["player_behavior"] >= 74
+        and scores["game_truth"] >= 82
+        and scores["central_goal"] >= 78
+        and scores["escalation"] >= 74
+        and scores["turning_point"] >= 74
+        and scores["ending_logic"] >= 80
+        and scores["filler"] >= 76
     )
     return {
         "scores": scores,
@@ -1821,7 +1826,8 @@ Hard rules:
 - The climax must use something established earlier and resolve the original goal.
 - The payoff must directly answer the hook.
 - Do not invent items, enemies, powers, rooms, currencies, UI or lore outside VERIFIED GAME CONTEXT.
-- Keep 14-18 purposeful scenes for a normal ~65 second Story, scaled to the requested runtime.
+- Keep about 10-13 purposeful scenes for a normal ~65 second Story, scaled to the requested runtime.
+- Prefer combining weak adjacent beats over adding filler.
 - Preserve the compact CURRENT STORY JSON shape.
 - Keep because_of and changes for every scene.
 - Do not add generated visual prompt fields.
