@@ -6,6 +6,26 @@ from typing import Any
 
 from .ollama_client import chat_json
 from .story_game import story_game_prompt_context
+from .asset_registry import power_prompt_context
+
+
+def _power_mode(genre: str | None) -> bool:
+    return str(genre or "").strip().lower() == "powers"
+
+
+def _power_story_rules(genre: str | None) -> str:
+    if not _power_mode(genre):
+        return (
+            "POWERS ARE NOT ENABLED. Do not invent magic, portals, energy attacks or sudden superpowers. "
+            "Every unusual capability must come from the verified game context."
+        )
+    return (
+        "POWER STORY MODE IS ENABLED. The recurring cast may use only the ORIGINAL FICTIONAL abilities below. "
+        "These abilities are part of our animated channel universe, NOT claims about the real Roblox game's mechanics. "
+        "Game locations, items, enemies, objectives and UI must still stay faithful to verified game context. "
+        "Powers must have setup, limits and consequences; they cannot randomly solve the climax.\n"
+        + power_prompt_context()
+    )
 
 
 BANNED_STORY_PATTERNS = (
@@ -151,13 +171,16 @@ AUDIENCE: {audience}
 CHANNEL TONE: {tone}
 REQUESTED GENRE: {genre}
 
+POWER/FANTASY RULES:
+{_power_story_rules(genre)}
+
 REAL ROBLOX GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
 Create 12 DIFFERENT mini-movie ideas that happen INSIDE this exact Roblox game.
 
 Every idea must:
-- depend on a real mechanic, objective, location, item, enemy, round rule or player situation from the game context;
+- depend on a real mechanic, objective, location, item, enemy, round rule or player situation from the game context; in powers genre, the approved fictional character ability may create extra pressure/action but must interact with the real game situation rather than replace it;
 - be recognisable to someone who actually plays the game;
 - be understandable even if the viewer only knows the game casually;
 - use the game's mechanics to create the problem and payoff;
@@ -315,6 +338,7 @@ def _plan_story_arc(
     target_seconds: int,
 ) -> dict[str, Any]:
     """Lock the causal plot before the screenplay writer expands it."""
+    power_rules = _power_story_rules(genre)
     result = chat_json(
         "You are a Roblox story architect. Build simple causal plots, never random AI nonsense. Return JSON only.",
         f"""
@@ -327,12 +351,15 @@ PREMISE/IDEA: {idea}
 VERIFIED GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
+POWER/FANTASY RULES:
+{power_rules}
+
 Design ONE coherent mini-movie arc.
 
 Rules:
 - One central player goal only.
-- Every major problem must come from a VERIFIED game mechanic, player choice or earlier mistake.
-- No random hacker, magic portal, secret weapon, mystery NPC, sudden superpower, fake item or invented lore.
+- Every major problem must come from a VERIFIED game mechanic, player choice, earlier mistake, or (only in powers genre) an already-established approved fictional ability.
+- Do not invent random hackers, secret weapons, mystery NPCs, fake items or lore. Follow POWER/FANTASY RULES exactly.
 - The failed attempt must make the next problem worse or more urgent.
 - The turning point must be something the player notices/decides/uses, not coincidence.
 - The climax must resolve the same goal established near the beginning.
@@ -387,6 +414,7 @@ def _story_prompt(
         f"- {_default_character(i)['name']}: {_default_character(i)['visual_identity']}; personality: {_default_character(i)['personality']}"
         for i in range(3)
     )
+    power_rules = _power_story_rules(genre)
     return f"""
 AUDIENCE: {audience}
 CHANNEL TONE: {tone}
@@ -396,6 +424,9 @@ USER IDEA: {requested}
 
 REAL GAME CONTEXT — DO NOT INVENT OUTSIDE THIS:
 {story_game_prompt_context(game_context)}
+
+POWER/FANTASY RULES:
+{power_rules}
 
 LOCKED CAUSAL STORY ARC:
 {json.dumps(arc_plan, ensure_ascii=False, indent=2)}
@@ -436,7 +467,7 @@ NON-NEGOTIABLE:
 - Never leave two adjacent scenes with the same environment AND the same camera framing. Each cut must reveal new visual information.
 - Conflict must escalate every few seconds.
 - Establish one clear central goal and keep it alive through the whole Short.
-- Do not introduce random new villains, secret weapons, portals, powers, rare items or lore unless the verified game context supports them AND they matter to the original goal.
+- Do not introduce random new villains, secret weapons, rare items or lore. Portals/powers are allowed ONLY when POWER/FANTASY RULES explicitly enable them, and they must be established early, limited, causal and relevant to the original goal.
 - No coincidence may solve the climax. The ending must come from a character decision, skill, mistake or verified game mechanic established earlier.
 - The ending must pay off the opening: twist, funny reversal, satisfying win, scary reveal,
   or relatable punchline.
@@ -465,7 +496,7 @@ Return JSON exactly:
 {{
   "title":"working story title",
   "game_name":"{game_context.get('game_name')}",
-  "genre":"funny|horror|mystery|action|relatable|sad",
+  "genre":"funny|horror|mystery|action|relatable|sad|powers",
   "premise":"one sentence",
   "story_goal":"the one clear thing the player wants during this story",
   "stakes":"what they lose/fail/miss if the goal goes wrong",
@@ -1003,6 +1034,10 @@ def _logic_audit(
         "You are a skeptical Roblox player reviewing a story for plot holes. Return JSON only.",
         f"""
 GAME: {game_context.get("game_name")}
+STORY GENRE: {story.get("genre")}
+
+POWER/FANTASY RULES:
+{_power_story_rules(story.get("genre"))}
 
 VERIFIED GAME CONTEXT:
 {story_game_prompt_context(game_context)}
@@ -1016,7 +1051,7 @@ STORY:
 Try to DISPROVE that this is a good story. Check:
 - causal_logic: does each meaningful event follow from an earlier action, mistake, clue or verified mechanic?
 - player_behavior: do the characters act like believable players, or do they become stupid just so the plot can happen?
-- game_truth: are game mechanics/locations/items used consistently with the verified context?
+- game_truth: are game mechanics/locations/items used consistently with verified context? If powers genre is enabled, approved fictional character powers are allowed and must NOT be mistaken for real game mechanics.
 - central_goal: is the same goal still driving the middle and climax?
 - escalation: do setbacks genuinely increase pressure rather than repeat the same problem?
 - turning_point: does a character notice/decide/use something that earns the change in direction?
