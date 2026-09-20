@@ -703,8 +703,9 @@ def generate_story_keyframe(
     reference_path: str | Path,
     job_id: str,
     seed: int | None = None,
+    identity_reference_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Generate a character-consistent Story frame with FLUX.2 Klein reference editing."""
+    """Generate a Story frame from both a fixed cast reference and previous-frame continuity."""
     state = health()
     if not state.get("story_image_ready"):
         missing = ", ".join(state.get("missing_story_image_models") or [])
@@ -720,7 +721,10 @@ def generate_story_keyframe(
         raise ComfyUIError(f"Could not read Story image workflow: {exc}") from exc
 
     seed = int(seed) if seed is not None else random.randint(0, 2_147_483_647)
-    uploaded = _upload_input_image(Path(reference_path))
+    continuity_path = Path(reference_path)
+    identity_path = Path(identity_reference_path) if identity_reference_path else continuity_path
+    uploaded_identity = _upload_input_image(identity_path)
+    uploaded_continuity = _upload_input_image(continuity_path)
     resolved = state.get("story_image_models_resolved") or {}
 
     workflow = _replace_placeholders(
@@ -735,7 +739,8 @@ def generate_story_keyframe(
             "__FLUX2_VAE__": resolved.get(
                 "vae", state["story_image_models"]["vae"]
             ),
-            "__REFERENCE_IMAGE__": uploaded,
+            "__IDENTITY_REFERENCE__": uploaded_identity,
+            "__CONTINUITY_REFERENCE__": uploaded_continuity,
             "__PROMPT__": prompt,
             "__SEED__": seed,
         },
@@ -750,7 +755,7 @@ def generate_story_keyframe(
         "path": str(output),
         "prompt_id": prompt_id,
         "seed": seed,
-        "backend": "flux2_klein_reference",
+        "backend": "flux2_klein_multi_reference",
     }
 
 def generate_ai_video(
