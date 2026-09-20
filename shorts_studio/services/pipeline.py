@@ -192,12 +192,62 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
             seed=(seed + 2309) & 0x7FFFFFFF,
             job_id=f"envplate_{idx}_{seed % 10000}_b",
         )
+        candidate_path = str(polished_plate["path"])
+        existing_plate_paths = list(plates.values())
+        max_similarity = max(
+            (
+                visual_similarity(existing, candidate_path)
+                for existing in existing_plate_paths
+            ),
+            default=0.0,
+        )
+
+        # Different named/set-piece environments must actually look different.
+        # If FLUX collapses them into the same generic room/map, regenerate once
+        # with a hard layout/material/lighting contrast instruction.
+        if max_similarity >= 0.80:
+            distinct_pass = generate_story_keyframe(
+                prompt=(
+                    f"Rebuild this as a VISUALLY DISTINCT Roblox Studio environment for {game_name}. "
+                    f"The verified location/set-piece is: {environment}. "
+                    f"Verified context: {visual_context}. "
+                    "Do not preserve the previous generic room composition. Emphasize the unique layout, obstacle shapes, "
+                    "landmarks, materials, depth and lighting that distinguish THIS set-piece from other areas in the same game. "
+                    "It must still look like a current Roblox game map: stylized MeshParts/Parts/Terrain, readable gameplay scale, "
+                    "clean game lighting, no photoreal movie-set materials and absolutely no Minecraft/voxel world styling. "
+                    "No characters. No readable text, letters, numbers, usernames, UI, logos or watermarks."
+                ),
+                reference_path=seed_ref,
+                seed=(seed + 7919) & 0x7FFFFFFF,
+                job_id=f"envplate_{idx}_{seed % 10000}_distinct",
+            )
+            candidate_path = str(distinct_pass["path"])
+            max_similarity = max(
+                (
+                    visual_similarity(existing, candidate_path)
+                    for existing in existing_plate_paths
+                ),
+                default=0.0,
+            )
+
         destination = plate_dir / f"env_{len(plates) + 1:02d}.png"
-        shutil.copy2(polished_plate["path"], destination)
+        shutil.copy2(candidate_path, destination)
         plates[key] = str(destination)
 
     if not plates:
         raise RuntimeError("Could not generate Story environment plates.")
+
+    # Fail early if the environment generator still collapsed multiple verified
+    # areas into almost the same visual. Better to stop than render a 65s movie
+    # on one repeated background.
+    plate_paths = list(plates.values())
+    for i in range(len(plate_paths)):
+        for j in range(i + 1, len(plate_paths)):
+            if visual_similarity(plate_paths[i], plate_paths[j]) >= 0.86:
+                raise RuntimeError(
+                    "Two different Roblox environment plates still look nearly identical after regeneration. "
+                    "Story Studio stopped before rendering repeated-background scenes."
+                )
     return plates
 
 
@@ -224,7 +274,7 @@ def run_pipeline(job_id: str) -> None:
         "tone": tone,
         "content_type": job.get("content_type", "auto"),
         "story_genre": job.get("story_genre", "auto"),
-        "pipeline_version": "2.0.0",
+        "pipeline_version": "2.1.0",
     }
 
     try:
