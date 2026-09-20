@@ -448,7 +448,7 @@ moment, server moment, obby moment or friendship moment they can recognise.
 
 NON-NEGOTIABLE:
 - Hook in the FIRST 1-2 seconds. Start inside the problem; no introduction.
-- Use about 10-13 purposeful scenes for a normal ~65 second Story. Scale with runtime. Maximum 3 characters.
+- Use about 10-13 purposeful scenes for a normal ~65 second Story. Aim for 12. Scale with runtime. Maximum 3 characters.
 - Think in six macro beats first: hook/problem → goal/setup → first setback → escalation → turning point/climax → payoff.
 - Do not split one event into multiple filler scenes just to hit a scene count.
 - Each narration line should usually be 6-14 spoken words. The longer runtime is for MORE STORY, not filler.
@@ -539,11 +539,10 @@ Return JSON exactly:
 
 
 def _required_scene_count(target_seconds: int) -> tuple[int, int]:
-    # A coherent 65-second story is better with ~11-13 meaningful shots than
-    # 14-18 tiny AI fragments. Fewer beats gives the local writer more room
-    # for cause/effect, natural narration and a real payoff.
-    minimum = max(9, min(12, round(target_seconds / 6.0)))
-    desired = min(14, max(minimum + 2, round(target_seconds / 5.0)))
+    # 65 seconds works best around 12 substantial beats. Requiring 14+ tiny
+    # scenes made the local 8B writer truncate JSON and encouraged filler.
+    minimum = max(9, min(11, round(target_seconds / 6.5)))
+    desired = min(13, max(minimum + 2, round(target_seconds / 5.5)))
     return minimum, desired
 
 
@@ -948,6 +947,18 @@ Return ONLY {{"scenes":[...]}}.
         arc_plan=arc,
         existing=existing,
     )
+
+    # Absolute safety net: Story generation may NEVER leave this function with
+    # zero/too-few scenes just because Qwen returned malformed/truncated JSON.
+    # The deterministic scaffold is intentionally plain; later editor/narration
+    # passes still have to improve it before production.
+    if _usable_raw_scene_count(current) < minimum:
+        current["scenes"] = _fallback_scene_scaffold(
+            desired=desired,
+            game_context=game_context,
+            arc_plan=arc,
+        )[:desired]
+
     current.setdefault("game_name", game_context.get("game_name"))
     current.setdefault("genre", genre)
     current.setdefault("story_goal", arc.get("central_goal"))
@@ -1418,17 +1429,20 @@ Return:
     # "passed" is intentionally demanding, but not perfection-only. The old
     # thresholds caused endless rewrites where an otherwise understandable
     # story was thrown away for one 79/100 sub-score.
+    # Hard-stop only genuinely broken stories. Hook wording, narrator polish and
+    # shot variety have dedicated later passes, so they should not endlessly
+    # reject an otherwise coherent screenplay by a few subjective points.
     passed = (
-        total >= 78
-        and scores["hook"] >= 78
-        and scores["payoff"] >= 78
-        and scores["coherence"] >= 80
-        and scores["cause_effect"] >= 78
-        and scores["setup_payoff"] >= 76
-        and scores["arc_fidelity"] >= 80
-        and scores["dialogue"] >= 76
-        and scores["game_specificity"] >= 80
-        and scores["cringe_avoidance"] >= 82
+        total >= 74
+        and scores["hook"] >= 72
+        and scores["payoff"] >= 72
+        and scores["coherence"] >= 75
+        and scores["cause_effect"] >= 74
+        and scores["setup_payoff"] >= 72
+        and scores["arc_fidelity"] >= 75
+        and scores["dialogue"] >= 70
+        and scores["game_specificity"] >= 78
+        and scores["cringe_avoidance"] >= 80
         and all(
             mechanical[key]
             for key in (
@@ -1439,7 +1453,6 @@ Return:
                 "causal_chain_ok",
                 "coincidence_free_ok",
                 "single_narrator_ok",
-                "natural_flow_ok",
                 "banned_phrase_ok",
             )
         )
@@ -1526,16 +1539,22 @@ For player_behavior, 100 means believable decisions.
         for item in (result.get("fatal_problems") or [])
         if _clean(item, 220)
     ][:6]
+    severe_logic_failure = (
+        scores["causal_logic"] < 65
+        or scores["game_truth"] < 70
+        or scores["central_goal"] < 65
+        or scores["ending_logic"] < 65
+    )
     passed = (
-        not fatal
-        and scores["causal_logic"] >= 78
-        and scores["player_behavior"] >= 74
-        and scores["game_truth"] >= 82
-        and scores["central_goal"] >= 78
-        and scores["escalation"] >= 74
-        and scores["turning_point"] >= 74
-        and scores["ending_logic"] >= 80
-        and scores["filler"] >= 76
+        not severe_logic_failure
+        and scores["causal_logic"] >= 74
+        and scores["player_behavior"] >= 70
+        and scores["game_truth"] >= 80
+        and scores["central_goal"] >= 74
+        and scores["escalation"] >= 70
+        and scores["turning_point"] >= 70
+        and scores["ending_logic"] >= 76
+        and scores["filler"] >= 72
     )
     return {
         "scores": scores,
@@ -1993,8 +2012,9 @@ def _finalize_story_quality(
     best_story = story
     best_score: dict[str, Any] | None = None
 
-    # Longer stories need enough chances to fix writing, narration and shot planning.
-    for attempt in range(7):
+    # Four focused repair cycles are enough. Endless self-rewrites tend to make
+    # a small local model drift away from the original coherent arc.
+    for attempt in range(4):
         candidate = _direct_story_shots(
             working_story,
             game_context=game_context,
@@ -2125,19 +2145,28 @@ def create_story(
         target_seconds=target_seconds,
     )
 
-    draft = chat_json(
-        "You are a sharp Roblox mini-movie writer/director. You write for young players without writing down to them. Return JSON only.",
-        _story_prompt(
-            idea,
-            audience,
-            tone,
-            target_seconds,
-            genre,
-            game_context,
-            arc_plan,
-        ),
-        temperature=0.54,
-    )
+    # Do NOT ask the local 8B model for one huge 65-second screenplay object.
+    # Build the screenplay in small continuity-aware batches from the start.
+    # This removes the truncation failure that previously produced 0 usable scenes.
+    _, desired_scene_count = _required_scene_count(target_seconds)
+    draft = {
+        "title": f"{game_context.get('game_name') or 'Roblox'} Story",
+        "game_name": game_context.get("game_name"),
+        "genre": genre,
+        "premise": idea,
+        "story_goal": arc_plan.get("central_goal"),
+        "stakes": arc_plan.get("stakes"),
+        "turning_point": arc_plan.get("turning_point"),
+        "payoff": arc_plan.get("payoff"),
+        "characters": [_default_character(i) for i in range(3)],
+        "scenes": _generate_scene_batches(
+            target_seconds=target_seconds,
+            game_context=game_context,
+            genre=genre,
+            arc_plan=arc_plan,
+            existing=None,
+        )[:desired_scene_count],
+    }
     draft = _repair_scene_count(
         draft,
         target_seconds=target_seconds,
