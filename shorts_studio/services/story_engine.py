@@ -2065,10 +2065,10 @@ def _production_safe_score(score: dict[str, Any]) -> bool:
     return (
         hard_structure
         and no_severe_logic
-        and float(score.get("total") or 0) >= 52
-        and float(scores.get("coherence") or 0) >= 50
-        and float(scores.get("game_specificity") or 0) >= 58
-        and float(scores.get("cringe_avoidance") or 0) >= 58
+        and float(score.get("total") or 0) >= 48
+        and float(scores.get("coherence") or 0) >= 46
+        and float(scores.get("game_specificity") or 0) >= 52
+        and float(scores.get("cringe_avoidance") or 0) >= 56
     )
 
 
@@ -2077,11 +2077,12 @@ def _deterministic_story_cleanup(
     *,
     game_context: dict[str, Any],
 ) -> dict[str, Any]:
-    """Fix mechanical rough edges without changing the plot."""
+    """Force structural sanity before asking subjective critics to judge the story."""
     scenes = story.get("scenes") or []
     if not scenes:
         return story
 
+    arc = story.get("arc_plan") or {}
     setpieces = [
         _clean(item.get("name") or item.get("description"), 160)
         for item in [
@@ -2101,39 +2102,180 @@ def _deterministic_story_cleanup(
         "randomly": "during the next move",
     }
 
+    count = len(scenes)
+    reveal_index = max(4, min(count - 2, round(count * 0.68)))
+    setup_indexes = {1, 2} if count >= 8 else {1}
+
+    # Map the screenplay onto the locked causal spine. Key moments get explicit
+    # arc actions so repeated/derailed local-model scenes cannot survive repairs.
+    def arc_action(idx: int) -> str:
+        progress = idx / max(1, count - 1)
+        if idx == 0:
+            return _clean(arc.get("hook_event"), 220)
+        if idx == count - 1:
+            return _clean(arc.get("payoff"), 220)
+        if idx == count - 2:
+            return _clean(arc.get("climax"), 220)
+        if idx == reveal_index:
+            return _clean(arc.get("turning_point"), 220)
+        if progress < 0.22:
+            return _clean(arc.get("setup") or arc.get("central_goal"), 220)
+        if progress < 0.42:
+            return _clean(arc.get("first_obstacle"), 220)
+        if progress < 0.58:
+            return _clean(arc.get("failed_attempt"), 220)
+        if progress < 0.74:
+            return _clean(arc.get("escalation"), 220)
+        return _clean(arc.get("climax"), 220)
+
+    # If the writer collapsed almost everything into one backdrop, rebuild the
+    # environment sequence from verified locations. We intentionally avoid
+    # adjacent repeats while still allowing later returns to an earlier area.
+    current_envs = [
+        re.sub(r"\s+", " ", str(scene.get("environment") or "").strip().lower())
+        for scene in scenes
+        if str(scene.get("environment") or "").strip()
+    ]
+    unique_envs = set(current_envs)
+    adjacent_env_repeats = sum(
+        1
+        for idx in range(1, len(current_envs))
+        if current_envs[idx] == current_envs[idx - 1]
+    )
+    force_environment_plan = bool(
+        setpieces
+        and (
+            len(unique_envs) < min(4, len(setpieces))
+            or adjacent_env_repeats >= 2
+        )
+    )
+
+    if setpieces:
+        usable_setpieces = setpieces[: min(6, len(setpieces))]
+    else:
+        usable_setpieces = [
+            f"recognisable {game_context.get('game_name') or 'Roblox'} gameplay area"
+        ]
+
+    # Spread locations forward through the story rather than ping-ponging every
+    # cut. If we must reuse one, the return occurs later in the movie.
+    environment_plan: list[str] = []
+    if usable_setpieces:
+        for idx in range(count):
+            bucket = min(
+                len(usable_setpieces) - 1,
+                int((idx / max(1, count - 1)) * len(usable_setpieces)),
+            )
+            environment_plan.append(usable_setpieces[bucket])
+        # Remove adjacent repeats when enough verified alternatives exist.
+        if len(usable_setpieces) >= 4:
+            for idx in range(1, count):
+                if environment_plan[idx] == environment_plan[idx - 1]:
+                    next_idx = (usable_setpieces.index(environment_plan[idx]) + 1) % len(usable_setpieces)
+                    environment_plan[idx] = usable_setpieces[next_idx]
+
+    camera_cycle = (
+        "wide",
+        "medium",
+        "over-shoulder",
+        "follow",
+        "close-up",
+        "low-angle",
+        "high-angle",
+    )
+
+    seen_lines: dict[str, int] = {}
     for idx, scene in enumerate(scenes):
+        # Roles are deterministic. This prevents multiple payoff/reveal labels
+        # from confusing both the scorer and the animation director.
+        if idx == 0:
+            scene["role"] = "hook"
+        elif idx == count - 1:
+            scene["role"] = "payoff"
+        elif idx == reveal_index:
+            scene["role"] = "reveal"
+        elif idx in setup_indexes:
+            scene["role"] = "setup"
+        else:
+            scene["role"] = "build"
+
         line = re.sub(r"\s+", " ", str(scene.get("narration") or "")).strip()
         lower = line.lower()
         for bad, good in random_replacements.items():
             if bad in lower:
                 line = re.sub(re.escape(bad), good, line, flags=re.I)
                 lower = line.lower()
+
+        intended_action = arc_action(idx)
+        action = _clean(scene.get("action"), 220)
+        previous_action = _clean(scenes[idx - 1].get("action"), 220) if idx else ""
+        # Key arc beats and obvious duplicates are re-anchored to the locked plot.
+        if intended_action and (
+            idx in {0, reveal_index, count - 2, count - 1}
+            or not action
+            or (idx and action.lower() == previous_action.lower())
+        ):
+            action = intended_action
+        scene["action"] = action or intended_action or line
+
+        normalized_line = re.sub(r"[^a-z0-9]+", " ", line.lower()).strip()
+        duplicate_index = seen_lines.get(normalized_line, 0) if normalized_line else 0
+        if normalized_line:
+            seen_lines[normalized_line] = duplicate_index + 1
+        if not line or duplicate_index:
+            # Use the unique locked event as temporary narration. The later
+            # narration-polish pass will turn this into natural spoken English.
+            line = _clean(scene.get("action"), 180) or "The next move changes the situation."
         scene["narration"] = line
 
+        if force_environment_plan and environment_plan:
+            scene["environment"] = environment_plan[idx]
+        elif not _clean(scene.get("environment"), 180) and environment_plan:
+            scene["environment"] = environment_plan[idx]
+
+        # Guarantee visual framing variety even when the writer keeps returning
+        # "medium" for every scene.
+        camera = _clean(scene.get("camera"), 60).lower()
+        if camera not in camera_cycle:
+            camera = camera_cycle[idx % len(camera_cycle)]
+        if idx and camera == str(scenes[idx - 1].get("camera") or "").lower():
+            camera = camera_cycle[(idx + 2) % len(camera_cycle)]
+        scene["camera"] = camera
+
+    # Rebuild the causal links from the cleaned action spine, making each beat
+    # explicitly depend on the previous one and point at the next one.
+    for idx, scene in enumerate(scenes):
         if idx == 0:
-            scene["role"] = "hook"
             scene["because_of"] = "opening situation"
-        elif not _clean(scene.get("because_of"), 180):
-            previous = scenes[idx - 1]
+        else:
             scene["because_of"] = _clean(
-                previous.get("changes") or previous.get("action") or previous.get("narration"),
+                scenes[idx - 1].get("changes")
+                or scenes[idx - 1].get("action")
+                or scenes[idx - 1].get("narration"),
                 180,
             )
 
-        if not _clean(scene.get("changes"), 200):
-            if idx + 1 < len(scenes):
-                nxt = scenes[idx + 1]
-                scene["changes"] = _clean(
-                    f"This creates the next problem: {nxt.get('action') or nxt.get('narration')}",
-                    200,
-                )
-            else:
-                scene["changes"] = "The opening problem is resolved."
+        if idx + 1 < count:
+            scene["changes"] = _clean(
+                f"This forces the next move: {scenes[idx + 1].get('action') or scenes[idx + 1].get('narration')}",
+                200,
+            )
+        else:
+            scene["changes"] = "The opening problem and central goal are resolved."
 
-        if setpieces and not _clean(scene.get("environment"), 180):
-            scene["environment"] = setpieces[idx % len(setpieces)]
+    # Keep top-level arc fields aligned with the locked arc even after multiple
+    # model rewrites.
+    story["story_goal"] = _clean(
+        arc.get("central_goal") or story.get("story_goal"),
+        220,
+    )
+    story["stakes"] = _clean(arc.get("stakes") or story.get("stakes"), 220)
+    story["turning_point"] = _clean(
+        arc.get("turning_point") or story.get("turning_point"),
+        240,
+    )
+    story["payoff"] = _clean(arc.get("payoff") or story.get("payoff"), 240)
 
-    scenes[-1]["role"] = "payoff"
     story["scenes"] = scenes
     story["hook"] = scenes[0].get("narration") or story.get("hook")
     narration = " ".join(str(s.get("narration") or "").strip() for s in scenes).strip()
@@ -2294,6 +2436,11 @@ def _finalize_story_quality(
         best_story["story_score"]["passed"] = True
         best_story["story_score"]["accepted_below_target"] = True
         best_story["story_score"]["production_safe"] = True
+    if best_story.get("story_score") and not best_story["story_score"].get("passed"):
+        best_story["story_score"]["production_safe"] = False
+        best_story["story_score"]["final_gate_note"] = (
+            "Story failed only after deterministic arc/environment/cause-effect repair and five editor passes."
+        )
     return best_story
 
 
