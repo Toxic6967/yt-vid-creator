@@ -231,6 +231,23 @@ def approve(job_id: str) -> dict:
     return {"ok": True}
 
 
+@app.post("/api/jobs/{job_id}/remake-story", status_code=202)
+def remake_as_story(job_id: str) -> dict:
+    old = get_job(job_id)
+    if not old:
+        raise HTTPException(404, "Job not found")
+    _ensure_story_backend_ready()
+    return _queue_short(
+        old["channel_name"],
+        old["niche"],
+        None,
+        old["voice"],
+        old["target_seconds"],
+        "story",
+        "auto",
+    )
+
+
 @app.post("/api/jobs/{job_id}/regenerate", status_code=202)
 def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
     old = get_job(job_id)
