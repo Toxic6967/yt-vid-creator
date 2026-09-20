@@ -152,7 +152,8 @@ def scene_image_prompt(scene: dict, topic: str) -> str:
 
     narration = str(scene.get("narration", "")).strip()
     query = str(scene.get("visual_query", "")).strip()
-    emphasis = str(scene.get("on_screen_emphasis", "")).strip()
+    # On-screen emphasis is an EDITOR overlay only. Never feed caption words
+    # into an image/video generator; generative models tend to hallucinate text.
     character_visuals = "; ".join(str(x) for x in scene.get("character_visuals", []) if x)
     environment = str(scene.get("environment", "")).strip()
     action = str(scene.get("action", "")).strip()
@@ -170,9 +171,11 @@ def scene_image_prompt(scene: dict, topic: str) -> str:
 
     return (
         f"Scene topic: {topic}. Narration meaning: {narration}. "
-        f"Show visually: {query or narration}. Important idea: {emphasis}. "
+        f"Show visually: {query or narration}. "
         + ". ".join(details)
-        + ". Create a polished modern Roblox-style cinematic frame that directly illustrates this exact beat."
+        + ". Create a polished modern Roblox-style cinematic frame that directly illustrates this exact beat. "
+        "Do not render any readable text, subtitles, usernames, signs, labels, logos or UI; "
+        "all English writing is added later by the deterministic video editor."
     )
 
 
