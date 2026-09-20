@@ -819,7 +819,8 @@ def setup_camera(camera_name, motion, frame_end, *, target_x=0.0, high_energy=Fa
 
     if high_energy and frame_end > 12:
         impact = max(5, frame_end//2)
-        base = Vector(cam.location)
+        impact_t = max(0.0, min(1.0, impact / max(1, frame_end)))
+        base = start_loc.lerp(end_loc, impact_t)
         for offset, dx, dz in ((-3,-0.035,0.025),(-1,0.045,-0.020),(1,-0.025,0.018),(3,0.018,-0.012)):
             frame = max(2,min(frame_end-1,impact+offset))
             cam.location = base + Vector((dx,0,dz))
