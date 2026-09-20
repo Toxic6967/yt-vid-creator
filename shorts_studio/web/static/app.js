@@ -367,13 +367,15 @@ function updateJobCard(node, job){
     if(script.genre) storyBits.push(esc(script.genre));
     if(chars) storyBits.push(esc(chars));
     if(q.hook_score!=null) storyBits.push(`hook ${q.hook_score}`);
-    if(q.relatability_score!=null) storyBits.push(`relatable ${q.relatability_score}`);
+    if(q.coherence_score!=null) storyBits.push(`story ${q.coherence_score}`);
+    if(q.cause_effect_score!=null) storyBits.push(`cause/effect ${q.cause_effect_score}`);
     if(q.payoff_score!=null) storyBits.push(`payoff ${q.payoff_score}`);
+    if(q.naturalness_score!=null) storyBits.push(`voice/writing ${q.naturalness_score}`);
     if(q.game_specificity_score!=null) storyBits.push(`game-specific ${q.game_specificity_score}`);
     details.innerHTML=`<b>${esc(manifest.metadata.title)}</b><br>${esc(manifest.metadata.description)}<br>`+
       `${(manifest.metadata.hashtags||[]).map(esc).join(' ')}<br>`+
       (storyBits.length ? `<span class="rights">${storyBits.join(' • ')}</span><br>` : '')+
-      `<span class="rights">${esc(manifest.content_type||job.content_type||'auto')} • story/retention ${q.retention_score??'?'} • cinematic motion ${q.cinematic_i2v_count||0} • cinematic stills ${q.ai_visual_count||0} • ${q.duration_seconds||'?'} sec</span>`;
+      `<span class="rights">${esc(manifest.content_type||job.content_type||'auto')} • score ${q.retention_score??'?'} • ${q.environment_plate_count||0} Roblox areas • cinematic motion ${q.cinematic_i2v_count||0} • stills ${q.ai_visual_count||0} • ${q.duration_seconds||'?'} sec</span>`;
   }
 
   const actions=node.querySelector('.actions');
