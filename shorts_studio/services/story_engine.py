@@ -943,6 +943,7 @@ def _polish_narration(
     story: dict,
     *,
     audience: str,
+    target_seconds: int,
     game_context: dict[str, Any],
 ) -> dict:
     scenes = story.get("scenes") or []
@@ -963,6 +964,8 @@ def _polish_narration(
         f"""
 AUDIENCE: {audience}
 GAME: {game_context.get("game_name")}
+TARGET RUNTIME: {target_seconds} seconds
+TARGET SPOKEN WORDS: roughly {round(target_seconds * 2.05)}-{round(target_seconds * 2.35)} words
 
 The visuals/events are LOCKED. Rewrite ONLY the narration so it sounds like one real person
 casually telling a friend what happened while the gameplay/movie plays.
@@ -974,9 +977,12 @@ Rules:
 - Return exactly {len(scenes)} lines, one per scene, same order.
 - Preserve every event and the ending. Do not add new plot points.
 - When all lines are joined with spaces, they must sound like ONE continuous spoken story.
-- Usually 4-11 words per line. Total narration should stay concise.
+- Usually 6-14 words per line. Use the longer runtime to tell more STORY, not to pad sentences.
+- Total narration should land close to the target spoken-word range above.
 - Use contractions: I'm, I'd, we're, didn't, couldn't, etc.
-- Natural everyday wording, not screenplay wording and not an AI narrator.
+- Natural everyday wording, like a gamer telling a friend what happened five minutes ago.
+- Include small human phrasing where natural: "I thought...", "we nearly...", "he just...", "for a second...", but do not force filler.
+- Do not sound like a trailer, documentary, news reader, motivational speaker or AI narrator.
 - Avoid restarting the story every scene.
 - Do not repeatedly start with I / Then / And then / So / But then / Suddenly.
 - Never say: little did I know, everything changed, what happened next, you won't believe,
@@ -1022,6 +1028,7 @@ def _finalize_story_quality(
         candidate = _polish_narration(
             candidate,
             audience=audience,
+            target_seconds=target_seconds,
             game_context=game_context,
         )
         score = _score_story(
