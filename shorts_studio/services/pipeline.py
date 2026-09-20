@@ -20,6 +20,7 @@ from .story_game import research_story_game
 from .ollama_client import unload_model
 from .tts import render_scene
 from .visuals import prepare_visual
+from .roblox_reference import build_cast_reference
 
 
 def _stage(job_id: str, name: str, progress: int) -> None:
@@ -210,6 +211,14 @@ def run_pipeline(job_id: str) -> None:
         _stage(job_id, "Generating game-specific cinematic scenes", 70)
         visuals = []
         continuity_reference = None
+        if content_type == "story":
+            continuity_reference = str(
+                build_cast_reference(
+                    script.get("characters", []),
+                    job_dir / "reference" / "cast_reference.png",
+                )
+            )
+
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
             visual = prepare_visual(
                 scene,
