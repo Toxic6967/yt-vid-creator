@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .asset_registry import (
@@ -50,11 +51,15 @@ def normalise_animation_plan(
         )
         duration = _clamp(duration, 1.3, 6.5)
 
-        environment_key = str(
-            scene.get("environment_key")
-            or scene.get("environment")
-            or f"scene-{idx + 1}"
-        ).strip().lower()
+        environment_key = re.sub(
+            r"\s+",
+            " ",
+            str(
+                scene.get("environment_key")
+                or scene.get("environment")
+                or f"scene-{idx + 1}"
+            ).strip().lower(),
+        )
         background = environment_plates.get(environment_key)
 
         camera = str(raw_shot.get("camera") or scene.get("camera") or "medium").lower()
