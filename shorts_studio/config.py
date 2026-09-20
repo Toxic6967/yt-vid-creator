@@ -34,6 +34,10 @@ class Settings:
         "COMFYUI_STORY_VIDEO_WORKFLOW",
         str(WORKFLOW_DIR / "ltx_i2v_api.json"),
     )
+    comfyui_story_image_workflow: str = os.getenv(
+        "COMFYUI_STORY_IMAGE_WORKFLOW",
+        str(WORKFLOW_DIR / "flux2_klein_story_api.json"),
+    )
     kokoro_model_path: str = os.getenv(
         "SHORTS_STUDIO_KOKORO_MODEL",
         str(KOKORO_DIR / "kokoro-v1.0.onnx"),
