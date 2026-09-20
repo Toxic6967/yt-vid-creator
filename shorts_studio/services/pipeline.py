@@ -27,6 +27,7 @@ from .roblox_reference import (
     build_cast_reference,
     build_environment_seed,
     compose_character_reference_sheet,
+    compose_scene_previsualization,
 )
 
 
@@ -98,11 +99,10 @@ def _ensure_polished_story_cast(
     return refs
 
 
-def _scene_polished_reference(
+def _scene_polished_paths(
     scene: dict,
     polished_refs: dict[str, str],
-    destination: Path,
-) -> str:
+) -> list[str]:
     visible = [
         str(cid).lower()
         for cid in (scene.get("characters") or [])
@@ -110,7 +110,15 @@ def _scene_polished_reference(
     ]
     if not visible:
         visible = list(polished_refs.keys())[:1]
-    paths = [polished_refs[cid] for cid in visible[:3]]
+    return [polished_refs[cid] for cid in visible[:3]]
+
+
+def _scene_polished_reference(
+    scene: dict,
+    polished_refs: dict[str, str],
+    destination: Path,
+) -> str:
+    paths = _scene_polished_paths(scene, polished_refs)
     return str(compose_character_reference_sheet(paths, destination))
 
 
@@ -442,6 +450,15 @@ def run_pipeline(job_id: str) -> None:
                 environment_reference = environment_plates.get(
                     _scene_environment_key(scene)
                 )
+                if environment_reference:
+                    environment_reference = str(
+                        compose_scene_previsualization(
+                            environment_reference,
+                            _scene_polished_paths(scene, polished_cast_refs),
+                            job_dir / "reference" / f"scene_{idx:02d}_previs.png",
+                            camera=str(scene.get("camera") or "medium"),
+                        )
+                    )
 
             visual = prepare_visual(
                 scene,
