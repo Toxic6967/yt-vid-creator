@@ -33,8 +33,8 @@ FEMALE_PREFERENCES = (
 )
 
 KOKORO_VOICES = {
-    "auto-youthful-male": "am_fenrir",
-    "human-story-male": "am_fenrir",
+    "auto-youthful-male": "am_puck",
+    "human-story-male": "am_puck",
     "auto-youthful-female": "af_heart",
     "human-story-female": "af_heart",
     "character-male-1": "am_michael",
@@ -206,7 +206,7 @@ def render_story_narration(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wav_path = output_path.with_suffix(".wav")
-    resolved_voice = KOKORO_VOICES.get(voice, "am_fenrir")
+    resolved_voice = KOKORO_VOICES.get(voice, "am_puck")
     model = _get_kokoro()
 
     import soundfile as sf
@@ -216,7 +216,7 @@ def render_story_narration(
     samples, sample_rate = model.create(
         spoken_text,
         voice=resolved_voice,
-        speed=0.96,
+        speed=0.98,
         lang="en-us",
     )
     sf.write(str(wav_path), samples, sample_rate)
@@ -289,7 +289,7 @@ def render_story_narration(
         "words": master_words,
         "voice": resolved_voice,
         "requested_voice": voice,
-        "speed": 0.96,
+        "speed": 0.98,
         "backend": "kokoro-onnx-continuous",
         "scene_audio": scene_audio,
         "text": spoken_text,
