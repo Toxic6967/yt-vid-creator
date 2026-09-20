@@ -112,6 +112,9 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
 
     scenes = script.get("scenes") or []
     game_name = str(script.get("game_name") or "Roblox").strip()
+    game_context = script.get("game_context") or {}
+    visual_setpieces = game_context.get("visual_setpieces") or []
+    visual_context = json.dumps(visual_setpieces[:8], ensure_ascii=False)
     plate_dir = job_dir / "reference" / "environments"
     plate_dir.mkdir(parents=True, exist_ok=True)
     seed_ref = build_environment_seed(job_dir / "reference" / "environment_seed.png")
@@ -128,6 +131,7 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
             prompt=(
                 f"Empty Roblox gameplay environment for {game_name}. "
                 f"Location: {environment}. "
+                f"Verified visual set-piece context: {visual_context}. "
                 "Polished Roblox Studio map, readable game-scale geometry, smooth stylized materials, "
                 "current Roblox lighting, clear depth and playable layout. "
                 "No characters. No Minecraft voxel terrain. No photoreal real-world film set. "
