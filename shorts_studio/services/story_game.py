@@ -201,6 +201,17 @@ Do not invent decorative details that the sources do not support. Keep each item
             "Story Studio stopped instead of making up a generic Roblox story."
         )
 
+    visual_place_names = {
+        _clean(item.get("name"), 100).lower()
+        for item in [*setpieces, *locations]
+        if isinstance(item, dict) and _clean(item.get("name"), 100)
+    }
+    if len(visual_place_names) < 4:
+        raise RuntimeError(
+            f"Research for {game_name} only found {len(visual_place_names)} distinct verified visual areas. "
+            "Long Story mode requires at least 4 so the movie does not repeat one background."
+        )
+
     return {
         "topic": game_name,
         "game_name": game_name,
