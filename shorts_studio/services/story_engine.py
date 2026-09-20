@@ -518,6 +518,16 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
         1 for scene in scenes
         if str(scene.get("speaker") or "narrator").lower() == "narrator"
     )
+    unique_environments = {
+        re.sub(r"\s+", " ", str(scene.get("environment") or "").strip().lower())
+        for scene in scenes
+        if str(scene.get("environment") or "").strip()
+    }
+    unique_cameras = {
+        str(scene.get("camera") or "").strip().lower()
+        for scene in scenes
+        if str(scene.get("camera") or "").strip()
+    }
     max_words = max(scene_word_counts, default=0)
     total_words = len(re.findall(r"\b[\w'-]+\b", narration))
     expected_min = max(42, round(target_seconds * 1.7))
@@ -529,6 +539,9 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
         "short_lines_ok": max_words <= 13,
         "word_count_ok": expected_min <= total_words <= expected_max,
         "single_narrator_ok": narrator_lines == len(scenes),
+        "visual_variety_ok": len(unique_environments) >= 2 and len(unique_cameras) >= 4,
+        "unique_environment_count": len(unique_environments),
+        "unique_camera_count": len(unique_cameras),
         "banned_phrase_ok": not banned_hits,
         "banned_hits": banned_hits,
         "max_scene_words": max_words,
@@ -562,6 +575,7 @@ Score 0-100:
 - dialogue: does the ONE narrator sound conversational and human rather than like an AI/documentary announcer?
 - movie_clarity: can every beat be understood visually?
 - character_consistency: are characters simple and reusable across shots?
+- visual_variety: do consecutive scenes visibly change framing, area, obstacle or set-piece instead of repeating one backdrop?
 - game_specificity: does this clearly happen inside the named game using real mechanics, rather than generic Roblox?
 - cringe_avoidance: 100 means not cringe, not babyish, no forced slang, no fake moral.
 
@@ -576,6 +590,7 @@ Return:
   "dialogue":0,
   "movie_clarity":0,
   "character_consistency":0,
+  "visual_variety":0,
   "game_specificity":0,
   "cringe_avoidance":0,
   "problems":[],
@@ -592,6 +607,7 @@ Return:
         "dialogue",
         "movie_clarity",
         "character_consistency",
+        "visual_variety",
         "game_specificity",
         "cringe_avoidance",
     )
@@ -602,9 +618,10 @@ Return:
         + scores["escalation"] * 0.11
         + scores["payoff"] * 0.14
         + scores["dialogue"] * 0.10
-        + scores["movie_clarity"] * 0.09
+        + scores["movie_clarity"] * 0.08
         + scores["character_consistency"] * 0.05
-        + scores["game_specificity"] * 0.12
+        + scores["visual_variety"] * 0.08
+        + scores["game_specificity"] * 0.10
         + scores["cringe_avoidance"] * 0.07,
         1,
     )
@@ -616,6 +633,15 @@ Return:
     if not mechanical["single_narrator_ok"]:
         problems.append("Story switches speakers even though this format uses one consistent narrator.")
         rewrite_instructions.append("Use narrator as the speaker for every beat; let characters act visually.")
+    if not mechanical["visual_variety_ok"]:
+        problems.append(
+            f"Movie repeats too much visually ({mechanical['unique_environment_count']} environments, "
+            f"{mechanical['unique_camera_count']} camera framings)."
+        )
+        rewrite_instructions.append(
+            "Use at least 2 clearly different in-game areas/set-pieces and 4 different camera framings. "
+            "No two adjacent scenes should look like the same shot."
+        )
     if not mechanical["word_count_ok"]:
         problems.append(
             f"Spoken word count {mechanical['word_count']} is outside the target range "
@@ -640,6 +666,7 @@ Return:
                 "short_lines_ok",
                 "word_count_ok",
                 "single_narrator_ok",
+                "visual_variety_ok",
                 "banned_phrase_ok",
             )
         )
