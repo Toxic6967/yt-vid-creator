@@ -41,7 +41,7 @@ def _ensure_polished_story_cast(
     """Create reusable FLUX-refined R15 identity sheets instead of feeding crude geometry into every scene."""
     from .comfyui_client import generate_story_keyframe
 
-    persistent_dir = ASSET_DIR / "cast" / "r15_v3"
+    persistent_dir = ASSET_DIR / "cast" / "r15_v4"
     persistent_dir.mkdir(parents=True, exist_ok=True)
     local_ref_dir = job_dir / "reference"
     local_ref_dir.mkdir(parents=True, exist_ok=True)
@@ -58,22 +58,24 @@ def _ensure_polished_story_cast(
                 [character],
                 local_ref_dir / f"{cid}_r15_skeleton.png",
             )
-            seed = zlib.crc32(f"shorts-studio-r15-v3:{cid}".encode("utf-8")) & 0x7FFFFFFF
+            seed = zlib.crc32(f"shorts-studio-r15-v4:{cid}".encode("utf-8")) & 0x7FFFFFFF
             result = generate_story_keyframe(
                 prompt=(
-                    "Create a clean full-body CHARACTER REFERENCE for one authentic modern Roblox R15 player avatar. "
-                    "This is not a movie scene. Neutral light-grey studio background, full body visible head-to-feet, "
-                    "slight three-quarter game-render angle, relaxed neutral pose. "
-                    "The anatomy must unmistakably match Roblox R15: softly beveled plastic head, classic simple Roblox "
-                    "face decal, R15 torso, separate upper/lower arm and leg pieces with visible Roblox joints, blocky-but-not-voxel proportions. "
+                    "Create a polished full-body CHARACTER REFERENCE for one authentic current Roblox R15 player avatar. "
+                    "This is a Roblox Studio/game avatar sheet, NOT a human portrait and NOT a movie scene. "
+                    "Neutral light-grey studio background, full body visible head-to-feet, slight three-quarter game-render angle, relaxed pose. "
+                    "Use unmistakable R15 construction: Roblox head proportions with softened bevels, flat classic face decal, "
+                    "R15 upper torso/lower torso structure, separate upper/lower arms and legs, visible Roblox joint segmentation, "
+                    "simple rounded Roblox hands with NO fingers, game-avatar feet and Roblox catalog hair/accessories. "
                     f"Character identity/outfit: {character.get('visual_identity','')}. "
-                    "Preserve the reference body's Roblox proportions while making it look like a polished current Roblox avatar render. "
-                    "No Minecraft/voxel character, no LEGO, no human child, no realistic fingers, nose or mouth. "
-                    "No scene props. No writing, letters, numbers, username, logo, UI, watermark or caption anywhere."
+                    "Clothing must look like Roblox catalog clothing mapped onto an R15 avatar, not real fabric on a human body. "
+                    "Use polished current Roblox materials and lighting while keeping the avatar intentionally game-like. "
+                    "Absolutely no Minecraft/voxel cube person, LEGO minifigure, Pixar child, realistic human anatomy, fingers, nose, lips or skin pores. "
+                    "No props. No writing, letters, numbers, username, logo, UI, watermark or caption anywhere."
                 ),
                 reference_path=skeleton,
                 seed=seed,
-                job_id=f"castref_{cid}_v3",
+                job_id=f"castref_{cid}_v4",
             )
             shutil.copy2(result["path"], persistent)
 
