@@ -391,6 +391,12 @@ def run_pipeline(job_id: str) -> None:
                     job_dir / "reference" / f"scene_{idx:02d}_cast.png",
                 )
 
+            environment_reference = None
+            if content_type == "story":
+                environment_reference = environment_plates.get(
+                    _environment_key(str(scene.get("environment") or ""))
+                )
+
             visual = prepare_visual(
                 scene,
                 job_dir,
@@ -399,6 +405,7 @@ def run_pipeline(job_id: str) -> None:
                 duration=float(audio["duration"]),
                 reference_image=scene_reference if content_type == "story" else None,
                 identity_reference=scene_reference if content_type == "story" else None,
+                environment_reference=environment_reference,
             )
 
             if content_type == "story":
@@ -432,6 +439,7 @@ def run_pipeline(job_id: str) -> None:
                             duration=float(audio["duration"]),
                             reference_image=scene_reference,
                             identity_reference=scene_reference,
+                            environment_reference=environment_reference,
                             variation_attempt=attempt,
                         )
                         retry_frame = frame_path(retry)
