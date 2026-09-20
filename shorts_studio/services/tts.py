@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import math
+import os
 import re
+import subprocess
 import threading
 from pathlib import Path
 from typing import Any
@@ -11,7 +13,7 @@ from typing import Any
 import edge_tts
 from mutagen.mp3 import MP3
 
-from ..config import settings
+from ..config import settings, ROOT_DIR, STORAGE_ROOT, CACHE_DIR
 
 
 _VOICE_CACHE: list[dict[str, Any]] | None = None
@@ -45,14 +47,30 @@ KOKORO_VOICES = {
 }
 
 
+def _chatterbox_health() -> dict[str, Any]:
+    python_exe = Path(settings.chatterbox_python)
+    package_dir = python_exe.parent.parent / "Lib" / "site-packages" / "chatterbox"
+    ready = python_exe.exists() and package_dir.exists()
+    return {
+        "ready": ready,
+        "python": str(python_exe),
+        "package_dir": str(package_dir),
+        "device": settings.chatterbox_device,
+    }
+
+
 def human_voice_health() -> dict[str, Any]:
     model = Path(settings.kokoro_model_path)
     voices = Path(settings.kokoro_voices_path)
     package_ready = importlib.util.find_spec("kokoro_onnx") is not None
-    ready = package_ready and model.exists() and voices.exists()
+    kokoro_ready = package_ready and model.exists() and voices.exists()
+    chatterbox = _chatterbox_health()
+    ready = bool(chatterbox["ready"] or kokoro_ready)
     return {
         "ready": ready,
-        "backend": "kokoro-onnx",
+        "backend": "chatterbox" if chatterbox["ready"] else "kokoro-onnx",
+        "chatterbox": chatterbox,
+        "kokoro_ready": kokoro_ready,
         "package_ready": package_ready,
         "model_ready": model.exists(),
         "voices_ready": voices.exists(),
@@ -178,10 +196,12 @@ def render_story_narration(
     voice: str,
     output_path: Path,
 ) -> dict[str, Any]:
-    """Render the whole Story in one Kokoro pass so cadence never resets between scenes."""
-    if not human_voice_health()["ready"]:
+    """Render one uninterrupted narration take; prefer Chatterbox when installed."""
+    voice_state = human_voice_health()
+    if not voice_state["ready"]:
         raise RuntimeError(
-            "Human narration backend is not ready. Run install_human_voice.bat and restart Shorts Studio."
+            "No natural narration backend is ready. Run install_natural_voice.bat "
+            "or install_human_voice.bat, then restart Shorts Studio."
         )
     if not scenes:
         raise RuntimeError("Story has no narration scenes.")
@@ -192,47 +212,86 @@ def render_story_narration(
         line = re.sub(r"\s+", " ", str(scene.get("narration") or "")).strip()
         if not line:
             line = "..."
-        # Keep the writer's punctuation. Do not force a full stop on every scene;
-        # scene boundaries are editing boundaries, not speech boundaries.
         lines.append(line)
         scene_word_counts.append(
             len(re.findall(r"[A-Za-z0-9][A-Za-z0-9'_-]*", line))
         )
 
-    spoken_text = " ".join(lines)
-    spoken_text = re.sub(r"\s+", " ", spoken_text).strip()
+    spoken_text = re.sub(r"\s+", " ", " ".join(lines)).strip()
     if spoken_text and spoken_text[-1] not in ".!?":
         spoken_text += "."
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wav_path = output_path.with_suffix(".wav")
+    backend = "kokoro-onnx-continuous"
     resolved_voice = KOKORO_VOICES.get(voice, "am_puck")
-    model = _get_kokoro()
+    backend_error = None
+
+    if voice_state.get("chatterbox", {}).get("ready"):
+        text_path = output_path.parent / "story_narration_input.txt"
+        text_path.write_text(spoken_text, encoding="utf-8")
+        runner = ROOT_DIR / "scripts" / "chatterbox_narrate.py"
+        env = os.environ.copy()
+        hf_root = (STORAGE_ROOT / "cache" / "huggingface") if STORAGE_ROOT else (CACHE_DIR / "huggingface")
+        env["HF_HOME"] = str(hf_root)
+        env["HUGGINGFACE_HUB_CACHE"] = str(hf_root / "hub")
+        env["TORCH_HOME"] = str((STORAGE_ROOT / "cache" / "torch") if STORAGE_ROOT else (CACHE_DIR / "torch"))
+        env["TOKENIZERS_PARALLELISM"] = "false"
+
+        command = [
+            str(settings.chatterbox_python),
+            str(runner),
+            "--text-file", str(text_path),
+            "--output", str(wav_path),
+            "--device", str(settings.chatterbox_device or "cpu"),
+            "--exaggeration", "0.46",
+            "--cfg-weight", "0.34",
+            "--temperature", "0.72",
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=3600,
+                env=env,
+            )
+            if result.returncode != 0 or not wav_path.exists():
+                raise RuntimeError(
+                    (result.stderr or result.stdout or "Chatterbox returned no audio")[-1800:]
+                )
+            backend = "chatterbox-continuous"
+            resolved_voice = "chatterbox-builtin"
+        except Exception as exc:
+            # If the user installed the stronger backend, do not silently pretend
+            # the old voice is equivalent. Keep the exact reason in metadata, but
+            # fall back so a temporary Chatterbox issue does not destroy a long render.
+            backend_error = str(exc)
+
+    if not wav_path.exists():
+        model = _get_kokoro()
+        import soundfile as sf
+
+        samples, sample_rate = model.create(
+            spoken_text,
+            voice=resolved_voice if resolved_voice != "chatterbox-builtin" else KOKORO_VOICES.get(voice, "am_puck"),
+            speed=0.98,
+            lang="en-us",
+        )
+        sf.write(str(wav_path), samples, sample_rate)
 
     import soundfile as sf
 
-    # Slightly slower than the old scene-by-scene voice. This avoids the
-    # clipped "AI Shorts" cadence and gives punctuation room to breathe.
-    samples, sample_rate = model.create(
-        spoken_text,
-        voice=resolved_voice,
-        speed=0.98,
-        lang="en-us",
-    )
-    sf.write(str(wav_path), samples, sample_rate)
-
-    duration = float(len(samples)) / float(sample_rate) if sample_rate else 0.0
+    info = sf.info(str(wav_path))
+    duration = float(info.frames) / float(info.samplerate) if info.samplerate else 0.0
     master_words = _estimated_word_timings(spoken_text, duration)
 
     total_expected = sum(scene_word_counts)
     if not master_words or total_expected <= 0:
         raise RuntimeError("Could not create narration word timings.")
 
-    # Split one continuous narration timeline back into per-scene timing windows
-    # without re-synthesizing or concatenating audio.
     scene_audio: list[dict[str, Any]] = []
     cursor = 0
-    timeline_start = 0.0
     for idx, (scene, count) in enumerate(zip(scenes, scene_word_counts)):
         count = max(1, count)
         chunk = master_words[cursor: cursor + count]
@@ -241,22 +300,20 @@ def render_story_narration(
 
         start = 0.0 if idx == 0 else float(chunk[0]["start"])
         cursor += count
-
         if idx + 1 < len(scene_word_counts) and cursor < len(master_words):
             end = float(master_words[cursor]["start"])
         else:
             end = duration
         end = max(start + 0.35, end)
 
-        relative_words = []
-        for word in chunk:
-            relative_words.append(
-                {
-                    "text": word.get("text", ""),
-                    "start": max(0.0, float(word.get("start", 0)) - start),
-                    "duration": float(word.get("duration", 0)),
-                }
-            )
+        relative_words = [
+            {
+                "text": word.get("text", ""),
+                "start": max(0.0, float(word.get("start", 0)) - start),
+                "duration": float(word.get("duration", 0)),
+            }
+            for word in chunk
+        ]
 
         scene_audio.append(
             {
@@ -268,13 +325,11 @@ def render_story_narration(
                 "voice": resolved_voice,
                 "requested_voice": voice,
                 "role": scene.get("role", ""),
-                "backend": "kokoro-onnx-continuous",
+                "backend": backend,
                 "speaker": "narrator",
             }
         )
-        timeline_start = end
 
-    # Keep exact video duration aligned with the continuous narration.
     if scene_audio:
         correction = duration - sum(float(x["duration"]) for x in scene_audio)
         scene_audio[-1]["duration"] = max(
@@ -289,8 +344,9 @@ def render_story_narration(
         "words": master_words,
         "voice": resolved_voice,
         "requested_voice": voice,
-        "speed": 0.98,
-        "backend": "kokoro-onnx-continuous",
+        "speed": None if backend.startswith("chatterbox") else 0.98,
+        "backend": backend,
+        "backend_error": backend_error,
         "scene_audio": scene_audio,
         "text": spoken_text,
     }
