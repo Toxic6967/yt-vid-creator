@@ -18,9 +18,9 @@ from .retention import optimize_retention
 from .story_engine import create_story
 from .story_game import research_story_game
 from .ollama_client import unload_model
-from .tts import render_scene
+from .tts import render_scene, render_story_narration
 from .visuals import prepare_visual
-from .roblox_reference import build_cast_reference
+from .roblox_reference import build_cast_reference, build_scene_cast_reference
 
 
 def _stage(job_id: str, name: str, progress: int) -> None:
@@ -50,7 +50,7 @@ def run_pipeline(job_id: str) -> None:
         "tone": tone,
         "content_type": job.get("content_type", "auto"),
         "story_genre": job.get("story_genre", "auto"),
-        "pipeline_version": "1.3.0",
+        "pipeline_version": "1.5.0",
     }
 
     try:
@@ -173,27 +173,43 @@ def run_pipeline(job_id: str) -> None:
         # Writing is complete. Free Qwen before ComfyUI/Wan takes the GPU.
         unload_model()
 
-        _stage(job_id, "Generating natural narration", 58)
+        _stage(job_id, "Generating one continuous human narration take", 58)
         audio_dir = job_dir / "audio"
         audio_dir.mkdir(exist_ok=True)
-        scene_audio = []
-        character_voices = {
-            c.get("id"): c.get("voice_profile")
-            for c in script.get("characters", [])
-            if c.get("id") and c.get("voice_profile")
-        }
-        for idx, scene in enumerate(script["scenes"], start=1):
-            speaker = str(scene.get("speaker") or "narrator").lower()
-            scene_voice = character_voices.get(speaker, job["voice"])
-            audio = render_scene(
-                scene["narration"],
-                scene_voice,
-                audio_dir / f"scene_{idx:02d}.wav",
-                role=scene.get("role", ""),
-                require_human=(content_type == "story"),
+        master_audio = None
+
+        if content_type == "story":
+            master_audio = render_story_narration(
+                script["scenes"],
+                job["voice"],
+                audio_dir / "story_narration.wav",
             )
-            audio["speaker"] = speaker
-            scene_audio.append(audio)
+            scene_audio = master_audio["scene_audio"]
+            manifest["narration_master"] = {
+                key: value
+                for key, value in master_audio.items()
+                if key != "scene_audio"
+            }
+        else:
+            scene_audio = []
+            character_voices = {
+                c.get("id"): c.get("voice_profile")
+                for c in script.get("characters", [])
+                if c.get("id") and c.get("voice_profile")
+            }
+            for idx, scene in enumerate(script["scenes"], start=1):
+                speaker = str(scene.get("speaker") or "narrator").lower()
+                scene_voice = character_voices.get(speaker, job["voice"])
+                audio = render_scene(
+                    scene["narration"],
+                    scene_voice,
+                    audio_dir / f"scene_{idx:02d}.wav",
+                    role=scene.get("role", ""),
+                    require_human=False,
+                )
+                audio["speaker"] = speaker
+                scene_audio.append(audio)
+
         manifest["audio"] = scene_audio
 
         if content_type == "story":
@@ -211,35 +227,40 @@ def run_pipeline(job_id: str) -> None:
 
         _stage(job_id, "Generating game-specific cinematic scenes", 70)
         visuals = []
-        continuity_reference = None
-        identity_reference = None
+        channel_cast_reference = None
         if content_type == "story":
-            identity_reference = str(
+            channel_cast_reference = str(
                 build_cast_reference(
                     script.get("characters", []),
-                    job_dir / "reference" / "cast_reference.png",
+                    job_dir / "reference" / "channel_cast_reference.png",
                 )
             )
-            continuity_reference = identity_reference
 
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
+            scene_reference = None
+            if content_type == "story":
+                scene_reference = str(
+                    build_scene_cast_reference(
+                        scene,
+                        script.get("characters", []),
+                        job_dir / "reference" / f"scene_{idx:02d}_cast.png",
+                    )
+                )
+
             visual = prepare_visual(
                 scene,
                 job_dir,
                 idx,
                 selected_topic,
                 duration=float(audio["duration"]),
-                reference_image=continuity_reference if content_type == "story" else None,
-                identity_reference=identity_reference if content_type == "story" else None,
+                # Do NOT feed the previous full movie frame into the next keyframe.
+                # That was causing every shot to inherit the same background/composition.
+                reference_image=scene_reference if content_type == "story" else None,
+                identity_reference=scene_reference if content_type == "story" else None,
             )
+            if channel_cast_reference:
+                visual["channel_cast_reference"] = channel_cast_reference
             visuals.append(visual)
-
-            if content_type == "story":
-                candidate_reference = visual.get("keyframe_path")
-                if not candidate_reference and visual.get("kind") == "ai_generated_scene":
-                    candidate_reference = visual.get("path")
-                if candidate_reference:
-                    continuity_reference = candidate_reference
 
         real_video_count = sum(1 for v in visuals if v.get("kind") == "ai_generated_video")
         ltx_video_count = sum(
@@ -270,7 +291,13 @@ def run_pipeline(job_id: str) -> None:
         manifest["visuals"] = visuals
 
         _stage(job_id, "Editing video + captions", 85)
-        render_info = render(job_dir, scene_audio, visuals, scenes=script.get("scenes"))
+        render_info = render(
+            job_dir,
+            scene_audio,
+            visuals,
+            scenes=script.get("scenes"),
+            master_audio=master_audio,
+        )
         manifest["render"] = render_info
 
         _stage(job_id, "Running quality checks", 96)
