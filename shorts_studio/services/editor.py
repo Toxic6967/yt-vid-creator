@@ -111,6 +111,7 @@ WrapStyle: 2
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
 Style: Main,Arial,80,&H00FFFFFF,&H00FFFFFF,&H00101010,&H60000000,-1,0,0,0,100,100,0,0,1,7,2,2,88,88,330,1
 Style: Hook,Arial,88,&H00FFFFFF,&H00FFFFFF,&H00101010,&H70000000,-1,0,0,0,100,100,0,0,1,8,2,2,82,82,340,1
+Style: TopHook,Arial,72,&H00FFFFFF,&H00FFFFFF,&H00101010,&H88000000,-1,0,0,0,100,100,0,0,3,3,0,8,70,70,96,1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -123,6 +124,15 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
         role = str(scene.get("role") or audio.get("role") or "").lower()
         emphasis = str(scene.get("on_screen_emphasis") or "")
         style = "Hook" if role in {"hook", "reveal", "payoff"} else "Main"
+
+        if scene_index == 0 and role == "hook":
+            top_text = _ass_escape(str(scene.get("on_screen_emphasis") or "").strip().upper())
+            if top_text:
+                top_end = timeline + min(1.65, max(0.85, float(audio.get("duration", 0))))
+                lines.append(
+                    f"Dialogue: 2,{_ass_time(timeline)},{_ass_time(top_end)},TopHook,,0,0,0,,"
+                    rf"{{\fad(70,110)}}{top_text}\n"
+                )
 
         words = [w for w in audio.get("words", []) if str(w.get("text", "")).strip()]
         if not words:
