@@ -16,6 +16,7 @@ from .comfyui_client import (
     generate_ai_image_from_reference,
     generate_ai_video,
     generate_story_keyframe,
+    generate_story_scene_dual_reference,
     generate_story_video_from_image,
     health as comfyui_health,
 )
@@ -209,6 +210,7 @@ def _try_ai_scene(
     topic: str,
     reference_image: str | Path | None = None,
     identity_reference: str | Path | None = None,
+    environment_reference: str | Path | None = None,
     variation_attempt: int = 0,
 ) -> dict[str, Any] | None:
     try:
@@ -257,19 +259,30 @@ def _try_ai_scene(
 
         if is_story and reference_image and Path(reference_image).exists():
             if state.get("story_image_ready"):
-                result = generate_story_keyframe(
-                    prompt=(
-                        direction["prompt"]
-                        + " The supplied reference is a neutral cast sheet, not the scene background. "
-                        "Use it only to preserve which Roblox avatars are present, their R15 proportions, hair and outfit colours. "
-                        "Do not copy the reference pose or background. Build a fresh scene matching this shot's environment, action and camera. "
-                        "Every surface that could contain writing must stay blank because all English text is added later in editing."
-                    ),
-                    reference_path=reference_image,
-                    identity_reference_path=identity_reference,
-                    seed=stable_seed,
-                    job_id=f"storyframe_{index}_{random.randint(1000,9999)}",
+                final_prompt = (
+                    direction["prompt"]
+                    + " The cast reference controls avatar identity only. "
+                    "The environment reference controls the Roblox map/location only. "
+                    "Place the R15 avatars naturally INTO that environment with matching perspective and lighting. "
+                    "Do not copy the cast-sheet studio background. Preserve the map layout enough to keep the location recognisable. "
+                    "Every surface that could contain writing must stay blank because all English text is added later in editing."
                 )
+                if environment_reference and Path(environment_reference).exists():
+                    result = generate_story_scene_dual_reference(
+                        prompt=final_prompt,
+                        identity_reference_path=identity_reference or reference_image,
+                        environment_reference_path=environment_reference,
+                        seed=stable_seed,
+                        job_id=f"storyframe_{index}_{random.randint(1000,9999)}",
+                    )
+                else:
+                    result = generate_story_keyframe(
+                        prompt=final_prompt,
+                        reference_path=reference_image,
+                        identity_reference_path=identity_reference,
+                        seed=stable_seed,
+                        job_id=f"storyframe_{index}_{random.randint(1000,9999)}",
+                    )
             else:
                 ref_path = Path(reference_image)
                 first_cast_reference = ref_path.name.lower().startswith("cast_reference")
@@ -331,6 +344,7 @@ def _try_ai_scene(
             "checkpoint": result.get("checkpoint"),
             "image_backend": result.get("backend", "sdxl_t2i"),
             "continuity_reference": str(reference_image) if reference_image else None,
+            "environment_reference": str(environment_reference) if environment_reference else None,
         }
     except Exception:
         return None
@@ -405,6 +419,7 @@ def prepare_visual(
     duration: float = 3.0,
     reference_image: str | Path | None = None,
     identity_reference: str | Path | None = None,
+    environment_reference: str | Path | None = None,
     variation_attempt: int = 0,
 ) -> dict:
     visual_dir = job_dir / "visuals"
@@ -433,6 +448,7 @@ def prepare_visual(
                 topic,
                 reference_image=reference_image,
                 identity_reference=identity_reference,
+                environment_reference=environment_reference,
                 variation_attempt=variation_attempt,
             )
             if not keyframe:
