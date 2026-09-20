@@ -11,6 +11,7 @@ from mathutils import Vector
 
 
 FPS = 30
+RENDERER_VERSION = "3.2-cinematic-r15"
 
 
 def parse_args():
@@ -72,6 +73,39 @@ def add_box(name, loc, size, material, parent=None, bevel=0.08):
         obj.data.materials.append(material)
     if bevel:
         mod = obj.modifiers.new(name="Roblox bevel", type="BEVEL")
+        mod.width = bevel
+        mod.segments = 3
+    if parent:
+        obj.parent = parent
+    return obj
+
+
+def add_tapered_box(name, loc, *, top_width, bottom_width, depth, height, material, parent=None, bevel=0.08):
+    """R15-style tapered torso block: game-like, but not a Minecraft cube."""
+    z0 = -height / 2
+    z1 = height / 2
+    td = depth / 2
+    verts = [
+        (-bottom_width/2,-td,z0),(bottom_width/2,-td,z0),
+        (bottom_width/2,td,z0),(-bottom_width/2,td,z0),
+        (-top_width/2,-td,z1),(top_width/2,-td,z1),
+        (top_width/2,td,z1),(-top_width/2,td,z1),
+    ]
+    faces = [
+        (0,1,2,3),(4,7,6,5),
+        (0,4,5,1),(1,5,6,2),
+        (2,6,7,3),(4,0,3,7),
+    ]
+    mesh = bpy.data.meshes.new(name + "_Mesh")
+    mesh.from_pydata(verts,[],faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name,mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.location = loc
+    if material:
+        obj.data.materials.append(material)
+    if bevel:
+        mod = obj.modifiers.new(name="R15 bevel",type="BEVEL")
         mod.width = bevel
         mod.segments = 3
     if parent:
@@ -168,11 +202,27 @@ def create_r15(cid, lane):
     root.location = (lane, 0, 0)
 
     parts = {}
-    parts["lower_torso"] = add_box(
-        f"{cid}_LowerTorso", (0, 0, 2.55), (1.42, 0.70, 0.78), mats["shirt"], root, 0.10
+    parts["lower_torso"] = add_tapered_box(
+        f"{cid}_LowerTorso",
+        (0,0,2.55),
+        top_width=1.44,
+        bottom_width=1.24,
+        depth=0.70,
+        height=0.78,
+        material=mats["shirt"],
+        parent=root,
+        bevel=0.10,
     )
-    parts["upper_torso"] = add_box(
-        f"{cid}_UpperTorso", (0, 0, 3.35), (1.70, 0.74, 0.92), mats["shirt"], root, 0.11
+    parts["upper_torso"] = add_tapered_box(
+        f"{cid}_UpperTorso",
+        (0,0,3.35),
+        top_width=1.76,
+        bottom_width=1.48,
+        depth=0.74,
+        height=0.92,
+        material=mats["shirt"],
+        parent=root,
+        bevel=0.11,
     )
     parts["head"] = add_box(
         f"{cid}_Head", (0, 0, 4.55), (1.28, 1.02, 1.12), mats["skin"], root, 0.16
@@ -249,28 +299,30 @@ def create_r15(cid, lane):
         8,
     )
 
-    for x in (-0.22, 0.22):
+    for eye_index, x in enumerate((-0.22,0.22)):
         eye = add_uv(
-            f"{cid}_Eye",
-            (x, -0.515, 4.65),
-            (0.055, 0.018, 0.085),
+            f"{cid}_Eye_{eye_index}",
+            (x,-0.515,4.65),
+            (0.055,0.018,0.085),
             black,
             root,
             16,
             8,
         )
         eye.rotation_euler[0] = math.radians(90)
+        parts[f"eye_{eye_index}"] = eye
 
-    for x, z, rz in ((-0.14, 4.38, -0.22), (0, 4.32, 0), (0.14, 4.38, 0.22)):
+    for smile_index, (x,z,rz) in enumerate(((-0.14,4.38,-0.22),(0,4.32,0),(0.14,4.38,0.22))):
         smile = add_box(
-            f"{cid}_Smile",
-            (x, -0.526, z),
-            (0.16, 0.026, 0.045),
+            f"{cid}_Smile_{smile_index}",
+            (x,-0.526,z),
+            (0.16,0.026,0.045),
             black,
             root,
             0.015,
         )
         smile.rotation_euler[1] = rz
+        parts[f"smile_{smile_index}"] = smile
 
     # Character-specific catalog-hair silhouettes keep the recurring cast readable.
     if cid == "mia":
@@ -562,7 +614,19 @@ def animate_actor(actor, rig, frame_end):
         key(controls["head"], q3, rotation=(math.radians(10),0,0))
         key(controls["spine"], q3, rotation=(math.radians(6),0,0))
 
-    smooth_curves(root, *controls.values())
+    # One subtle blink gives close-ups life without turning the classic Roblox
+    # face into a human facial-animation system.
+    blink_frame = max(4,min(frame_end-3,round(frame_end*0.34)))
+    for eye_name in ("eye_0","eye_1"):
+        eye = rig["parts"].get(eye_name)
+        if not eye:
+            continue
+        key(eye,blink_frame-2,scale=(1,1,1))
+        key(eye,blink_frame,scale=(1,1,0.12))
+        key(eye,blink_frame+2,scale=(1,1,1))
+        smooth_curves(eye)
+
+    smooth_curves(root,*controls.values())
 
 def create_power_effect(effect, rig, frame_end):
     if not effect or effect == "none":
