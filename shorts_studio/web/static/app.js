@@ -372,6 +372,8 @@ function updateJobCard(node, job){
     if(q.payoff_score!=null) storyBits.push(`payoff ${q.payoff_score}`);
     if(q.naturalness_score!=null) storyBits.push(`voice/writing ${q.naturalness_score}`);
     if(q.game_specificity_score!=null) storyBits.push(`game-specific ${q.game_specificity_score}`);
+    if(q.causal_logic_score!=null) storyBits.push(`logic ${q.causal_logic_score}`);
+    if(q.ending_logic_score!=null) storyBits.push(`ending ${q.ending_logic_score}`);
     details.innerHTML=`<b>${esc(manifest.metadata.title)}</b><br>${esc(manifest.metadata.description)}<br>`+
       `${(manifest.metadata.hashtags||[]).map(esc).join(' ')}<br>`+
       (storyBits.length ? `<span class="rights">${storyBits.join(' • ')}</span><br>` : '')+
