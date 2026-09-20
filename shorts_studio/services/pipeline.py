@@ -100,6 +100,50 @@ def _scene_polished_reference(
     return str(compose_character_reference_sheet(paths, destination))
 
 
+
+def _environment_key(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, str]:
+    from .comfyui_client import generate_story_keyframe
+
+    scenes = script.get("scenes") or []
+    game_name = str(script.get("game_name") or "Roblox").strip()
+    plate_dir = job_dir / "reference" / "environments"
+    plate_dir.mkdir(parents=True, exist_ok=True)
+    seed_ref = build_environment_seed(job_dir / "reference" / "environment_seed.png")
+    plates: dict[str, str] = {}
+
+    for idx, scene in enumerate(scenes, start=1):
+        environment = str(scene.get("environment") or "").strip()
+        key = _environment_key(environment)
+        if not key or key in plates:
+            continue
+
+        seed = zlib.crc32(f"roblox-env-v2|{game_name}|{key}".encode("utf-8")) & 0x7FFFFFFF
+        result = generate_story_keyframe(
+            prompt=(
+                f"Empty Roblox gameplay environment for {game_name}. "
+                f"Location: {environment}. "
+                "Polished Roblox Studio map, readable game-scale geometry, smooth stylized materials, "
+                "current Roblox lighting, clear depth and playable layout. "
+                "No characters. No Minecraft voxel terrain. No photoreal real-world film set. "
+                "Keep the center area open for Roblox avatars. No readable text, UI, logos or watermarks."
+            ),
+            reference_path=seed_ref,
+            seed=seed,
+            job_id=f"envplate_{idx}_{seed % 10000}",
+        )
+        destination = plate_dir / f"env_{len(plates) + 1:02d}.png"
+        shutil.copy2(result["path"], destination)
+        plates[key] = str(destination)
+
+    if not plates:
+        raise RuntimeError("Could not generate Story environment plates.")
+    return plates
+
+
 def run_pipeline(job_id: str) -> None:
     job = get_job(job_id)
     if not job:
