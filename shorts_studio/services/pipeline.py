@@ -86,14 +86,20 @@ def run_pipeline(job_id: str) -> None:
             research = research_story_game(idea_hint)
 
             _stage(job_id, f"Writing story inside {research.get('game_name','Roblox')}", 30)
+            story_tone = (
+                "Natural conversational Roblox story told like a real young gaming creator recounting "
+                "what just happened to a friend; casual, specific, lightly expressive, never documentary, "
+                "never announcer-like and never fake-hype."
+            )
             script = create_story(
                 idea_hint,
                 audience=audience,
-                tone=tone,
+                tone=story_tone,
                 target_seconds=int(job["target_seconds"]),
                 game_context=research,
                 genre=job.get("story_genre", "auto"),
             )
+            manifest["story_tone"] = story_tone
             selected_topic = (
                 f"{script.get('game_name')}: {script.get('title')}"
                 if script.get("game_name")
