@@ -1,10 +1,42 @@
-# Shorts Studio V1
+# Shorts Studio V3
 
-Private/local-first **Roblox mini-movie creator** for Windows.
+Private/local-first **AI-directed Roblox animation studio** for Windows.
 
 The main workflow builds short cinematic Roblox stories aimed at young Roblox players: a strong opening, a recognisable situation, recurring/consistent characters, escalating conflict, a real payoff, character dialogue, generated movie-style scenes, active-word captions, subtle SFX, metadata, and a manual review queue.
 
 **Nothing is auto-published to YouTube.**
+
+## V3 visual direction
+
+Story Studio V3 prefers **controlled Roblox R15 animation** over full-frame AI video generation.
+
+The default path is now:
+
+`GAME RESEARCH → STORY → LOGIC AUDIT → NARRATION → ROBLOX ENVIRONMENT PLATES → ANIMATION SHOT PLAN → FIXED R15 RIGS → BLENDER ACTION/CAMERA/VFX RENDER → CAPTIONS/SFX/MUSIC → REVIEW`
+
+This keeps the characters consistent and prevents frame-to-frame generative morphing. FLUX is still used to create Roblox-looking environment plates; Blender then animates fixed R15-style characters over those environments. The old FLUX→LTX generative path remains available as a legacy fallback.
+
+Story Studio also includes an optional **Powers / animated action** genre. Powers are treated as original fictional abilities in the channel's animated universe, not as claims about the real Roblox game's mechanics. Available reusable effects include energy, dashes, shields, shockwaves, telekinesis, portals and lightning.
+
+The V3 scene/shot architecture is intentionally reusable for a future long-form mode, but 10–15 minute episode generation is not exposed yet.
+
+## Animation engine setup
+
+Run:
+
+```bat
+install_animation_engine.bat
+```
+
+This checks for Blender and can install it through Windows winget. Restart Shorts Studio afterward.
+
+For the complete Story stack:
+
+```bat
+upgrade_story_quality.bat
+```
+
+V3 animated Story mode still uses ComfyUI/FLUX for the game-environment plates, so ComfyUI must be available when a Story starts.
 
 ## Current creative direction
 
@@ -16,7 +48,7 @@ Typical formats include relatable gameplay pain, horror-game situations, teammat
 
 ## Story pipeline
 
-`IDEAS → COMMISSIONING SCORE → SCREENPLAY → STORY QC → CHARACTER BIBLE → SHOT PLAN → CHARACTER VOICES → CINEMATIC KEYFRAMES → KEYFRAME-TO-VIDEO → ACTIVE CAPTIONS → SFX/MUSIC → EDIT → QUALITY GATE → REVIEW`
+`IDEAS → COMMISSIONING SCORE → CAUSAL SCREENPLAY → LOGIC AUDIT → SHOT PLAN → CONTINUOUS NARRATION → ENVIRONMENT PLATES → CONTROLLED R15 ANIMATION → ACTIVE CAPTIONS → SFX/MUSIC → EDIT → QUALITY GATE → REVIEW`
 
 Story scenes carry exact character descriptions (hair, clothing, colours and personality), environment, action, camera, emotion, motion priority and dialogue speaker.
 
@@ -29,9 +61,11 @@ For continuity, later SDXL keyframes can use the previous keyframe as an img2img
 - Ollama + `qwen3:8b` for local story planning/writing/scoring
 - ComfyUI for images and video
 - SDXL for cinematic keyframes
-- Optional LTX 2B FP8 keyframe-to-video backend for Story mode
-- Wan 2.1 retained for standalone/legacy video tools, not accepted as the finished Story-mode fallback
-- Edge TTS for no-key character/narrator voices
+- Blender/Eevee for deterministic R15-style character animation, reusable motion, cameras and power VFX
+- FLUX.2 Klein for Roblox game-environment plates and legacy generative Story imagery
+- Optional LTX 2B FP8 keyframe-to-video backend for legacy Story mode
+- Wan 2.1 retained for standalone/legacy video tools
+- Chatterbox for continuous Story narration, with Kokoro retained for legacy/fallback tools
 - FFmpeg through `imageio-ffmpeg`
 - ASS captions using actual TTS word timings
 - locally generated procedural SFX for whoosh/impact/alert/glitch/reward cues
