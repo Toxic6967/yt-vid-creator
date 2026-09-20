@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageStat
 
 from ..config import settings
 from .comfyui_client import (
@@ -175,6 +175,33 @@ def _make_storyboard_visual(
     final.save(destination, quality=94)
 
 
+def visual_similarity(path_a: str | Path, path_b: str | Path) -> float:
+    """Cheap perceptual similarity check used to reject near-duplicate Story shots."""
+    try:
+        a = Image.open(path_a).convert("L").resize((24, 24))
+        b = Image.open(path_b).convert("L").resize((24, 24))
+        av = list(a.getdata())
+        bv = list(b.getdata())
+        mean_a = sum(av) / len(av)
+        mean_b = sum(bv) / len(bv)
+        bits_a = [x >= mean_a for x in av]
+        bits_b = [x >= mean_b for x in bv]
+        hamming_similarity = sum(x == y for x, y in zip(bits_a, bits_b)) / len(bits_a)
+
+        # Also compare very coarse luminance structure so two compositions with
+        # similar global brightness are not incorrectly called identical.
+        a_small = a.resize((6, 6))
+        b_small = b.resize((6, 6))
+        diffs = [
+            abs(int(x) - int(y)) / 255.0
+            for x, y in zip(a_small.getdata(), b_small.getdata())
+        ]
+        structure_similarity = 1.0 - (sum(diffs) / len(diffs))
+        return max(0.0, min(1.0, hamming_similarity * 0.72 + structure_similarity * 0.28))
+    except Exception:
+        return 0.0
+
+
 def _try_ai_scene(
     scene: dict,
     destination: Path,
@@ -182,6 +209,7 @@ def _try_ai_scene(
     topic: str,
     reference_image: str | Path | None = None,
     identity_reference: str | Path | None = None,
+    variation_attempt: int = 0,
 ) -> dict[str, Any] | None:
     try:
         state = comfyui_health()
@@ -215,8 +243,17 @@ def _try_ai_scene(
         character_key = "|".join(
             str(x) for x in scene.get("character_visuals", []) if x
         ) or topic
-        seed_key = f"{character_key}|{scene.get('game_name','')}|scene:{index}"
+        seed_key = (
+            f"{character_key}|{scene.get('game_name','')}|scene:{index}|variation:{variation_attempt}"
+        )
         stable_seed = zlib.crc32(seed_key.encode("utf-8")) & 0x7FFFFFFF
+
+        if variation_attempt > 0 and is_story:
+            direction["prompt"] += (
+                f" COMPOSITION RESET {variation_attempt}: choose a clearly different camera distance, subject placement, "
+                "foreground/background arrangement and visible game landmark from the prior shot. "
+                "Do not reuse the same wall, doorway, floor pattern or centered character pose."
+            )
 
         if is_story and reference_image and Path(reference_image).exists():
             if state.get("story_image_ready"):
@@ -368,6 +405,7 @@ def prepare_visual(
     duration: float = 3.0,
     reference_image: str | Path | None = None,
     identity_reference: str | Path | None = None,
+    variation_attempt: int = 0,
 ) -> dict:
     visual_dir = job_dir / "visuals"
     visual_dir.mkdir(parents=True, exist_ok=True)
@@ -395,6 +433,7 @@ def prepare_visual(
                 topic,
                 reference_image=reference_image,
                 identity_reference=identity_reference,
+                variation_attempt=variation_attempt,
             )
             if not keyframe:
                 raise RuntimeError(
