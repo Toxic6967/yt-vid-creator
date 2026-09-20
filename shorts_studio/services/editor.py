@@ -176,11 +176,19 @@ def render(
         kind = str(visual.get("kind", ""))
         path = str(visual["path"])
 
+        scene = (scenes or [])[idx - 1] if scenes and idx - 1 < len(scenes) else {}
+        is_story_scene = bool(scene.get("game_name") or scene.get("character_visuals"))
+
         if kind == "ai_generated_video" or Path(path).suffix.lower() in {".mp4", ".mov", ".mkv", ".webm"}:
+            framing = (
+                "scale=1180:2098:force_original_aspect_ratio=increase,"
+                "crop=1080:1920:(iw-1080)/2:145,"
+                if is_story_scene
+                else "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+            )
             vf = (
-                "scale=1080:1920:force_original_aspect_ratio=increase,"
-                "crop=1080:1920,"
-                "eq=contrast=1.05:saturation=1.08:gamma=0.99,"
+                framing
+                + "eq=contrast=1.05:saturation=1.08:gamma=0.99,"
                 "unsharp=5:5:0.42:5:5:0.0,"
                 "fps=30,format=yuv420p"
             )
@@ -195,10 +203,15 @@ def render(
         else:
             zoom_speed = 0.0010 if idx % 2 else 0.00135
             zoom_cap = 1.09 if idx % 2 else 1.12
+            framing = (
+                "scale=1180:2098:force_original_aspect_ratio=increase,"
+                "crop=1080:1920:(iw-1080)/2:145,"
+                if is_story_scene
+                else "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+            )
             vf = (
-                "scale=1080:1920:force_original_aspect_ratio=increase,"
-                "crop=1080:1920,"
-                f"zoompan=z='min(zoom+{zoom_speed:.5f},{zoom_cap:.2f})':d={frames}:s=1080x1920:fps=30,"
+                framing
+                + f"zoompan=z='min(zoom+{zoom_speed:.5f},{zoom_cap:.2f})':d={frames}:s=1080x1920:fps=30,"
                 "eq=contrast=1.04:saturation=1.07:gamma=0.99,"
                 "unsharp=5:5:0.34:5:5:0.0,"
                 "format=yuv420p"
