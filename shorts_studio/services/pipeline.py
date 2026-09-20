@@ -122,7 +122,7 @@ def run_pipeline(job_id: str) -> None:
         "tone": tone,
         "content_type": job.get("content_type", "auto"),
         "story_genre": job.get("story_genre", "auto"),
-        "pipeline_version": "1.5.0",
+        "pipeline_version": "2.0.0",
     }
 
     try:
@@ -469,7 +469,11 @@ def run_pipeline(job_id: str) -> None:
         ]
         max_adjacent_similarity = max(adjacent_similarities, default=0.0)
         quality = {
-            "duration_ok": 20 <= duration <= 45,
+            "duration_ok": (
+                42 <= duration <= 75
+                if content_type == "story"
+                else 20 <= duration <= 45
+            ),
             "duration_seconds": duration,
             "sources_ok": (source_count >= 2) if require_citations else True,
             "source_count": source_count,
