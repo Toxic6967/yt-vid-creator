@@ -188,8 +188,9 @@ def run_pipeline(job_id: str) -> None:
             audio = render_scene(
                 scene["narration"],
                 scene_voice,
-                audio_dir / f"scene_{idx:02d}.mp3",
+                audio_dir / f"scene_{idx:02d}.wav",
                 role=scene.get("role", ""),
+                require_human=(content_type == "story"),
             )
             audio["speaker"] = speaker
             scene_audio.append(audio)
