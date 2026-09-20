@@ -315,10 +315,14 @@ def _try_ai_scene(
             try:
                 cleaned = generate_story_keyframe(
                     prompt=(
-                        "Keep this exact Roblox R15 movie frame, characters, pose, camera, lighting and environment. "
-                        "Remove every piece of generated typography or pseudo-typography. Make signs, screens, posters, "
-                        "labels and boards blank or purely pictorial. Do not add any letters, numbers, usernames, logos, "
-                        "captions or symbols. Preserve the Roblox avatars exactly."
+                        "Polish this exact Roblox gameplay movie frame without changing the story beat, camera or map layout. "
+                        "FIRST: make every visible player unmistakably authentic Roblox R15 if the previous pass drifted: "
+                        "classic Roblox face decal, R15 torso, separate upper/lower limbs, Roblox joints, catalog hair/clothing, "
+                        "simple game-avatar hands with no fingers. Remove any Minecraft/voxel, LEGO or human anatomy drift. "
+                        "SECOND: keep the environment looking like a polished Roblox Studio game map, not a photoreal film set. "
+                        "THIRD: remove every piece of generated typography or pseudo-typography. Make signs, screens, posters, "
+                        "labels and boards blank or purely pictorial. Do not add letters, numbers, usernames, logos, captions or symbols. "
+                        "Preserve outfit colours, pose, action and composition."
                     ),
                     reference_path=result["path"],
                     identity_reference_path=identity_reference or reference_image,
