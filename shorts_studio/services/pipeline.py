@@ -273,10 +273,18 @@ def run_pipeline(job_id: str) -> None:
                 "scores": {
                     "hook": story_scores.get("hook"),
                     "relatability": story_scores.get("relatability"),
+                    "escalation": story_scores.get("escalation"),
                     "payoff": story_scores.get("payoff"),
+                    "coherence": story_scores.get("coherence"),
+                    "cause_effect": story_scores.get("cause_effect"),
+                    "setup_payoff": story_scores.get("setup_payoff"),
+                    "arc_fidelity": story_scores.get("arc_fidelity"),
                     "naturalness": story_scores.get("dialogue"),
                     "visual_pacing": story_scores.get("movie_clarity"),
+                    "character_consistency": story_scores.get("character_consistency"),
+                    "visual_variety": story_scores.get("visual_variety"),
                     "game_specificity": story_scores.get("game_specificity"),
+                    "cringe_avoidance": story_scores.get("cringe_avoidance"),
                 },
                 "issues": story_score.get("problems") or [],
             }
@@ -564,6 +572,8 @@ def run_pipeline(job_id: str) -> None:
             if v.get("previous_frame_similarity") is not None
         ]
         max_adjacent_similarity = max(adjacent_similarities, default=0.0)
+        retention_scores = (script.get("retention") or {}).get("scores") or {}
+        environment_plate_count = len(manifest.get("environment_plates") or {})
         quality = {
             "duration_ok": (
                 42 <= duration <= 75
@@ -590,6 +600,10 @@ def run_pipeline(job_id: str) -> None:
                 if content_type == "story"
                 else True
             ),
+            "environment_plate_count": environment_plate_count,
+            "environment_variety_ok": (
+                environment_plate_count >= 4 if content_type == "story" else True
+            ),
             "visual_content_ok": len(fallback_visuals) == 0 and (
                 (
                     content_type == "story"
@@ -602,10 +616,18 @@ def run_pipeline(job_id: str) -> None:
             ),
             "retention_ok": bool((script.get("retention") or {}).get("passed")),
             "retention_score": (script.get("retention") or {}).get("total"),
-            "hook_score": ((script.get("retention") or {}).get("scores") or {}).get("hook"),
-            "relatability_score": ((script.get("retention") or {}).get("scores") or {}).get("relatability"),
-            "payoff_score": ((script.get("retention") or {}).get("scores") or {}).get("payoff"),
-            "game_specificity_score": ((script.get("retention") or {}).get("scores") or {}).get("game_specificity"),
+            "hook_score": retention_scores.get("hook"),
+            "relatability_score": retention_scores.get("relatability"),
+            "escalation_score": retention_scores.get("escalation"),
+            "payoff_score": retention_scores.get("payoff"),
+            "coherence_score": retention_scores.get("coherence"),
+            "cause_effect_score": retention_scores.get("cause_effect"),
+            "setup_payoff_score": retention_scores.get("setup_payoff"),
+            "arc_fidelity_score": retention_scores.get("arc_fidelity"),
+            "naturalness_score": retention_scores.get("naturalness"),
+            "character_consistency_score": retention_scores.get("character_consistency"),
+            "visual_variety_score": retention_scores.get("visual_variety"),
+            "game_specificity_score": retention_scores.get("game_specificity"),
             "output_exists": Path(render_info["path"]).exists(),
             "output_bytes": Path(render_info["path"]).stat().st_size if Path(render_info["path"]).exists() else 0,
         }
@@ -619,6 +641,7 @@ def run_pipeline(job_id: str) -> None:
                 "visual_content_ok",
                 "visual_variety_ok",
                 "polished_cast_ok",
+                "environment_variety_ok",
                 "retention_ok",
                 "output_exists",
             )
