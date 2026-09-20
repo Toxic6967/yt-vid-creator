@@ -35,9 +35,10 @@ async function loadHealth(){
   try{
     const h = await jsonFetch('/api/health');
     const chatterboxReady = Boolean(h.voice && h.voice.chatterbox && h.voice.chatterbox.ready);
+    const animationReady = Boolean(h.animation && h.animation.ready);
     const ok = h.ollama.ok && h.ollama.model_installed && h.ffmpeg.ok && chatterboxReady;
     health.className = 'health ' + (ok ? 'ok' : 'bad');
-    if(ok) health.textContent = `Story AI ready • ${h.ollama.model} • natural narrator`;
+    if(ok) health.textContent = `Story AI ready • ${h.ollama.model} • natural narrator • ${animationReady ? 'V3 animation ready' : 'install V3 animation engine'}`;
     else if(!h.ollama.ok) health.textContent = 'Ollama not running';
     else if(!h.ollama.model_installed) health.textContent = `Install model: ollama pull ${h.ollama.model}`;
     else if(!chatterboxReady) health.textContent = 'Natural narrator not installed • run install_natural_voice.bat';
@@ -85,6 +86,7 @@ document.querySelector('#video-form').addEventListener('submit', async e=>{
     topic: fd.get('topic'),
     content_type: fd.get('content_type') || 'story',
     story_genre: fd.get('story_genre') || 'auto',
+    visual_mode: fd.get('visual_mode') || 'animated',
     voice: fd.get('voice'),
     target_seconds: Number(fd.get('target_seconds')),
   };
@@ -377,7 +379,7 @@ function updateJobCard(node, job){
     details.innerHTML=`<b>${esc(manifest.metadata.title)}</b><br>${esc(manifest.metadata.description)}<br>`+
       `${(manifest.metadata.hashtags||[]).map(esc).join(' ')}<br>`+
       (storyBits.length ? `<span class="rights">${storyBits.join(' • ')}</span><br>` : '')+
-      `<span class="rights">${esc(manifest.content_type||job.content_type||'auto')} • score ${q.retention_score??'?'} • ${q.environment_plate_count||0} Roblox areas • cinematic motion ${q.cinematic_i2v_count||0} • stills ${q.ai_visual_count||0} • ${q.duration_seconds||'?'} sec</span>`;
+      `<span class="rights">${esc(manifest.content_type||job.content_type||'auto')} • ${esc(manifest.visual_mode||job.visual_mode||'generative')} • score ${q.retention_score??'?'} • ${q.environment_plate_count||0} Roblox areas • V3 animated ${q.blender_animation_count||0} • generative motion ${q.cinematic_i2v_count||0} • ${q.duration_seconds||'?'} sec</span>`;
   }
 
   const actions=node.querySelector('.actions');
