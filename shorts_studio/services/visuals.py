@@ -383,16 +383,16 @@ def prepare_visual(
                 direction = {
                     "prompt": (
                         scene_video_prompt(scene, topic)
-                        + " Animate from the supplied keyframe like an actual Roblox gameplay cinematic. "
-                        "Preserve square Roblox heads, rectangular torsos and segmented R15 block limbs frame-to-frame. "
-                        "Preserve the exact avatar face, hair accessory, clothing textures, colours, body proportions "
-                        "and game environment. One controlled camera move and one readable action only. "
-                        "Movement should resemble Roblox character animation, not human motion capture."
+                        + " Animate only the supplied clean keyframe. Preserve unmistakable Roblox R15 proportions, "
+                        "classic face decal, catalog hair/clothing and the exact environment already present. "
+                        "Use one restrained Roblox-style action and one subtle camera move. Do not transform the avatar "
+                        "into a voxel character or a realistic person. Generate absolutely no writing; signs, screens "
+                        "and posters stay blank because all English captions are added later in editing."
                     ),
                     "negative_prompt": (
-                        "words, letters, numbers, subtitles, captions, title, logo, watermark, UI text, "
-                        "human anatomy, realistic human, Pixar, clay, LEGO, Minecraft, generic cartoon person, "
-                        "rounded human face, fingers, identity drift, changed clothes, changed hair, face morphing, "
+                        "words, letters, numbers, subtitles, captions, title, fake text, usernames, logo, watermark, UI text, "
+                        "Minecraft, voxel character, cubic pixel person, LEGO, minifigure, human anatomy, realistic person, "
+                        "fingers, realistic nose, identity drift, changed clothes, changed hair, face morphing, "
                         "duplicate character, extra limbs, flicker, camera teleport, random object pop-in, old low-poly look"
                     ),
                 }
