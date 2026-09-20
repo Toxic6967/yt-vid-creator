@@ -202,14 +202,18 @@ def make_topic_short(topic_id: str) -> dict:
     if not topic:
         raise HTTPException(404, "Topic not found")
     profile = get_channel_profile()
+    content_type = (topic.get("evidence") or {}).get("content_type", "trend")
+    if content_type == "story":
+        _ensure_story_backend_ready("animated")
     return _queue_short(
         profile["channel_name"],
         profile["niche"],
         topic["title"],
         profile["voice"],
         int(profile["target_seconds"]),
-        (topic.get("evidence") or {}).get("content_type", "trend"),
+        content_type,
         "auto",
+        "animated",
     )
 
 
