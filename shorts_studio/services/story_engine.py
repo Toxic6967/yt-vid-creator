@@ -273,7 +273,9 @@ moment, server moment, obby moment or friendship moment they can recognise.
 
 NON-NEGOTIABLE:
 - Hook in the FIRST 1-2 seconds. Start inside the problem; no introduction.
-- One simple story. Maximum 3 characters.
+- Use 7-10 short scenes. Maximum 3 characters.
+- Each narration line should usually be 5-12 spoken words so the visual shot can finish before the next cut.
+- Tell it like a creator recounting something that just happened in the game, not like a movie trailer.
 - Keep the story mostly inside ONE continuous game session/location so the movie is visually coherent.
   Change rooms/areas only when the plot actually requires it; prefer new camera angles over teleporting worlds.
 - Conflict must escalate every few seconds.
@@ -472,8 +474,8 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
     banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
 
     return {
-        "scene_count_ok": 6 <= len(scenes) <= 13,
-        "short_lines_ok": max_words <= 18,
+        "scene_count_ok": 7 <= len(scenes) <= 11,
+        "short_lines_ok": max_words <= 13,
         "word_count_ok": expected_min <= total_words <= expected_max,
         "single_narrator_ok": narrator_lines == len(scenes),
         "banned_phrase_ok": not banned_hits,
@@ -559,7 +561,7 @@ Return:
     rewrite_instructions = list(result.get("rewrite_instructions") or [])
     if not mechanical["short_lines_ok"]:
         problems.append(f"Some spoken beats are too long ({mechanical['max_scene_words']} words).")
-        rewrite_instructions.append("Keep every spoken beat at 18 words or fewer.")
+        rewrite_instructions.append("Keep every spoken beat at 13 words or fewer; most should be 5-12 words.")
     if not mechanical["single_narrator_ok"]:
         problems.append("Story switches speakers even though this format uses one consistent narrator.")
         rewrite_instructions.append("Use narrator as the speaker for every beat; let characters act visually.")
