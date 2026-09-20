@@ -69,6 +69,20 @@ def _pick_image_checkpoint(choices: list[str], configured: str = "") -> str | No
     ]
     return candidates[0] if candidates else None
 
+def free_models() -> bool:
+    """Ask ComfyUI to unload cached models and release VRAM/RAM."""
+    try:
+        with httpx.Client(timeout=20) as client:
+            response = client.post(
+                f"{settings.comfyui_base_url}/free",
+                json={"unload_models": True, "free_memory": True},
+            )
+            response.raise_for_status()
+        return True
+    except Exception:
+        return False
+
+
 def health() -> dict[str, Any]:
     result: dict[str, Any] = {
         "ok": False,
