@@ -52,7 +52,7 @@ class Settings:
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     ollama_model: str = os.getenv("SHORTS_STUDIO_MODEL", "qwen3:8b")
     default_voice: str = os.getenv("SHORTS_STUDIO_VOICE", "en-AU-WilliamNeural")
-    default_target_seconds: int = int(os.getenv("SHORTS_STUDIO_TARGET_SECONDS", "32"))
+    default_target_seconds: int = int(os.getenv("SHORTS_STUDIO_TARGET_SECONDS", "58"))
     comfyui_base_url: str = os.getenv("COMFYUI_BASE_URL", "http://127.0.0.1:8188")
     comfyui_image_checkpoint: str = os.getenv("COMFYUI_IMAGE_CHECKPOINT", "")
     comfyui_video_workflow: str = os.getenv("COMFYUI_VIDEO_WORKFLOW", str(WORKFLOW_DIR / "video_api.json"))
@@ -63,6 +63,10 @@ class Settings:
     comfyui_story_image_workflow: str = os.getenv(
         "COMFYUI_STORY_IMAGE_WORKFLOW",
         str(WORKFLOW_DIR / "flux2_klein_story_api.json"),
+    )
+    comfyui_story_dual_image_workflow: str = os.getenv(
+        "COMFYUI_STORY_DUAL_IMAGE_WORKFLOW",
+        str(WORKFLOW_DIR / "flux2_klein_story_dual_api.json"),
     )
     kokoro_model_path: str = os.getenv(
         "SHORTS_STUDIO_KOKORO_MODEL",
