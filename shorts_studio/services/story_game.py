@@ -62,7 +62,7 @@ USER STORY IDEA: {requested_idea or 'none — choose automatically'}
 SEARCH EVIDENCE:
 {evidence_lines or 'No useful search evidence was available.'}
 
-Pick ONE real Roblox experience that can support a relatable 20-45 second story.
+Pick ONE real Roblox experience that can support a coherent 45-70 second mini-movie with multiple visually distinct gameplay areas/set-pieces.
 
 Rules:
 - If the user clearly named a Roblox experience, prefer that exact game if the evidence supports it.
@@ -156,10 +156,10 @@ SOURCE PACK:
 
 Extract only details clearly supported by the source pack.
 
-We need enough detail to write a SHORT FICTIONAL STORY that feels like it really happens
+We need enough detail to write a 45-70 SECOND FICTIONAL MINI-MOVIE that feels like it really happens
 inside this game. Focus on mechanics players actually interact with, recognizable locations,
-objectives, round structure, enemies/items/resources, failure conditions, and common player
-situations.
+objectives, round structure, enemies/items/resources, failure conditions, common player
+situations, and VISUALLY DISTINCT set-pieces that can make each movie scene look different.
 
 Return:
 {{
@@ -177,19 +177,25 @@ Return:
   "avoid_inventing":["things the sources do NOT establish"]
 }}
 
-Need at least 4 useful mechanics/situations total. Keep each item concise.
+Need at least 6 useful mechanics/locations/situations total and preferably 4+ visually distinct set-pieces/locations.
+Do not invent decorative details that the sources do not support. Keep each item concise.
 """,
         temperature=0.12,
     )
 
     mechanics = context.get("mechanics") if isinstance(context.get("mechanics"), list) else []
     locations = context.get("locations") if isinstance(context.get("locations"), list) else []
+    setpieces = (
+        context.get("visual_setpieces")
+        if isinstance(context.get("visual_setpieces"), list)
+        else []
+    )
     situations = (
         context.get("player_situations")
         if isinstance(context.get("player_situations"), list)
         else []
     )
-    if len(mechanics) + len(locations) + len(situations) < 4:
+    if len(mechanics) + len(locations) + len(setpieces) + len(situations) < 6:
         raise RuntimeError(
             f"Research for {game_name} did not produce enough verified gameplay detail. "
             "Story Studio stopped instead of making up a generic Roblox story."
@@ -201,7 +207,8 @@ Need at least 4 useful mechanics/situations total. Keep each item concise.
         "why_it_fits": selection.get("why_it_fits", ""),
         "core_loop": _clean(context.get("core_loop"), 420),
         "mechanics": mechanics[:8],
-        "locations": locations[:6],
+        "locations": locations[:8],
+        "visual_setpieces": setpieces[:8],
         "player_situations": situations[:8],
         "avoid_inventing": context.get("avoid_inventing") or [],
         "sources": sources[:8],
@@ -218,6 +225,7 @@ def story_game_prompt_context(game_context: dict[str, Any]) -> str:
             "core_loop": game_context.get("core_loop"),
             "mechanics": game_context.get("mechanics", []),
             "locations": game_context.get("locations", []),
+            "visual_setpieces": game_context.get("visual_setpieces", []),
             "player_situations": game_context.get("player_situations", []),
             "avoid_inventing": game_context.get("avoid_inventing", []),
         },
