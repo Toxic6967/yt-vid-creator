@@ -6,3 +6,4 @@ __pycache__/
 Thumbs.db
 data/
 *.log
+.shorts_studio_storage
