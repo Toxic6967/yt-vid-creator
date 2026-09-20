@@ -60,14 +60,14 @@ if (-not (Test-Path $venvPython)) {
     }
 }
 
-Write-Host "Installing Chatterbox TTS..." -ForegroundColor Yellow
-& $uvExe pip install --python $venvPython --upgrade chatterbox-tts
+Write-Host "Installing Chatterbox TTS + local caption aligner..." -ForegroundColor Yellow
+& $uvExe pip install --python $venvPython --upgrade chatterbox-tts faster-whisper
 if ($LASTEXITCODE -ne 0) {
-    throw "Could not install Chatterbox TTS."
+    throw "Could not install Chatterbox TTS / faster-whisper."
 }
 
-Write-Host "Testing Chatterbox import..." -ForegroundColor Cyan
-& $venvPython -c "from chatterbox.tts import ChatterboxTTS; print('Chatterbox import OK')"
+Write-Host "Testing Chatterbox + faster-whisper imports..." -ForegroundColor Cyan
+& $venvPython -c "from chatterbox.tts import ChatterboxTTS; from faster_whisper import WhisperModel; print('Chatterbox + aligner import OK')"
 if ($LASTEXITCODE -ne 0) {
     throw "Chatterbox installed but could not be imported."
 }
