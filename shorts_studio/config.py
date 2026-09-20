@@ -14,7 +14,7 @@ def _storage_root() -> Path | None:
         return Path(env)
     try:
         if STORAGE_MARKER.exists():
-            value = STORAGE_MARKER.read_text(encoding="utf-8").strip()
+            value = STORAGE_MARKER.read_text(encoding="utf-8").lstrip("\ufeff").strip()
             if value:
                 return Path(value)
     except Exception:
