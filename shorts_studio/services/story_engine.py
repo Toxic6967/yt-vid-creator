@@ -237,7 +237,7 @@ Do not reward random shock value. The best idea should be simple enough to under
 instantly but strong enough to make someone stay for the ending.
 
 Return:
-{{"best_index":0,"reason":"...","scores":[{{"index":0,"hook":0,"relatability":0,"visual":0,"escalation":0,"payoff":0,"originality":0,"game_specificity":0,"cringe_avoidance":0}}]}}
+{{"best_index":0,"reason":"...","scores":[{{"index":0,"hook":0,"relatability":0,"visual":0,"escalation":0,"payoff":0,"originality":0,"causal_depth":0,"visual_progression":0,"game_specificity":0,"cringe_avoidance":0}}]}}
 """,
         temperature=0.16,
     )
@@ -247,8 +247,63 @@ Return:
         index = 0
     index = max(0, min(index, len(ideas) - 1))
     selected = dict(ideas[index])
+
+    score_rows = judged.get("scores") if isinstance(judged.get("scores"), list) else []
+    selected_score = next(
+        (
+            row for row in score_rows
+            if isinstance(row, dict) and int(row.get("index", -1)) == index
+        ),
+        {},
+    )
+    weak_concept = any(
+        int(float(selected_score.get(key, 0) or 0)) < threshold
+        for key, threshold in {
+            "hook": 80,
+            "escalation": 76,
+            "payoff": 80,
+            "causal_depth": 78,
+            "visual_progression": 75,
+            "game_specificity": 82,
+            "cringe_avoidance": 84,
+        }.items()
+    )
+    if weak_concept:
+        improved = chat_json(
+            "You are a Roblox Shorts commissioning editor fixing a weak premise before screenplay writing. Return JSON only.",
+            f"""
+GAME CONTEXT:
+{story_game_prompt_context(game_context)}
+
+WEAK SELECTED CONCEPT:
+{json.dumps(selected, ensure_ascii=False)}
+
+SCORE:
+{json.dumps(selected_score, ensure_ascii=False)}
+
+Repair the CONCEPT, not the screenplay.
+Keep the same game and general genre, but make the premise:
+- instantly understandable in 1-2 seconds;
+- driven by a real verified game mechanic;
+- able to sustain 50-75 seconds through real cause-and-effect escalation;
+- capable of moving through several visually distinct verified set-pieces;
+- resolved by an earned player decision/skill/mechanic, not coincidence;
+- relatable to real players and not cringe.
+
+Return exactly:
+{{"premise":"...","genre":"...","opening":"...","escalation":"...","payoff":"..."}}
+""",
+            temperature=0.34,
+        )
+        if isinstance(improved, dict) and _clean(improved.get("premise"), 260):
+            selected.update({
+                key: improved.get(key, selected.get(key))
+                for key in ("premise", "genre", "opening", "escalation", "payoff")
+            })
+
     selected["selection_reason"] = _clean(judged.get("reason"), 240)
-    selected["candidate_scores"] = judged.get("scores") or []
+    selected["selected_score"] = selected_score
+    selected["candidate_scores"] = score_rows
     return selected
 
 def _plan_story_arc(
