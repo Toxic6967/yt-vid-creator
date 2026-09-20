@@ -78,7 +78,7 @@ class Settings:
     )
     chatterbox_device: str = os.getenv(
         "SHORTS_STUDIO_CHATTERBOX_DEVICE",
-        "cpu",
+        "cuda",
     )
     max_source_chars: int = int(os.getenv("SHORTS_STUDIO_MAX_SOURCE_CHARS", "2400"))
     user_agent: str = os.getenv(
