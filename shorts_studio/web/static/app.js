@@ -363,6 +363,7 @@ function updateJobCard(node, job){
     if(q.hook_score!=null) storyBits.push(`hook ${q.hook_score}`);
     if(q.relatability_score!=null) storyBits.push(`relatable ${q.relatability_score}`);
     if(q.payoff_score!=null) storyBits.push(`payoff ${q.payoff_score}`);
+    if(q.game_specificity_score!=null) storyBits.push(`game-specific ${q.game_specificity_score}`);
     details.innerHTML=`<b>${esc(manifest.metadata.title)}</b><br>${esc(manifest.metadata.description)}<br>`+
       `${(manifest.metadata.hashtags||[]).map(esc).join(' ')}<br>`+
       (storyBits.length ? `<span class="rights">${storyBits.join(' • ')}</span><br>` : '')+
