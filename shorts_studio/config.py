@@ -10,12 +10,13 @@ OUTPUT_DIR = DATA_DIR / "outputs"
 ASSET_DIR = DATA_DIR / "assets"
 MUSIC_DIR = ASSET_DIR / "music"
 SFX_DIR = ASSET_DIR / "sfx"
+KOKORO_DIR = ASSET_DIR / "kokoro"
 CACHE_DIR = DATA_DIR / "cache"
 MEDIA_OUTPUT_DIR = OUTPUT_DIR / "media"
 WORKFLOW_DIR = ROOT_DIR / "workflows"
 DB_PATH = DATA_DIR / "shorts_studio.db"
 
-for path in (DATA_DIR, OUTPUT_DIR, MEDIA_OUTPUT_DIR, ASSET_DIR, MUSIC_DIR, SFX_DIR, CACHE_DIR, WORKFLOW_DIR):
+for path in (DATA_DIR, OUTPUT_DIR, MEDIA_OUTPUT_DIR, ASSET_DIR, MUSIC_DIR, SFX_DIR, KOKORO_DIR, CACHE_DIR, WORKFLOW_DIR):
     path.mkdir(parents=True, exist_ok=True)
 
 
@@ -32,6 +33,14 @@ class Settings:
     comfyui_story_video_workflow: str = os.getenv(
         "COMFYUI_STORY_VIDEO_WORKFLOW",
         str(WORKFLOW_DIR / "ltx_i2v_api.json"),
+    )
+    kokoro_model_path: str = os.getenv(
+        "SHORTS_STUDIO_KOKORO_MODEL",
+        str(KOKORO_DIR / "kokoro-v1.0.onnx"),
+    )
+    kokoro_voices_path: str = os.getenv(
+        "SHORTS_STUDIO_KOKORO_VOICES",
+        str(KOKORO_DIR / "voices-v1.0.bin"),
     )
     max_source_chars: int = int(os.getenv("SHORTS_STUDIO_MAX_SOURCE_CHARS", "2400"))
     user_agent: str = os.getenv(
