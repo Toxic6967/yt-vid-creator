@@ -101,8 +101,11 @@ foreach ($item in $targets) {
 
     $driveRoot = [IO.Path]::GetPathRoot($dest)
     $drive = New-Object System.IO.DriveInfo($driveRoot)
-    $remaining = [math]::Max(0, [int64]$item.ExpectedBytes - [int64]$partialBytes)
-    $safety = 1GB
+    $remaining = [int64]$item.ExpectedBytes - [int64]$partialBytes
+    if ($remaining -lt 0) {
+        $remaining = [int64]0
+    }
+    $safety = [int64]1GB
     if ($drive.AvailableFreeSpace -lt ($remaining + $safety)) {
         $freeGB = [math]::Round($drive.AvailableFreeSpace / 1GB, 2)
         $needGB = [math]::Round(($remaining + $safety) / 1GB, 2)
