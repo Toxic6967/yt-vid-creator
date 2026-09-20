@@ -193,18 +193,18 @@ def _try_ai_scene(
             direction = {
                 "prompt": (
                     base_prompt
-                    + " Authentic Roblox R15 gameplay render. Square block head, simple Roblox face, rectangular torso, "
-                    "segmented block arms and legs, classic Roblox plastic avatar proportions. Crisp current Roblox-engine "
-                    "look, polished lighting and depth, but still unmistakably Roblox rather than a generic 3D cartoon. "
-                    "Keep all important action below the top safe area."
+                    + " Authentic modern Roblox R15 gameplay render. Preserve classic R15 avatar proportions, "
+                    "beveled plastic head, classic Roblox face decal, separate upper/lower limb pieces and catalog accessories. "
+                    "The result must read instantly as Roblox, never as a voxel game. Use the reference only for avatar identity; "
+                    "build a fresh environment and camera composition for this shot."
                 ),
                 "negative_prompt": (
-                    "words, letters, numbers, typography, subtitles, captions, title card, fake game title, signs, "
-                    "logo, watermark, UI text, gibberish writing, random symbols, "
-                    "human body, realistic human, Pixar, Disney, clay, Playmobil, LEGO, minifigure, Minecraft, voxel person, "
-                    "Funko, chibi, doll, generic mobile game character, rounded human head, realistic hands, fingers, "
-                    "old low-poly 2010s look, flat lighting, blurry, low detail, extra limbs, duplicate character, "
-                    "changed clothes, changed hair, deformed face, cluttered composition"
+                    "words, letters, numbers, typography, subtitles, captions, title card, fake game title, "
+                    "signage, menus, labels, usernames, logos, watermarks, UI text, gibberish writing, random symbols, "
+                    "Minecraft, voxel character, cubic pixel character, LEGO, minifigure, Playmobil, Funko, clay toy, "
+                    "realistic human anatomy, fingers, realistic nose, generic mobile-game character, "
+                    "old low-poly look, flat lighting, blurry, low detail, extra limbs, duplicate character, "
+                    "changed clothes, changed hair, identity drift, deformed face, cluttered composition"
                 ),
             }
         else:
