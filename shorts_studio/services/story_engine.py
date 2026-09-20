@@ -547,8 +547,8 @@ def _required_scene_count(target_seconds: int) -> tuple[int, int]:
     return minimum, desired
 
 
-def _scene_list_from_writer(raw: Any) -> list[dict[str, Any]]:
-    """Accept harmless wrappers/aliases commonly emitted by small local models."""
+def _scene_list_from_writer(raw: Any) -> list[Any]:
+    """Accept harmless scene wrappers/shapes commonly emitted by small local models."""
     if not isinstance(raw, dict):
         return []
 
@@ -574,19 +574,52 @@ def _scene_list_from_writer(raw: Any) -> list[dict[str, Any]]:
         value
         for key, value in sorted(raw.items())
         if re.fullmatch(r"scene[_ -]?\d+", str(key), re.I)
-        and isinstance(value, dict)
+        and isinstance(value, (dict, str))
     ]
     if numbered:
         candidates.append(numbered)
 
     for candidate in candidates:
+        # Some local-model replies serialize the scene array one extra time.
+        if isinstance(candidate, str):
+            text = candidate.strip()
+            if text.startswith("[") or text.startswith("{"):
+                try:
+                    candidate = json.loads(text)
+                except Exception:
+                    candidate = [candidate]
+
+        if isinstance(candidate, dict):
+            # Accept {"1": {...}, "2": {...}} or {"scene_1": "..."}.
+            ordered = []
+            for key, value in sorted(candidate.items(), key=lambda kv: str(kv[0])):
+                if isinstance(value, (dict, str)):
+                    ordered.append(value)
+            candidate = ordered
+
         if isinstance(candidate, list):
-            return [item for item in candidate if isinstance(item, dict)]
+            usable = [
+                item for item in candidate
+                if isinstance(item, (dict, str)) and (not isinstance(item, str) or item.strip())
+            ]
+            if usable:
+                return usable
     return []
 
 
-def _coerce_writer_scene(scene: dict[str, Any], index: int) -> dict[str, Any]:
-    item = dict(scene)
+def _coerce_writer_scene(scene: Any, index: int) -> dict[str, Any]:
+    if isinstance(scene, str):
+        text = _clean(scene, 260)
+        item: dict[str, Any] = {
+            "role": "hook" if index == 0 else "build",
+            "speaker": "narrator",
+            "narration": text,
+            "action": text,
+        }
+    elif isinstance(scene, dict):
+        item = dict(scene)
+    else:
+        return {}
 
     if not _clean(item.get("narration"), 240):
         for key in ("voiceover", "voice_over", "line", "dialogue", "spoken", "text"):
@@ -650,8 +683,10 @@ def _coerce_writer_object(raw: Any) -> dict[str, Any]:
     scenes = _scene_list_from_writer(current)
     if scenes:
         current["scenes"] = [
-            _coerce_writer_scene(scene, idx)
-            for idx, scene in enumerate(scenes[:18])
+            item
+            for idx, scene in enumerate(scenes[:14])
+            for item in [_coerce_writer_scene(scene, idx)]
+            if item
         ]
     return current
 
