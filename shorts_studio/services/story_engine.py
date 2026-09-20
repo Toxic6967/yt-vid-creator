@@ -359,7 +359,7 @@ moment, server moment, obby moment or friendship moment they can recognise.
 
 NON-NEGOTIABLE:
 - Hook in the FIRST 1-2 seconds. Start inside the problem; no introduction.
-- Use 12-16 purposeful scenes for a normal ~58 second Story. Scale within that range for the requested runtime. Maximum 3 characters.
+- Use 14-18 purposeful scenes for a normal ~65 second Story. Scale within that range for the requested runtime. Maximum 3 characters.
 - Each narration line should usually be 6-14 spoken words. The longer runtime is for MORE STORY, not filler.
 - Follow the LOCKED CAUSAL STORY ARC above. Do not replace it with a different plot.
 - Build a real cause-and-effect story arc:
@@ -454,7 +454,7 @@ def _normalise_story(
     scenes_raw = raw.get("scenes") if isinstance(raw.get("scenes"), list) else []
     scenes: list[dict[str, Any]] = []
 
-    for idx, item in enumerate(scenes_raw[:16]):
+    for idx, item in enumerate(scenes_raw[:18]):
         if not isinstance(item, dict):
             continue
         role = _clean(item.get("role"), 20).lower()
@@ -615,7 +615,7 @@ def _writer_view(story: dict) -> dict[str, Any]:
                 "sfx_cue": scene.get("sfx_cue"),
                 "motion_priority": scene.get("motion_priority"),
             }
-            for scene in (story.get("scenes") or [])[:16]
+            for scene in (story.get("scenes") or [])[:18]
         ],
     }
 
@@ -652,9 +652,10 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
     }
     max_words = max(scene_word_counts, default=0)
     total_words = len(re.findall(r"\b[\w'-]+\b", narration))
-    required_scene_min = max(11, min(14, round(target_seconds / 5)))
-    expected_min = max(82, round(target_seconds * 1.85))
-    expected_max = min(180, round(target_seconds * 2.50))
+    required_scene_min = max(12, min(15, round(target_seconds / 4.8)))
+    required_scene_max = min(18, max(15, round(target_seconds / 3.8)))
+    expected_min = max(90, round(target_seconds * 1.95))
+    expected_max = min(190, round(target_seconds * 2.45))
     banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
 
     line_starters = []
@@ -692,8 +693,8 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
     )
 
     return {
-        "scene_count_ok": required_scene_min <= len(scenes) <= 16,
-        "required_scene_range": [required_scene_min, 16],
+        "scene_count_ok": required_scene_min <= len(scenes) <= required_scene_max,
+        "required_scene_range": [required_scene_min, required_scene_max],
         "short_lines_ok": max_words <= 16,
         "arc_structure_ok": arc_structure_ok,
         "arc_fields_ok": arc_fields_ok,
