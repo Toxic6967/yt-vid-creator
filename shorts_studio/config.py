@@ -5,7 +5,30 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = Path(os.getenv("SHORTS_STUDIO_DATA", ROOT_DIR / "data"))
+STORAGE_MARKER = ROOT_DIR / ".shorts_studio_storage"
+
+
+def _storage_root() -> Path | None:
+    env = os.getenv("SHORTS_STUDIO_STORAGE_ROOT", "").strip()
+    if env:
+        return Path(env)
+    try:
+        if STORAGE_MARKER.exists():
+            value = STORAGE_MARKER.read_text(encoding="utf-8").strip()
+            if value:
+                return Path(value)
+    except Exception:
+        pass
+    return None
+
+
+STORAGE_ROOT = _storage_root()
+DATA_DIR = Path(
+    os.getenv(
+        "SHORTS_STUDIO_DATA",
+        str((STORAGE_ROOT / "data") if STORAGE_ROOT else (ROOT_DIR / "data")),
+    )
+)
 OUTPUT_DIR = DATA_DIR / "outputs"
 ASSET_DIR = DATA_DIR / "assets"
 MUSIC_DIR = ASSET_DIR / "music"
