@@ -24,8 +24,17 @@ $modelDir = Join-Path $storageRoot "data\assets\kokoro"
 New-Item -ItemType Directory -Force -Path $modelDir | Out-Null
 Write-Host "Voice model folder: $modelDir" -ForegroundColor Green
 
-Write-Host "Installing Python voice packages..." -ForegroundColor Yellow
-& py -m pip install --upgrade "kokoro-onnx>=0.6.1,<0.7" "soundfile>=0.13,<1"
+$venvPython = Join-Path $projectRoot ".venv\Scripts\python.exe"
+if (Test-Path $venvPython) {
+    $pythonExe = $venvPython
+    Write-Host "Installing voice packages into Shorts Studio .venv..." -ForegroundColor Yellow
+}
+else {
+    $pythonExe = "py"
+    Write-Host "Shorts Studio .venv was not found; installing with py..." -ForegroundColor Yellow
+}
+
+& $pythonExe -m pip install --upgrade "kokoro-onnx>=0.6.1,<0.7" "soundfile>=0.13,<1"
 if ($LASTEXITCODE -ne 0) {
     throw "Python package installation failed."
 }
@@ -68,10 +77,10 @@ foreach ($item in $targets) {
 }
 
 Write-Host ""
-Write-Host "Testing Kokoro import..." -ForegroundColor Cyan
-& py -c "from kokoro_onnx import Kokoro; print('Kokoro import OK')"
+Write-Host "Testing Kokoro import in the same Python Shorts Studio uses..." -ForegroundColor Cyan
+& $pythonExe -c "from kokoro_onnx import Kokoro; import soundfile; print('Kokoro import OK')"
 if ($LASTEXITCODE -ne 0) {
-    throw "Kokoro installed, but Python could not import it."
+    throw "Kokoro installed, but Shorts Studio's Python could not import it."
 }
 
 Write-Host ""
