@@ -39,12 +39,27 @@ else {
     $comfyRoot = $installRoot
 }
 
-$models = Join-Path $comfyRoot "models"
+$projectRoot = Split-Path -Parent $PSScriptRoot
+$storageMarker = Join-Path $projectRoot ".shorts_studio_storage"
+if (Test-Path $storageMarker) {
+    $storageRoot = (Get-Content $storageMarker -Raw).Trim()
+}
+else {
+    $storageRoot = "E:\auto yt"
+}
+if (-not $storageRoot) {
+    throw "Shorts Studio storage root is empty. Run setup_external_storage.bat first."
+}
+if (-not (Test-Path ([IO.Path]::GetPathRoot($storageRoot)))) {
+    throw "Storage drive is unavailable: $storageRoot"
+}
+
+$models = Join-Path $storageRoot "models"
 New-Item -ItemType Directory -Force -Path $models | Out-Null
 
 Write-Host "Installation record: $installRoot"
 Write-Host "Actual ComfyUI root: $comfyRoot" -ForegroundColor Green
-Write-Host "Model root:          $models" -ForegroundColor Green
+Write-Host "External model root: $models" -ForegroundColor Green
 Write-Host ""
 
 function Move-ExistingModel {
@@ -64,7 +79,7 @@ function Move-ExistingModel {
     if ($found) {
         Write-Host "Found existing download:" -ForegroundColor Yellow
         Write-Host "  $($found.FullName)"
-        Write-Host "Moving it to the model folder ComfyUI actually scans..."
+        Write-Host "Moving it to the external Shorts Studio model folder..."
         New-Item -ItemType Directory -Force -Path (Split-Path $Destination -Parent) | Out-Null
         Move-Item -LiteralPath $found.FullName -Destination $Destination -Force
         return $true
@@ -134,7 +149,7 @@ foreach ($item in $targets) {
 }
 
 Write-Host ""
-Write-Host "Verifying files in the actual ComfyUI model root..." -ForegroundColor Cyan
+Write-Host "Verifying files in the external Shorts Studio model root..." -ForegroundColor Cyan
 $allGood = $true
 foreach ($item in $targets) {
     $dest = Join-Path $item.Dir $item.File
@@ -153,6 +168,6 @@ if (-not $allGood) {
 }
 
 Write-Host ""
-Write-Host "Wan 2.1 video models are in the correct ComfyUI model root." -ForegroundColor Green
+Write-Host "Wan 2.1 video models are in the external model root." -ForegroundColor Green
 Write-Host "IMPORTANT: Completely close ComfyUI, reopen it, then restart Shorts Studio."
 Write-Host ""
