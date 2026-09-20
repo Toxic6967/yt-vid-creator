@@ -305,6 +305,7 @@ def run_pipeline(job_id: str) -> None:
             "hook_score": ((script.get("retention") or {}).get("scores") or {}).get("hook"),
             "relatability_score": ((script.get("retention") or {}).get("scores") or {}).get("relatability"),
             "payoff_score": ((script.get("retention") or {}).get("scores") or {}).get("payoff"),
+            "game_specificity_score": ((script.get("retention") or {}).get("scores") or {}).get("game_specificity"),
             "output_exists": Path(render_info["path"]).exists(),
             "output_bytes": Path(render_info["path"]).stat().st_size if Path(render_info["path"]).exists() else 0,
         }
