@@ -184,12 +184,19 @@ Return {{"ideas":[{{"premise":"...","genre":"...","opening":"...","escalation":"
     ideas = raw.get("ideas") if isinstance(raw.get("ideas"), list) else []
     ideas = [item for item in ideas if isinstance(item, dict)][:8]
     if not ideas:
+        game_name = _clean(game_context.get("game_name"), 80) or "the selected Roblox game"
+        situations = game_context.get("player_situations") or []
+        situation = _clean(
+            (situations[0] or {}).get("situation") if situations and isinstance(situations[0], dict) else "",
+            220,
+        )
+        premise = situation or f"A player in {game_name} makes one risky mistake right before they are about to win."
         return {
-            "premise": "Two friends enter a Roblox horror game and one vanishes just before the exit opens.",
-            "genre": "horror",
-            "opening": "The exit opens, but only one player's name is still in the server list.",
-            "escalation": "The missing friend keeps triggering doors from rooms they supposedly left.",
-            "payoff": "The survivor reaches the exit and sees the friend waiting outside, asking why they took so long.",
+            "premise": f"Inside {game_name}, {premise}",
+            "genre": genre if genre != "auto" else "relatable",
+            "opening": "Start at the exact moment the run is about to go wrong.",
+            "escalation": "Use a verified game mechanic to make the problem worse.",
+            "payoff": "Resolve it with a game-specific clutch, reversal or funny consequence.",
         }
 
     judged = chat_json(
@@ -537,14 +544,14 @@ Return:
     )
     scores = {k: max(0, min(100, int(float(result.get(k, 0) or 0)))) for k in keys}
     total = round(
-        scores["hook"] * 0.18
-        + scores["relatability"] * 0.18
-        + scores["escalation"] * 0.14
-        + scores["payoff"] * 0.16
+        scores["hook"] * 0.16
+        + scores["relatability"] * 0.16
+        + scores["escalation"] * 0.11
+        + scores["payoff"] * 0.14
         + scores["dialogue"] * 0.10
-        + scores["movie_clarity"] * 0.10
+        + scores["movie_clarity"] * 0.09
         + scores["character_consistency"] * 0.05
-        + scores["game_specificity"] * 0.10
+        + scores["game_specificity"] * 0.12
         + scores["cringe_avoidance"] * 0.07,
         1,
     )
