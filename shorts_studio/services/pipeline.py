@@ -585,6 +585,7 @@ def run_pipeline(job_id: str) -> None:
 
         _stage(job_id, "Running quality checks", 96)
         duration = float(render_info["duration"])
+        target_duration = float(job.get("target_seconds") or 58)
         source_count = len(research.get("sources", []))
         missing_citations = (
             sum(1 for s in script.get("scenes", []) if not s.get("source_ids"))
@@ -606,10 +607,15 @@ def run_pipeline(job_id: str) -> None:
         environment_plate_count = len(manifest.get("environment_plates") or {})
         quality = {
             "duration_ok": (
-                42 <= duration <= 75
+                (
+                    42 <= duration <= 75
+                    and abs(duration - target_duration) <= max(8.0, target_duration * 0.18)
+                )
                 if content_type == "story"
                 else 20 <= duration <= 45
             ),
+            "target_duration_seconds": target_duration,
+            "duration_delta_seconds": round(duration - target_duration, 2),
             "duration_seconds": duration,
             "sources_ok": (source_count >= 2) if require_citations else True,
             "source_count": source_count,
