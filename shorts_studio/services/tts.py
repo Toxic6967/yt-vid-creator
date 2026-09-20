@@ -51,12 +51,24 @@ KOKORO_VOICES = {
 def _chatterbox_health() -> dict[str, Any]:
     python_exe = Path(settings.chatterbox_python)
     package_dir = python_exe.parent.parent / "Lib" / "site-packages" / "chatterbox"
-    ready = python_exe.exists() and package_dir.exists()
+    runner = ROOT_DIR / "scripts" / "chatterbox_narrate.py"
+    ready = python_exe.exists() and package_dir.exists() and runner.exists()
+    missing = []
+    if not python_exe.exists():
+        missing.append("isolated Python runtime")
+    if not package_dir.exists():
+        missing.append("chatterbox package")
+    if not runner.exists():
+        missing.append("Shorts Studio narration runner")
     return {
         "ready": ready,
         "python": str(python_exe),
         "package_dir": str(package_dir),
+        "runner": str(runner),
+        "runner_ready": runner.exists(),
         "device": settings.chatterbox_device,
+        "missing": missing,
+        "runtime_patch": "perth-dummy-fallback-v1",
     }
 
 
