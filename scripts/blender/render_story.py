@@ -168,6 +168,25 @@ def create_r15(cid, lane):
         parts[f"{side}_hand"] = add_box(
             f"{cid}_{side}_Hand", (x, -0.01, 2.25), (0.42, 0.50, 0.30), mats["skin"], root, 0.10
         )
+        # Rounded joint caps make the segmented body read as R15 rather than voxel/Minecraft.
+        add_uv(
+            f"{cid}_{side}_ShoulderJoint",
+            (x, 0, 3.82),
+            (0.22, 0.24, 0.22),
+            mats["shirt"],
+            root,
+            16,
+            8,
+        )
+        add_uv(
+            f"{cid}_{side}_ElbowJoint",
+            (x, 0, 3.02),
+            (0.19, 0.20, 0.19),
+            mats["skin"],
+            root,
+            16,
+            8,
+        )
 
         lx = 0.43 * sign
         parts[f"{side}_upper_leg"] = add_box(
@@ -179,6 +198,35 @@ def create_r15(cid, lane):
         parts[f"{side}_foot"] = add_box(
             f"{cid}_{side}_Foot", (lx, -0.10, 0.34), (0.62, 0.88, 0.32), mats["shoe"], root, 0.09
         )
+        add_uv(
+            f"{cid}_{side}_HipJoint",
+            (lx, 0, 2.02),
+            (0.24, 0.25, 0.22),
+            mats["pants"],
+            root,
+            16,
+            8,
+        )
+        add_uv(
+            f"{cid}_{side}_KneeJoint",
+            (lx, 0, 1.16),
+            (0.21, 0.22, 0.19),
+            mats["pants"],
+            root,
+            16,
+            8,
+        )
+
+    # Small neck/joint separation is another strong R15 silhouette cue.
+    add_uv(
+        f"{cid}_NeckJoint",
+        (0, 0, 4.02),
+        (0.22, 0.22, 0.18),
+        mats["skin"],
+        root,
+        16,
+        8,
+    )
 
     for x in (-0.22, 0.22):
         eye = add_uv(
@@ -203,13 +251,46 @@ def create_r15(cid, lane):
         )
         smile.rotation_euler[1] = rz
 
-    for x, z, scale in (
-        (-0.38, 5.12, (0.34, 0.48, 0.24)),
-        (0.0, 5.20, (0.45, 0.50, 0.28)),
-        (0.36, 5.10, (0.32, 0.45, 0.25)),
-        (-0.18, 5.30, (0.26, 0.34, 0.20)),
-    ):
-        add_uv(f"{cid}_Hair", (x, 0, z), scale, mats["hair"], root, 16, 8)
+    # Character-specific catalog-hair silhouettes keep the recurring cast readable.
+    if cid == "mia":
+        for x, z, scale in (
+            (-0.30, 5.13, (0.34, 0.48, 0.24)),
+            (0.10, 5.20, (0.46, 0.50, 0.27)),
+            (0.38, 5.05, (0.28, 0.42, 0.22)),
+        ):
+            add_uv(f"{cid}_Hair", (x, 0.02, z), scale, mats["hair"], root, 16, 8)
+        for y, z, scale in (
+            (0.52, 4.95, (0.24, 0.24, 0.30)),
+            (0.68, 4.62, (0.22, 0.22, 0.34)),
+            (0.76, 4.26, (0.19, 0.19, 0.31)),
+        ):
+            add_uv(f"{cid}_Ponytail", (0.34, y, z), scale, mats["hair"], root, 16, 8)
+    elif cid == "kai":
+        for x, z, scale in (
+            (-0.30, 5.08, (0.31, 0.40, 0.18)),
+            (0.02, 5.13, (0.39, 0.42, 0.20)),
+            (0.32, 5.07, (0.29, 0.37, 0.17)),
+        ):
+            add_uv(f"{cid}_Hair", (x, 0, z), scale, mats["hair"], root, 16, 8)
+    else:
+        for x, z, scale in (
+            (-0.38, 5.12, (0.34, 0.48, 0.24)),
+            (0.0, 5.20, (0.45, 0.50, 0.28)),
+            (0.36, 5.10, (0.32, 0.45, 0.25)),
+            (-0.18, 5.30, (0.26, 0.34, 0.20)),
+        ):
+            add_uv(f"{cid}_Hair", (x, 0, z), scale, mats["hair"], root, 16, 8)
+
+    # Simple clothing accents distinguish the cast without generating text/logos.
+    if cid == "kai":
+        accent = mat(f"{cid}_accent", rgb("#15171C"))
+        add_box(f"{cid}_JacketStripe", (0, -0.39, 3.35), (0.34, 0.035, 0.76), accent, root, 0.015)
+    elif cid == "mia":
+        accent = mat(f"{cid}_accent", rgb("#E4D8FF"))
+        add_box(f"{cid}_JacketZip", (0, -0.39, 3.35), (0.08, 0.035, 0.72), accent, root, 0.01)
+    else:
+        accent = mat(f"{cid}_accent", rgb("#173D8F"))
+        add_box(f"{cid}_HoodiePocket", (0, -0.39, 3.10), (0.68, 0.035, 0.24), accent, root, 0.03)
 
     add_uv(
         f"{cid}_Shadow",
