@@ -86,6 +86,15 @@ def health() -> dict[str, Any]:
         "missing_video_models": [],
         "video_models_resolved": {},
         "video_model_choices": {},
+        "story_image_ready": False,
+        "story_image_workflow": settings.comfyui_story_image_workflow,
+        "story_image_models": {
+            "diffusion": "flux-2-klein-4b-fp8.safetensors",
+            "text_encoder": "qwen_3_4b.safetensors",
+            "vae": "flux2-vae.safetensors",
+        },
+        "story_image_models_resolved": {},
+        "missing_story_image_models": [],
         "story_video_ready": False,
         "story_video_workflow": settings.comfyui_story_video_workflow,
         "story_video_models": {
@@ -151,6 +160,50 @@ def health() -> dict[str, Any]:
                     result["video_ready"] = not missing
                 except Exception as exc:
                     result["video_check_error"] = str(exc)
+            story_image_workflow_exists = Path(settings.comfyui_story_image_workflow).exists()
+            if story_image_workflow_exists:
+                try:
+                    missing_story_image = []
+                    resolved_story_image = {}
+                    checks = (
+                        ("diffusion", "UNETLoader", "unet_name", result["story_image_models"]["diffusion"]),
+                        ("text_encoder", "CLIPLoader", "clip_name", result["story_image_models"]["text_encoder"]),
+                        ("vae", "VAELoader", "vae_name", result["story_image_models"]["vae"]),
+                    )
+                    for key, node_name, field_name, expected in checks:
+                        resp = client.get(f"{settings.comfyui_base_url}/object_info/{node_name}")
+                        resp.raise_for_status()
+                        payload = resp.json()
+                        node = payload.get(node_name, payload)
+                        required = ((node.get("input") or {}).get("required") or {})
+                        choices = _extract_choices(required.get(field_name))
+                        matched = _match_model_choice(choices, expected)
+                        if matched:
+                            resolved_story_image[key] = matched
+                        else:
+                            missing_story_image.append(expected)
+
+                    for node_name in (
+                        "EmptyFlux2LatentImage",
+                        "Flux2Scheduler",
+                        "ReferenceLatent",
+                        "SamplerCustomAdvanced",
+                        "CFGGuider",
+                        "RandomNoise",
+                        "KSamplerSelect",
+                        "ImageScaleToTotalPixels",
+                        "GetImageSize",
+                    ):
+                        node_resp = client.get(f"{settings.comfyui_base_url}/object_info/{node_name}")
+                        if not node_resp.is_success:
+                            missing_story_image.append(f"ComfyUI node: {node_name}")
+
+                    result["story_image_models_resolved"] = resolved_story_image
+                    result["missing_story_image_models"] = missing_story_image
+                    result["story_image_ready"] = not missing_story_image
+                except Exception as exc:
+                    result["story_image_check_error"] = str(exc)
+
             story_workflow_exists = Path(settings.comfyui_story_video_workflow).exists()
             if story_workflow_exists:
                 try:
@@ -642,6 +695,62 @@ def generate_ai_image_from_reference(
         "seed": seed,
         "checkpoint": ckpt,
         "backend": "sdxl_img2img_continuity",
+    }
+
+
+def generate_story_keyframe(
+    prompt: str,
+    reference_path: str | Path,
+    job_id: str,
+    seed: int | None = None,
+) -> dict[str, Any]:
+    """Generate a character-consistent Story frame with FLUX.2 Klein reference editing."""
+    state = health()
+    if not state.get("story_image_ready"):
+        missing = ", ".join(state.get("missing_story_image_models") or [])
+        raise ComfyUIError(
+            "High-quality Story image engine is not ready."
+            + (f" Missing: {missing}" if missing else "")
+        )
+
+    path = Path(settings.comfyui_story_image_workflow)
+    try:
+        workflow = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ComfyUIError(f"Could not read Story image workflow: {exc}") from exc
+
+    seed = int(seed) if seed is not None else random.randint(0, 2_147_483_647)
+    uploaded = _upload_input_image(Path(reference_path))
+    resolved = state.get("story_image_models_resolved") or {}
+
+    workflow = _replace_placeholders(
+        workflow,
+        {
+            "__FLUX2_MODEL__": resolved.get(
+                "diffusion", state["story_image_models"]["diffusion"]
+            ),
+            "__FLUX2_TEXT_ENCODER__": resolved.get(
+                "text_encoder", state["story_image_models"]["text_encoder"]
+            ),
+            "__FLUX2_VAE__": resolved.get(
+                "vae", state["story_image_models"]["vae"]
+            ),
+            "__REFERENCE_IMAGE__": uploaded,
+            "__PROMPT__": prompt,
+            "__SEED__": seed,
+        },
+    )
+
+    prompt_id = _queue_workflow(workflow)
+    ref = _wait_for_artifact(prompt_id, timeout_seconds=1200)
+    suffix = Path(ref["filename"]).suffix or ".png"
+    output = MEDIA_OUTPUT_DIR / f"{job_id}{suffix}"
+    _download_artifact(ref, output)
+    return {
+        "path": str(output),
+        "prompt_id": prompt_id,
+        "seed": seed,
+        "backend": "flux2_klein_reference",
     }
 
 def generate_ai_video(
