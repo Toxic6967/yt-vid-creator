@@ -15,7 +15,7 @@ DEFAULT_PROFILE = {
     "tone": "Cinematic, fast and relatable Roblox mini-movies; engaging but never babyish or cringe",
     "audience": "Kids / young Roblox players (roughly 8-14); energetic, clear, exciting, never babyish",
     "voice": "auto-youthful-male",
-    "target_seconds": 32,
+    "target_seconds": 58,
     "trend_weight": 70,
     "evergreen_weight": 20,
     "experiment_weight": 10,
@@ -161,6 +161,11 @@ def init_db() -> None:
         conn.execute(
             "UPDATE channel_profile SET voice=? WHERE id=1 AND voice=?",
             ("auto-youthful-male", "en-AU-WilliamNeural"),
+        )
+        # Story Studio V2 uses longer mini-movies. Upgrade the old <=45 second
+        # profile default automatically without changing deliberately longer values.
+        conn.execute(
+            "UPDATE channel_profile SET target_seconds=58 WHERE id=1 AND target_seconds<=45"
         )
         conn.execute(
             """
