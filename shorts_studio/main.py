@@ -67,15 +67,32 @@ def home(request: Request):
     return templates.TemplateResponse(request=request, name="index.html", context={"app_name": settings.app_name})
 
 
+def _safe_health_component(name: str, fn) -> dict:
+    try:
+        value = fn()
+        if isinstance(value, dict):
+            return value
+        return {"ok": False, "ready": False, "error": f"{name} health returned an invalid result."}
+    except Exception as exc:
+        # The dashboard health endpoint must NEVER crash just because one optional
+        # local backend is missing/broken. Return the component error instead.
+        return {
+            "ok": False,
+            "ready": False,
+            "component": name,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
 @app.get("/api/health")
 def api_health() -> dict:
     return {
         "app": {"ok": True, "name": settings.app_name},
-        "ollama": ollama_health(),
-        "ffmpeg": ffmpeg_health(),
-        "comfyui": comfyui_health(),
-        "voice": human_voice_health(),
-        "animation": animation_health(),
+        "ollama": _safe_health_component("ollama", ollama_health),
+        "ffmpeg": _safe_health_component("ffmpeg", ffmpeg_health),
+        "comfyui": _safe_health_component("comfyui", comfyui_health),
+        "voice": _safe_health_component("voice", human_voice_health),
+        "animation": _safe_health_component("animation", animation_health),
     }
 
 
