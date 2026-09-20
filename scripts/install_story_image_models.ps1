@@ -34,9 +34,24 @@ else {
     $comfyRoot = $installRoot
 }
 
-$models = Join-Path $comfyRoot "models"
+$projectRoot = Split-Path -Parent $PSScriptRoot
+$storageMarker = Join-Path $projectRoot ".shorts_studio_storage"
+if (Test-Path $storageMarker) {
+    $storageRoot = (Get-Content $storageMarker -Raw).Trim()
+}
+else {
+    $storageRoot = "E:\auto yt"
+}
+if (-not $storageRoot) {
+    throw "Shorts Studio storage root is empty. Run setup_external_storage.bat first."
+}
+if (-not (Test-Path ([IO.Path]::GetPathRoot($storageRoot)))) {
+    throw "Storage drive is unavailable: $storageRoot"
+}
+
+$models = Join-Path $storageRoot "models"
 Write-Host "Actual ComfyUI root: $comfyRoot" -ForegroundColor Green
-Write-Host "Model root:          $models" -ForegroundColor Green
+Write-Host "External model root: $models" -ForegroundColor Green
 Write-Host ""
 
 $targets = @(
