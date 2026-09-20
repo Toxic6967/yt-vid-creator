@@ -277,3 +277,47 @@ def build_scene_cast_reference(
     if not selected:
         selected = characters[:1]
     return build_cast_reference(selected, destination)
+
+
+
+def compose_character_reference_sheet(
+    character_paths: list[str | Path],
+    destination: Path,
+) -> Path:
+    """Combine polished one-character refs into a neutral scene-specific cast sheet."""
+    paths = [Path(p) for p in character_paths if p and Path(p).exists()]
+    if not paths:
+        raise RuntimeError("No polished Roblox character references were available.")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    width, height = 576, 1024
+    canvas = Image.new("RGB", (width, height), (216, 220, 226))
+    draw = ImageDraw.Draw(canvas)
+    draw.rectangle((0, int(height * 0.82), width, height), fill=(187, 191, 198))
+
+    count = min(3, len(paths))
+    gap = 14
+    panel_w = (width - gap * (count + 1)) // count
+    panel_h = int(height * 0.84)
+
+    for idx, path in enumerate(paths[:count]):
+        image = Image.open(path).convert("RGB")
+        # Crop toward the character, keeping full-body portrait proportions.
+        src_ratio = image.width / image.height
+        target_ratio = panel_w / panel_h
+        if src_ratio > target_ratio:
+            crop_w = int(image.height * target_ratio)
+            left = max(0, (image.width - crop_w) // 2)
+            image = image.crop((left, 0, left + crop_w, image.height))
+        else:
+            crop_h = int(image.width / target_ratio)
+            top = max(0, (image.height - crop_h) // 2)
+            image = image.crop((0, top, image.width, top + crop_h))
+
+        image = image.resize((panel_w, panel_h), Image.Resampling.LANCZOS)
+        x = gap + idx * (panel_w + gap)
+        y = int(height * 0.05)
+        canvas.paste(image, (x, y))
+
+    canvas.save(destination, quality=96)
+    return destination
