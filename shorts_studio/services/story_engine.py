@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from .ollama_client import chat_json
+from .story_game import story_game_prompt_context
 
 
 BANNED_STORY_PATTERNS = (
@@ -36,8 +37,10 @@ def _default_character(idx: int) -> dict[str, str]:
             "name": "Max",
             "gender": "male",
             "visual_identity": (
-                "blocky Roblox-style teen avatar, messy dark-brown hair, royal-blue hoodie, "
-                "black cargo pants, white sneakers, expressive square face"
+                "authentic Roblox R15 avatar with a square block head, classic simple Roblox smile face, "
+                "rectangular torso, segmented block arms and legs, plastic game-avatar proportions; "
+                "messy dark-brown Roblox hair accessory, royal-blue hoodie shirt texture, black cargo-style pants, white shoes; "
+                "must look like an actual Roblox player avatar, never a human, clay toy, LEGO figure, Minecraft character or Pixar person"
             ),
             "personality": "confident, competitive, gets himself into trouble",
         },
@@ -46,8 +49,10 @@ def _default_character(idx: int) -> dict[str, str]:
             "name": "Mia",
             "gender": "female",
             "visual_identity": (
-                "blocky Roblox-style teen avatar, long dark hair in a high ponytail, purple jacket, "
-                "black jeans, white shoes, expressive square face"
+                "authentic Roblox R15 avatar with a square block head, classic simple Roblox smile face, "
+                "rectangular torso, segmented block arms and legs, plastic game-avatar proportions; "
+                "long dark Roblox ponytail hair accessory, purple jacket shirt texture, black pants, white shoes; "
+                "must look like an actual Roblox player avatar, never a human, clay toy, LEGO figure, Minecraft character or Pixar person"
             ),
             "personality": "quick-thinking, sarcastic, notices details first",
         },
@@ -56,8 +61,10 @@ def _default_character(idx: int) -> dict[str, str]:
             "name": "Kai",
             "gender": "male",
             "visual_identity": (
-                "blocky Roblox-style teen avatar, short black hair, red-and-black jacket, "
-                "dark pants, red sneakers, expressive square face"
+                "authentic Roblox R15 avatar with a square block head, classic simple Roblox smile face, "
+                "rectangular torso, segmented block arms and legs, plastic game-avatar proportions; "
+                "short black Roblox hair accessory, red-and-black jacket shirt texture, dark pants, red shoes; "
+                "must look like an actual Roblox player avatar, never a human, clay toy, LEGO figure, Minecraft character or Pixar person"
             ),
             "personality": "calm, loyal, suspicious when something feels wrong",
         },
@@ -131,28 +138,35 @@ def _character_map(characters: list[dict[str, str]]) -> dict[str, dict[str, str]
 
 
 
-def _select_story_idea(audience: str, tone: str) -> dict[str, Any]:
+def _select_story_idea(
+    audience: str,
+    tone: str,
+    game_context: dict[str, Any],
+    genre: str = "auto",
+) -> dict[str, Any]:
     raw = chat_json(
         "You create high-retention Roblox mini-movie concepts for Shorts. Return JSON only.",
         f"""
 AUDIENCE: {audience}
 CHANNEL TONE: {tone}
+REQUESTED GENRE: {genre}
 
-Create 8 DIFFERENT Roblox mini-movie ideas aimed at this audience.
+REAL ROBLOX GAME CONTEXT:
+{story_game_prompt_context(game_context)}
 
-Base them on recognisable Roblox-player feelings/situations, such as:
-- entering a horror game with a friend and getting separated
-- grinding for a rare item while someone else gets lucky instantly
-- being underestimated as the noob
-- a teammate betraying the group at the worst time
-- lag/disconnect ruining an almost-win
-- joining a strange empty server
-- one player being left alive in a survival round
-- an obby shortcut that seems too good to be true
-- spending Robux and immediately regretting it
-- a friend saying "one more game"
+Create 8 DIFFERENT mini-movie ideas that happen INSIDE this exact Roblox game.
 
-Do NOT copy these literally every time. Use them as the level of relatability.
+Every idea must:
+- depend on a real mechanic, objective, location, item, enemy, round rule or player situation from the game context;
+- be recognisable to someone who actually plays the game;
+- be understandable even if the viewer only knows the game casually;
+- use the game's mechanics to create the problem and payoff.
+
+Good story energy: unlucky timing, teammate mistake, clutch save, scary close call,
+rare drop luck, greed, betrayal, panic, risky shortcut, one-player-left moment, or a funny
+reversal caused by the GAME itself.
+
+Do NOT write generic "Roblox world" stories that could happen in any game.
 Avoid fake inspirational morals, random lore dumps, generic "evil hacker" stories,
 death/tragedy bait, and plots that only work because characters act stupid.
 
@@ -182,6 +196,7 @@ Return {{"ideas":[{{"premise":"...","genre":"...","opening":"...","escalation":"
         "You are a ruthless Roblox Shorts commissioning editor. Return JSON only.",
         f"""
 AUDIENCE: {audience}
+GAME: {game_context.get("game_name")}
 CANDIDATES:
 {json.dumps(ideas, ensure_ascii=False)}
 
@@ -192,6 +207,7 @@ Score each 0-100 for:
 - escalation
 - payoff
 - originality
+- game_specificity: would a real player recognise that this story belongs in THIS game?
 - cringe_avoidance (100 = not cringe)
 
 Pick the best idea for a 20-45 second cinematic Roblox Short.
@@ -199,7 +215,7 @@ Do not reward random shock value. The best idea should be simple enough to under
 instantly but strong enough to make someone stay for the ending.
 
 Return:
-{{"best_index":0,"reason":"...","scores":[{{"index":0,"hook":0,"relatability":0,"visual":0,"escalation":0,"payoff":0,"originality":0,"cringe_avoidance":0}}]}}
+{{"best_index":0,"reason":"...","scores":[{{"index":0,"hook":0,"relatability":0,"visual":0,"escalation":0,"payoff":0,"originality":0,"game_specificity":0,"cringe_avoidance":0}}]}}
 """,
         temperature=0.16,
     )
@@ -219,6 +235,7 @@ def _story_prompt(
     tone: str,
     target_seconds: int,
     genre: str,
+    game_context: dict[str, Any],
 ) -> str:
     requested = idea.strip() if idea else "Use the selected premise supplied by the commissioning editor."
     recurring_cast = "\n".join(
@@ -232,10 +249,13 @@ TARGET LENGTH: {target_seconds} seconds
 GENRE: {genre}
 USER IDEA: {requested}
 
+REAL GAME CONTEXT — DO NOT INVENT OUTSIDE THIS:
+{story_game_prompt_context(game_context)}
+
 RECURRING CHANNEL CAST:
 {recurring_cast}
 
-Create a short cinematic Roblox mini-movie for YouTube Shorts.
+Create a short cinematic mini-movie that takes place INSIDE {game_context.get("game_name")}.
 Use 1-3 characters from the recurring cast whenever possible. Keep their names, exact
 hair/clothing/colours and core personalities unchanged. A one-off side character is allowed
 only when the plot genuinely needs one.
@@ -255,16 +275,23 @@ NON-NEGOTIABLE:
 - Do not write a fake inspirational moral.
 - Do not write random nonsense just because it is dramatic.
 - Do not use baby talk, forced Gen-Z slang, "bro" every sentence, or corporate AI wording.
-- Dialogue should sound like actual players talking while gaming.
-- Avoid long narration. Prefer characters acting and speaking.
+- Use ONE natural narrator voice for the whole Short, like a person telling a quick story over the action.
+- Keep narration conversational and human. No announcer voice, no documentary phrasing, no fake hype.
+- Characters should ACT the story visually. If a character speaks, paraphrase/quote it inside the narrator line instead of switching voices.
+- Avoid long narration. Each line should sound like something a real creator would naturally say in one breath.
 - Every scene must be easy to understand visually with no explanation.
 - Keep violence game-like/non-graphic and appropriate for the audience.
 - Characters must keep EXACTLY the same clothing/hair/colours in every scene.
+- EVERY visible player character must be an authentic Roblox R15 avatar: square block head, rectangular torso,
+  segmented block arms/legs and simple Roblox face. Never humanoid Pixar/clay/LEGO/Minecraft-looking people.
 - Reuse the same important props and environmental details when the story returns to a location.
+- Use at least TWO real game-specific mechanics/locations/items from the verified game context.
+- Never invent a fake item, enemy, currency, room, objective or UI element.
 
 Return JSON exactly:
 {{
   "title":"working story title",
+  "game_name":"{game_context.get('game_name')}",
   "genre":"funny|horror|mystery|action|relatable|sad",
   "premise":"one sentence",
   "hook":"first spoken line",
@@ -280,8 +307,8 @@ Return JSON exactly:
   "scenes":[
     {{
       "role":"hook|setup|build|reveal|payoff",
-      "speaker":"narrator or character id",
-      "narration":"ONE short spoken line",
+      "speaker":"narrator",
+      "narration":"ONE short natural narrator line",
       "characters":["character ids visible in shot"],
       "environment":"specific Roblox-style game location",
       "action":"what physically happens during this shot",
@@ -296,7 +323,11 @@ Return JSON exactly:
 """
 
 
-def _normalise_story(raw: dict, target_seconds: int) -> dict:
+def _normalise_story(
+    raw: dict,
+    target_seconds: int,
+    game_context: dict[str, Any],
+) -> dict:
     characters = _normalise_characters(raw.get("characters"))
     cmap = _character_map(characters)
 
@@ -327,35 +358,37 @@ def _normalise_story(raw: dict, target_seconds: int) -> dict:
             for cid in visible_ids
         ]
 
-        environment = _clean(item.get("environment"), 180) or "cinematic Roblox-style game environment"
+        game_name = _clean(raw.get("game_name") or game_context.get("game_name"), 80)
+        environment = _clean(item.get("environment"), 180) or f"recognisable {game_name} Roblox gameplay area"
         action = _clean(item.get("action"), 220) or _clean(item.get("narration"), 220)
         camera = _clean(item.get("camera"), 60) or "medium"
         emotion = _clean(item.get("emotion"), 80)
 
         keyframe_prompt = (
-            "cinematic Roblox-style 3D movie frame, polished modern lighting, strong depth, "
-            "clean blocky avatars, high-detail game environment, vertical composition. "
-            f"Characters: {'; '.join(identities)}. Environment: {environment}. "
-            f"Action frozen at the clearest dramatic moment: {action}. Camera: {camera}. "
-            f"Emotion: {emotion}. Keep exact character clothing, hair and colours. "
-            "No text, no logo, no watermark, no extra limbs, no duplicated characters."
+            f"AUTHENTIC ROBLOX GAMEPLAY MOVIE FRAME from the real Roblox experience {game_name}. "
+            "Use Roblox R15 player-avatar geometry: square block heads, simple Roblox faces, rectangular torsos, "
+            "segmented block arms and legs, plastic Roblox game proportions. Absolutely NOT realistic humans, "
+            "Pixar people, clay toys, LEGO minifigures, Minecraft/voxel people or generic cartoon children. "
+            f"Characters: {'; '.join(identities)}. Recognisable in-game environment: {environment}. "
+            f"Action frozen at the clearest dramatic moment: {action}. Camera: {camera}. Emotion: {emotion}. "
+            "Modern Roblox game lighting, crisp 3D gameplay screenshot feel, cinematic depth, vertical composition. "
+            "Frame characters around the middle/lower-middle and leave the top 12 percent as clean environment only. "
+            "No words, no letters, no numbers, no captions, no signs, no fake game title, no logo, no watermark, "
+            "no UI text, no extra limbs, no duplicated characters. Keep exact avatar clothing, hair and colours."
         )
         motion_prompt = (
-            f"{action}. Camera movement: {camera}. Keep the same characters, clothing, hair, "
-            f"face design and environment throughout the shot. Emotion: {emotion}. "
-            "Natural game-character body motion, cinematic timing, no morphing, no outfit changes."
+            f"Inside {game_name} Roblox gameplay: {action}. Camera movement: {camera}. "
+            "Keep authentic Roblox R15 square-head/block-limb geometry throughout the entire shot. "
+            "Keep the exact same characters, clothing, hair, simple Roblox faces and environment. "
+            f"Emotion: {emotion}. Natural Roblox game-animation body motion, cinematic timing, "
+            "no morphing, no human anatomy, no outfit changes, no words or UI text appearing."
         )
 
         spoken_line = _clean(item.get("narration"), 240)
         if not spoken_line:
             continue
 
-        raw_speaker = _clean(item.get("speaker") or "narrator", 30).lower()
-        if raw_speaker == "narrator":
-            speaker = "narrator"
-        else:
-            speaker_character = cmap.get(raw_speaker)
-            speaker = speaker_character["id"] if speaker_character else raw_speaker
+        speaker = "narrator"
 
         scenes.append(
             {
@@ -364,6 +397,7 @@ def _normalise_story(raw: dict, target_seconds: int) -> dict:
                 "narration": spoken_line,
                 "characters": visible_ids,
                 "character_visuals": identities,
+                "game_name": game_name,
                 "environment": environment,
                 "action": action,
                 "camera": camera,
@@ -390,6 +424,13 @@ def _normalise_story(raw: dict, target_seconds: int) -> dict:
     return {
         "topic": _clean(raw.get("title") or raw.get("premise") or "Roblox Story", 120),
         "title": _clean(raw.get("title") or "Roblox Story", 100),
+        "game_name": _clean(raw.get("game_name") or game_context.get("game_name"), 80),
+        "game_context": {
+            "core_loop": game_context.get("core_loop"),
+            "mechanics": game_context.get("mechanics", []),
+            "locations": game_context.get("locations", []),
+            "player_situations": game_context.get("player_situations", []),
+        },
         "genre": _clean(raw.get("genre") or "relatable", 24).lower(),
         "premise": _clean(raw.get("premise"), 240),
         "hook": scenes[0]["narration"],
@@ -413,9 +454,9 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
         len(re.findall(r"\b[\w'-]+\b", str(scene.get("narration") or "")))
         for scene in scenes
     ]
-    spoken_character_lines = sum(
+    narrator_lines = sum(
         1 for scene in scenes
-        if str(scene.get("speaker") or "narrator").lower() != "narrator"
+        if str(scene.get("speaker") or "narrator").lower() == "narrator"
     )
     max_words = max(scene_word_counts, default=0)
     total_words = len(re.findall(r"\b[\w'-]+\b", narration))
@@ -427,21 +468,29 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
         "scene_count_ok": 6 <= len(scenes) <= 13,
         "short_lines_ok": max_words <= 18,
         "word_count_ok": expected_min <= total_words <= expected_max,
-        "dialogue_ratio_ok": spoken_character_lines >= max(2, len(scenes) // 3),
+        "single_narrator_ok": narrator_lines == len(scenes),
         "banned_phrase_ok": not banned_hits,
         "banned_hits": banned_hits,
         "max_scene_words": max_words,
         "word_count": total_words,
         "expected_word_range": [expected_min, expected_max],
-        "character_line_count": spoken_character_lines,
+        "narrator_line_count": narrator_lines,
     }
 
-def _score_story(story: dict, audience: str, target_seconds: int) -> dict[str, Any]:
+def _score_story(
+    story: dict,
+    audience: str,
+    target_seconds: int,
+    game_context: dict[str, Any],
+) -> dict[str, Any]:
     mechanical = _deterministic_story_checks(story, target_seconds)
     result = chat_json(
         "You are a ruthless short-form story editor for a successful Roblox channel. Return JSON only.",
         f"""
 AUDIENCE: {audience}
+REAL GAME CONTEXT:
+{story_game_prompt_context(game_context)}
+
 STORY:
 {json.dumps(story, ensure_ascii=False)}
 
@@ -450,9 +499,10 @@ Score 0-100:
 - relatability: would Roblox players recognise the situation/emotion?
 - escalation: does something meaningfully change/get worse or better every few seconds?
 - payoff: does the ending reward watching?
-- dialogue: does it sound like actual players rather than an AI script?
+- dialogue: does the ONE narrator sound conversational and human rather than like an AI/documentary announcer?
 - movie_clarity: can every beat be understood visually?
 - character_consistency: are characters simple and reusable across shots?
+- game_specificity: does this clearly happen inside the named game using real mechanics, rather than generic Roblox?
 - cringe_avoidance: 100 means not cringe, not babyish, no forced slang, no fake moral.
 
 Also list exact problems and exact rewrite instructions.
@@ -466,6 +516,7 @@ Return:
   "dialogue":0,
   "movie_clarity":0,
   "character_consistency":0,
+  "game_specificity":0,
   "cringe_avoidance":0,
   "problems":[],
   "rewrite_instructions":[]
@@ -481,6 +532,7 @@ Return:
         "dialogue",
         "movie_clarity",
         "character_consistency",
+        "game_specificity",
         "cringe_avoidance",
     )
     scores = {k: max(0, min(100, int(float(result.get(k, 0) or 0)))) for k in keys}
@@ -491,8 +543,9 @@ Return:
         + scores["payoff"] * 0.16
         + scores["dialogue"] * 0.10
         + scores["movie_clarity"] * 0.10
-        + scores["character_consistency"] * 0.06
-        + scores["cringe_avoidance"] * 0.08,
+        + scores["character_consistency"] * 0.05
+        + scores["game_specificity"] * 0.10
+        + scores["cringe_avoidance"] * 0.07,
         1,
     )
     problems = list(result.get("problems") or [])
@@ -500,9 +553,9 @@ Return:
     if not mechanical["short_lines_ok"]:
         problems.append(f"Some spoken beats are too long ({mechanical['max_scene_words']} words).")
         rewrite_instructions.append("Keep every spoken beat at 18 words or fewer.")
-    if not mechanical["dialogue_ratio_ok"]:
-        problems.append("Too much narrator exposition and not enough character dialogue.")
-        rewrite_instructions.append("Move more of the story into short character dialogue and visible action.")
+    if not mechanical["single_narrator_ok"]:
+        problems.append("Story switches speakers even though this format uses one consistent narrator.")
+        rewrite_instructions.append("Use narrator as the speaker for every beat; let characters act visually.")
     if not mechanical["word_count_ok"]:
         problems.append(
             f"Spoken word count {mechanical['word_count']} is outside the target range "
@@ -518,6 +571,7 @@ Return:
         and scores["hook"] >= 84
         and scores["relatability"] >= 80
         and scores["payoff"] >= 80
+        and scores["game_specificity"] >= 82
         and scores["cringe_avoidance"] >= 85
         and all(
             mechanical[key]
@@ -525,7 +579,7 @@ Return:
                 "scene_count_ok",
                 "short_lines_ok",
                 "word_count_ok",
-                "dialogue_ratio_ok",
+                "single_narrator_ok",
                 "banned_phrase_ok",
             )
         )
@@ -546,11 +600,12 @@ def create_story(
     audience: str,
     tone: str,
     target_seconds: int,
+    game_context: dict[str, Any],
     genre: str = "auto",
 ) -> dict:
     selected_idea = None
     if not idea:
-        selected_idea = _select_story_idea(audience, tone)
+        selected_idea = _select_story_idea(audience, tone, game_context, genre)
         idea = (
             f"Premise: {selected_idea.get('premise','')}. "
             f"Opening: {selected_idea.get('opening','')}. "
@@ -561,15 +616,15 @@ def create_story(
 
     draft = chat_json(
         "You are a sharp Roblox mini-movie writer/director. You write for young players without writing down to them. Return JSON only.",
-        _story_prompt(idea, audience, tone, target_seconds, genre),
+        _story_prompt(idea, audience, tone, target_seconds, genre, game_context),
         temperature=0.62,
     )
-    story = _normalise_story(draft, target_seconds)
+    story = _normalise_story(draft, target_seconds, game_context)
     if selected_idea:
         story["idea_selection"] = selected_idea
 
     for _ in range(2):
-        score = _score_story(story, audience, target_seconds)
+        score = _score_story(story, audience, target_seconds, game_context)
         if score["passed"]:
             story["story_score"] = score
             return story
@@ -579,6 +634,8 @@ def create_story(
             f"""
 AUDIENCE: {audience}
 TARGET: {target_seconds} seconds
+REAL GAME CONTEXT:
+{story_game_prompt_context(game_context)}
 
 CURRENT STORY:
 {json.dumps(story, ensure_ascii=False)}
@@ -588,7 +645,8 @@ EDITOR SCORE:
 
 Rewrite the WHOLE story.
 Preserve useful character identities, but fix the exact problems.
-Start inside the conflict. Make it more recognisable to Roblox players.
+Start inside the conflict. Make it more recognisable to players of {game_context.get("game_name")}.
+The problem and payoff must depend on real mechanics from the supplied game context.
 Do not make it louder/randomer just to increase excitement.
 No fake moral, no forced slang, no babyish wording.
 Return the exact same story JSON shape.
@@ -596,9 +654,9 @@ Return the exact same story JSON shape.
             temperature=0.48,
         )
         retained_idea = story.get("idea_selection")
-        story = _normalise_story(rewritten, target_seconds)
+        story = _normalise_story(rewritten, target_seconds, game_context)
         if retained_idea:
             story["idea_selection"] = retained_idea
 
-    story["story_score"] = _score_story(story, audience, target_seconds)
+    story["story_score"] = _score_story(story, audience, target_seconds, game_context)
     return story
