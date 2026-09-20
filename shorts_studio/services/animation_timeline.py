@@ -125,6 +125,7 @@ def normalise_animation_plan(
                     "id": cid,
                     "name": characters[cid].get("name") or cid.title(),
                     "visual_identity": characters[cid].get("visual_identity") or "",
+                    "emotion": str(scene.get("emotion") or ""),
                     "clip": clip,
                     "start_lane": _clamp(start_lane, -2.4, 2.4),
                     "end_lane": _clamp(end_lane, -2.4, 2.4),
@@ -181,8 +182,18 @@ def animation_plan_quality(plan: dict[str, Any]) -> dict[str, Any]:
         problems.append("Animation plan does not vary camera framing enough.")
     if len(environments) < 4:
         problems.append("Animation plan does not use enough distinct game areas.")
-    if animated < max(6, round(len(shots) * 0.65)):
+    if animated < max(6, round(len(shots) * 0.72)):
         problems.append("Too many shots use only idle poses.")
+
+    static_cameras = sum(
+        1 for shot in shots
+        if str(shot.get("camera_motion") or "static") == "static"
+    )
+    if static_cameras > max(3, round(len(shots) * 0.55)):
+        problems.append("Too many shots use a completely static camera.")
+
+    if plan.get("allow_powers") and powered < 2:
+        problems.append("Power-story mode needs at least two visible, story-motivated power VFX beats.")
 
     return {
         "passed": not problems,
@@ -190,6 +201,7 @@ def animation_plan_quality(plan: dict[str, Any]) -> dict[str, Any]:
         "camera_count": len(cameras),
         "environment_count": len(environments),
         "active_motion_shots": animated,
+        "static_camera_shots": static_cameras,
         "power_effect_shots": powered,
         "problems": problems,
     }
