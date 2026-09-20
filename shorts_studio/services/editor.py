@@ -199,13 +199,14 @@ def render(
                 else "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
             )
             vf = (
-                framing
+                "tpad=stop_mode=clone:stop_duration=12,"
+                + framing
                 + "eq=contrast=1.05:saturation=1.08:gamma=0.99,"
                 "unsharp=5:5:0.42:5:5:0.0,"
                 "fps=30,format=yuv420p"
             )
             _run([
-                "-stream_loop", "-1", "-i", path,
+                "-i", path,
                 "-t", f"{duration:.3f}",
                 "-vf", vf,
                 "-an",
@@ -221,9 +222,13 @@ def render(
                 if is_story_scene
                 else "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
             )
+            pan_x = "sin(on/18)*7" if idx % 2 else "cos(on/20)*7"
+            pan_y = "cos(on/23)*8" if idx % 3 else "sin(on/21)*8"
             vf = (
                 framing
-                + f"zoompan=z='min(zoom+{zoom_speed:.5f},{zoom_cap:.2f})':d={frames}:s=1080x1920:fps=30,"
+                + f"zoompan=z='min(zoom+{zoom_speed:.5f},{zoom_cap:.2f})':"
+                + f"x='iw/2-(iw/zoom/2)+{pan_x}':y='ih/2-(ih/zoom/2)+{pan_y}':"
+                + f"d={frames}:s=1080x1920:fps=30,"
                 "eq=contrast=1.04:saturation=1.07:gamma=0.99,"
                 "unsharp=5:5:0.34:5:5:0.0,"
                 "format=yuv420p"
