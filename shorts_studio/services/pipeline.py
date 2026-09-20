@@ -19,7 +19,7 @@ from .story_engine import create_story
 from .story_game import research_story_game
 from .ollama_client import unload_model
 from .tts import render_scene, render_story_narration
-from .visuals import prepare_visual
+from .visuals import prepare_visual, visual_similarity
 from .roblox_reference import build_cast_reference, build_scene_cast_reference
 
 
@@ -236,6 +236,9 @@ def run_pipeline(job_id: str) -> None:
                 )
             )
 
+        previous_story_frame = None
+        duplicate_retry_count = 0
+
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
             scene_reference = None
             if content_type == "story":
@@ -253,14 +256,69 @@ def run_pipeline(job_id: str) -> None:
                 idx,
                 selected_topic,
                 duration=float(audio["duration"]),
-                # Do NOT feed the previous full movie frame into the next keyframe.
-                # That was causing every shot to inherit the same background/composition.
                 reference_image=scene_reference if content_type == "story" else None,
                 identity_reference=scene_reference if content_type == "story" else None,
             )
+
+            if content_type == "story":
+                def frame_path(item: dict) -> str | None:
+                    value = item.get("keyframe_path")
+                    if value:
+                        return str(value)
+                    if item.get("kind") == "ai_generated_scene" and item.get("path"):
+                        return str(item["path"])
+                    return None
+
+                candidate_frame = frame_path(visual)
+                similarity = (
+                    visual_similarity(previous_story_frame, candidate_frame)
+                    if previous_story_frame and candidate_frame
+                    else 0.0
+                )
+
+                # If adjacent shots are visually near-identical, automatically
+                # regenerate with a different seed/composition instruction.
+                if similarity >= 0.82:
+                    best_visual = visual
+                    best_frame = candidate_frame
+                    best_similarity = similarity
+                    for attempt in (1, 2):
+                        retry = prepare_visual(
+                            scene,
+                            job_dir,
+                            idx,
+                            selected_topic,
+                            duration=float(audio["duration"]),
+                            reference_image=scene_reference,
+                            identity_reference=scene_reference,
+                            variation_attempt=attempt,
+                        )
+                        retry_frame = frame_path(retry)
+                        retry_similarity = (
+                            visual_similarity(previous_story_frame, retry_frame)
+                            if previous_story_frame and retry_frame
+                            else 0.0
+                        )
+                        duplicate_retry_count += 1
+                        if retry_similarity < best_similarity:
+                            best_visual = retry
+                            best_frame = retry_frame
+                            best_similarity = retry_similarity
+                        if retry_similarity < 0.78:
+                            break
+                    visual = best_visual
+                    candidate_frame = best_frame
+                    similarity = best_similarity
+
+                visual["previous_frame_similarity"] = round(similarity, 3)
+                if candidate_frame:
+                    previous_story_frame = candidate_frame
+
             if channel_cast_reference:
                 visual["channel_cast_reference"] = channel_cast_reference
             visuals.append(visual)
+
+        manifest["duplicate_scene_regenerations"] = duplicate_retry_count
 
         real_video_count = sum(1 for v in visuals if v.get("kind") == "ai_generated_video")
         ltx_video_count = sum(
