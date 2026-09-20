@@ -536,6 +536,87 @@ Return JSON exactly:
 """
 
 
+def _required_scene_count(target_seconds: int) -> tuple[int, int]:
+    minimum = max(12, min(15, round(target_seconds / 4.8)))
+    desired = min(18, max(minimum, round(target_seconds / 4.1)))
+    return minimum, desired
+
+
+def _usable_raw_scene_count(raw: dict[str, Any]) -> int:
+    scenes = raw.get("scenes") if isinstance(raw.get("scenes"), list) else []
+    return sum(
+        1
+        for scene in scenes
+        if isinstance(scene, dict) and _clean(scene.get("narration"), 240)
+    )
+
+
+def _repair_scene_count(
+    raw: dict[str, Any],
+    *,
+    target_seconds: int,
+    game_context: dict[str, Any],
+    genre: str,
+    arc_plan: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Expand a valid-but-too-short writer response before strict normalization."""
+    minimum, desired = _required_scene_count(target_seconds)
+    current = raw if isinstance(raw, dict) else {}
+    if _usable_raw_scene_count(current) >= minimum:
+        return current
+
+    for _ in range(3):
+        current_count = _usable_raw_scene_count(current)
+        repaired = chat_json(
+            "You are a Roblox screenplay continuity editor. Return compact JSON only.",
+            f"""
+TARGET RUNTIME: {target_seconds} seconds
+REQUIRED USABLE SCENES: at least {minimum}
+TARGET SCENE COUNT: exactly {desired}
+CURRENT USABLE SCENES: {current_count}
+GAME: {game_context.get("game_name")}
+
+VERIFIED GAME CONTEXT:
+{story_game_prompt_context(game_context)}
+
+POWER/FANTASY RULES:
+{_power_story_rules(genre)}
+
+LOCKED CAUSAL ARC:
+{json.dumps(arc_plan or {}, ensure_ascii=False)}
+
+CURRENT WRITER JSON:
+{json.dumps(current, ensure_ascii=False)}
+
+The writer returned too few usable scenes. Rebuild/expand it into EXACTLY {desired} purposeful scenes.
+
+Important:
+- Keep ONE central goal and the same premise/characters.
+- Do not pad by splitting one sentence into meaningless fragments.
+- Add real intermediate cause-and-effect beats: decision -> consequence -> new pressure/opportunity.
+- Every scene needs non-empty narration, environment, action, because_of and changes.
+- Most narration lines should be 6-14 spoken words.
+- Use setup/build/reveal beats to earn the climax and payoff.
+- Move through visually distinct VERIFIED game locations/set-pieces where possible.
+- Do not invent fake game mechanics, items, enemies, rooms, UI or lore.
+- Preserve approved fictional powers only when POWER/FANTASY RULES allow them.
+- Scene 1 is hook; final scene is payoff.
+- Return the complete story object, not only the missing scenes.
+- Return ONLY compact writer JSON. No markdown and no derived visual fields.
+""",
+            temperature=0.34,
+        )
+        if isinstance(repaired, dict):
+            current = repaired
+        if _usable_raw_scene_count(current) >= minimum:
+            return current
+
+    raise RuntimeError(
+        f"Story writer only produced {_usable_raw_scene_count(current)} usable scenes after automatic repair; "
+        f"this {target_seconds}-second Story needs at least {minimum}."
+    )
+
+
 def _normalise_story(
     raw: dict,
     target_seconds: int,
@@ -1462,6 +1543,13 @@ Return ONLY the repaired compact story JSON.
         temperature=0.30,
     )
 
+    result = _repair_scene_count(
+        result,
+        target_seconds=target_seconds,
+        game_context=game_context,
+        genre=str(story.get("genre") or "auto"),
+        arc_plan=story.get("arc_plan") or {},
+    )
     repaired = _normalise_story(result, target_seconds, game_context)
     repaired["arc_plan"] = story.get("arc_plan") or {}
     if story.get("idea_selection"):
@@ -1586,6 +1674,13 @@ def create_story(
         ),
         temperature=0.54,
     )
+    draft = _repair_scene_count(
+        draft,
+        target_seconds=target_seconds,
+        game_context=game_context,
+        genre=genre,
+        arc_plan=arc_plan,
+    )
     story = _normalise_story(draft, target_seconds, game_context)
     if genre != "auto":
         story["genre"] = genre
@@ -1637,6 +1732,13 @@ retention, claims, warnings, source_ids, edit_instruction, pattern_interrupt or 
         )
         retained_idea = story.get("idea_selection")
         retained_arc_plan = story.get("arc_plan") or arc_plan
+        rewritten = _repair_scene_count(
+            rewritten,
+            target_seconds=target_seconds,
+            game_context=game_context,
+            genre=genre,
+            arc_plan=retained_arc_plan,
+        )
         story = _normalise_story(rewritten, target_seconds, game_context)
         if genre != "auto":
             story["genre"] = genre
