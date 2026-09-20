@@ -633,9 +633,17 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
         if str(scene.get("speaker") or "narrator").lower() == "narrator"
     )
     unique_environments = {
-        re.sub(r"\s+", " ", str(scene.get("environment") or "").strip().lower())
+        re.sub(
+            r"\s+",
+            " ",
+            str(
+                scene.get("environment_key")
+                or scene.get("environment")
+                or ""
+            ).strip().lower(),
+        )
         for scene in scenes
-        if str(scene.get("environment") or "").strip()
+        if str(scene.get("environment_key") or scene.get("environment") or "").strip()
     }
     unique_cameras = {
         str(scene.get("camera") or "").strip().lower()
@@ -694,7 +702,7 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
         "natural_flow_ok": natural_flow_ok,
         "mechanical_start_count": mechanical_start_count,
         "line_starters": line_starters,
-        "visual_variety_ok": len(unique_environments) >= 4 and len(unique_cameras) >= 5,
+        "visual_variety_ok": 4 <= len(unique_environments) <= 8 and len(unique_cameras) >= 5,
         "unique_environment_count": len(unique_environments),
         "unique_camera_count": len(unique_cameras),
         "banned_phrase_ok": not banned_hits,
@@ -830,12 +838,13 @@ Return:
         )
     if not mechanical["visual_variety_ok"]:
         problems.append(
-            f"Movie repeats too much visually ({mechanical['unique_environment_count']} environments, "
+            f"Movie set-piece plan is weak ({mechanical['unique_environment_count']} environment groups, "
             f"{mechanical['unique_camera_count']} camera framings)."
         )
         rewrite_instructions.append(
-            "Use at least 4 clearly different in-game areas/set-pieces and 5 different camera framings. "
-            "No two adjacent scenes should look like the same shot."
+            "Use 4-8 clearly different in-game areas/set-pieces and at least 5 camera framings. "
+            "Reuse the same stable environment_key when the story remains in one location; "
+            "do not create a brand-new map for every single shot."
         )
     if not mechanical["word_count_ok"]:
         problems.append(
