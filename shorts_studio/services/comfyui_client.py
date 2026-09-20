@@ -90,7 +90,7 @@ def health() -> dict[str, Any]:
         "story_image_workflow": settings.comfyui_story_image_workflow,
         "story_image_models": {
             "diffusion": "flux-2-klein-4b-fp8.safetensors",
-            "text_encoder": "qwen_3_4b.safetensors",
+            "text_encoder": "qwen_3_4b_fp4_flux2.safetensors",
             "vae": "flux2-vae.safetensors",
         },
         "story_image_models_resolved": {},
