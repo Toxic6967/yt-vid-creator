@@ -98,11 +98,25 @@ def normalise_animation_plan(
         for actor_index, cid in enumerate(visible[:3]):
             proposed = actor_by_id.get(cid, {})
             clip = str(proposed.get("clip") or "").lower()
-            if clip not in ANIMATION_CLIPS:
-                clip = choose_clip_from_action(
-                    str(scene.get("action") or ""),
-                    str(scene.get("role") or ""),
+            action_context = " ".join(
+                str(value or "")
+                for value in (
+                    scene.get("action"),
+                    scene.get("narration"),
+                    scene.get("emotion"),
+                    scene.get("changes"),
                 )
+            )
+            inferred_clip = choose_clip_from_action(
+                action_context,
+                str(scene.get("role") or ""),
+            )
+            if clip not in ANIMATION_CLIPS:
+                clip = inferred_clip
+            elif clip == "idle" and inferred_clip != "idle":
+                # The AI director often returns a technically valid "idle"
+                # even when the screenplay clearly describes movement.
+                clip = inferred_clip
 
             try:
                 start_lane = float(proposed.get("start_lane", lanes[actor_index]))
@@ -153,6 +167,66 @@ def normalise_animation_plan(
                 "actors": actors,
             }
         )
+
+    # Deterministic repair: never throw away an otherwise good Story because
+    # the animation LLM was too conservative. Make the PRIMARY actor perform a
+    # readable non-idle beat on enough shots, using only generic body acting
+    # when the screenplay did not name a more specific action.
+    required_active = max(6, round(len(shots) * 0.76))
+    active_now = sum(
+        1
+        for shot in shots
+        if any(actor.get("clip") != "idle" for actor in (shot.get("actors") or []))
+    )
+    if active_now < required_active:
+        generic_cycle = ("react", "turn", "look_back")
+        for idx, shot in enumerate(shots):
+            if active_now >= required_active:
+                break
+            actors = shot.get("actors") or []
+            if not actors:
+                continue
+            if any(actor.get("clip") != "idle" for actor in actors):
+                continue
+
+            role = str(shot.get("role") or "")
+            context = " ".join(
+                str(value or "")
+                for value in (
+                    shot.get("action"),
+                    shot.get("emotion"),
+                )
+            )
+            inferred = choose_clip_from_action(context, role)
+            if inferred == "idle":
+                if role == "payoff":
+                    inferred = "celebrate"
+                elif role in {"hook", "reveal"}:
+                    inferred = "react"
+                else:
+                    inferred = generic_cycle[idx % len(generic_cycle)]
+
+            actors[0]["clip"] = inferred
+            active_now += 1
+
+    # Repair an overly static camera plan as well. The shot's framing remains
+    # locked; only a subtle camera move is added.
+    max_static = max(3, round(len(shots) * 0.48))
+    static_indexes = [
+        idx for idx, shot in enumerate(shots)
+        if str(shot.get("camera_motion") or "static") == "static"
+    ]
+    if len(static_indexes) > max_static:
+        motion_cycle = ("push_in", "track_left", "track_right", "small_orbit", "reveal_pan")
+        repair_count = len(static_indexes) - max_static
+        for repair_index, shot_index in enumerate(static_indexes[:repair_count]):
+            shot = shots[shot_index]
+            if str(shot.get("camera") or "") == "follow":
+                shot["camera_motion"] = "follow"
+            else:
+                shot["camera_motion"] = motion_cycle[
+                    (shot_index + repair_index) % len(motion_cycle)
+                ]
 
     return {
         "version": "v3.0",
