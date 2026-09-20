@@ -67,9 +67,16 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Testing Chatterbox + faster-whisper imports..." -ForegroundColor Cyan
-& $venvPython -c "from chatterbox.tts import ChatterboxTTS; from faster_whisper import WhisperModel; print('Chatterbox + aligner import OK')"
+& $venvPython -c "import perth; assert hasattr(perth,'DummyWatermarker'); print('Perth fallback ready:', getattr(perth,'PerthImplicitWatermarker',None) is None); from chatterbox.tts import ChatterboxTTS; from faster_whisper import WhisperModel; print('Chatterbox + aligner import OK')"
 if ($LASTEXITCODE -ne 0) {
     throw "Chatterbox installed but could not be imported."
+}
+
+Write-Host "Testing Shorts Studio Chatterbox runner compatibility..." -ForegroundColor Cyan
+$runner = Join-Path $projectRoot "scripts\chatterbox_narrate.py"
+& $venvPython -m py_compile $runner
+if ($LASTEXITCODE -ne 0) {
+    throw "Shorts Studio's Chatterbox runner did not compile."
 }
 
 Write-Host ""
