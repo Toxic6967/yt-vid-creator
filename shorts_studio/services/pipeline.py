@@ -16,6 +16,7 @@ from .research import (
 )
 from .retention import optimize_retention
 from .story_engine import create_story
+from .story_game import research_story_game
 from .ollama_client import unload_model
 from .tts import render_scene
 from .visuals import prepare_visual
@@ -79,22 +80,24 @@ def run_pipeline(job_id: str) -> None:
         update_job(job_id, selected_topic=selected_topic, content_type=content_type)
 
         if content_type == "story":
-            _stage(job_id, "Writing cinematic Roblox story", 25)
-            research = {
-                "topic": selected_topic,
-                "sources": [],
-                "evidence_score": 0,
-                "source_domains": [],
-                "note": "Fictional Roblox mini-movie. No factual research required.",
-            }
+            _stage(job_id, "Choosing a real Roblox game + mechanics", 14)
+            idea_hint = None if selected_topic.startswith("Auto-generated") else selected_topic
+            research = research_story_game(idea_hint)
+
+            _stage(job_id, f"Writing story inside {research.get('game_name','Roblox')}", 30)
             script = create_story(
-                None if selected_topic.startswith("Auto-generated") else selected_topic,
+                idea_hint,
                 audience=audience,
                 tone=tone,
                 target_seconds=int(job["target_seconds"]),
+                game_context=research,
                 genre=job.get("story_genre", "auto"),
             )
-            selected_topic = script.get("title") or selected_topic
+            selected_topic = (
+                f"{script.get('game_name')}: {script.get('title')}"
+                if script.get("game_name")
+                else (script.get("title") or selected_topic)
+            )
             update_job(job_id, selected_topic=selected_topic)
             story_score = script.get("story_score") or {}
             story_scores = story_score.get("scores") or {}
@@ -107,6 +110,7 @@ def run_pipeline(job_id: str) -> None:
                     "payoff": story_scores.get("payoff"),
                     "naturalness": story_scores.get("dialogue"),
                     "visual_pacing": story_scores.get("movie_clarity"),
+                    "game_specificity": story_scores.get("game_specificity"),
                 },
                 "issues": story_score.get("problems") or [],
             }
@@ -161,14 +165,14 @@ def run_pipeline(job_id: str) -> None:
         manifest["script"] = script
         manifest["retention"] = script.get("retention", {})
 
-        _stage(job_id, "Creating metadata", 50)
+        _stage(job_id, "Creating metadata", 52)
         metadata = create_metadata(selected_topic, script)
         manifest["metadata"] = metadata
 
         # Writing is complete. Free Qwen before ComfyUI/Wan takes the GPU.
         unload_model()
 
-        _stage(job_id, "Generating human-style narration", 57)
+        _stage(job_id, "Generating natural narration", 58)
         audio_dir = job_dir / "audio"
         audio_dir.mkdir(exist_ok=True)
         scene_audio = []
@@ -203,7 +207,7 @@ def run_pipeline(job_id: str) -> None:
                     + (f" Missing: {missing_story}." if missing_story else "")
                 )
 
-        _stage(job_id, "Generating cinematic story scenes", 69)
+        _stage(job_id, "Generating game-specific cinematic scenes", 70)
         visuals = []
         continuity_reference = None
         for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
