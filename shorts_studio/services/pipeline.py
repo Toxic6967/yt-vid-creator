@@ -29,6 +29,7 @@ from .roblox_reference import (
     compose_character_reference_sheet,
     compose_scene_previsualization,
 )
+from .animation_director import render_animated_story
 
 
 def _stage(job_id: str, name: str, progress: int) -> None:
@@ -263,6 +264,7 @@ def run_pipeline(job_id: str) -> None:
         "Kids / young Roblox players (roughly 8-14); energetic, clear, exciting, never babyish",
     )
     tone = profile.get("tone", "Fast, exciting Roblox gaming documentary")
+    visual_mode = str(job.get("visual_mode") or "animated").lower()
     manifest: dict = {
         "job_id": job_id,
         "channel_name": job["channel_name"],
@@ -274,7 +276,8 @@ def run_pipeline(job_id: str) -> None:
         "tone": tone,
         "content_type": job.get("content_type", "auto"),
         "story_genre": job.get("story_genre", "auto"),
-        "pipeline_version": "2.2.0",
+        "visual_mode": visual_mode,
+        "pipeline_version": "3.0.0",
     }
 
     try:
@@ -459,141 +462,154 @@ def run_pipeline(job_id: str) -> None:
 
         manifest["audio"] = scene_audio
 
-        if content_type == "story":
-            from .comfyui_client import health as comfyui_health
-            story_media_state = comfyui_health()
-            if not story_media_state.get("story_video_ready"):
-                missing_story = ", ".join(
-                    story_media_state.get("missing_story_video_models") or []
-                )
-                raise RuntimeError(
-                    "Cinematic Story mode needs the keyframe-to-video backend before rendering. "
-                    "Run install_story_video_models.bat, restart ComfyUI, then regenerate."
-                    + (f" Missing: {missing_story}." if missing_story else "")
-                )
-
-        _stage(job_id, "Building polished Roblox R15 cast", 64)
         visuals = []
-        channel_cast_reference = None
-        polished_cast_refs: dict[str, str] = {}
         environment_plates: dict[str, str] = {}
-        if content_type == "story":
-            polished_cast_refs = _ensure_polished_story_cast(
-                job_dir,
-                script.get("characters", []),
-            )
-            channel_cast_reference = str(
-                compose_character_reference_sheet(
-                    list(polished_cast_refs.values()),
-                    job_dir / "reference" / "channel_cast_reference.png",
-                )
-            )
-            manifest["polished_cast_references"] = polished_cast_refs
+        duplicate_retry_count = 0
 
-            _stage(job_id, "Building Roblox game environments", 68)
+        if content_type == "story":
+            _stage(job_id, "Building Roblox game environments", 64)
             environment_plates = _ensure_story_environment_plates(job_dir, script)
             manifest["environment_plates"] = environment_plates
 
-        previous_story_frame = None
-        duplicate_retry_count = 0
-        if content_type == "story":
-            _stage(job_id, "Composing cinematic Roblox scenes", 72)
-
-        for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
-            scene_reference = None
-            if content_type == "story":
-                scene_reference = _scene_polished_reference(
-                    scene,
-                    polished_cast_refs,
-                    job_dir / "reference" / f"scene_{idx:02d}_cast.png",
+            if visual_mode == "animated":
+                _stage(job_id, "Planning controlled R15 animation", 70)
+                animation_result = render_animated_story(
+                    script=script,
+                    scene_audio=scene_audio,
+                    environment_plates=environment_plates,
+                    job_dir=job_dir,
                 )
-
-            environment_reference = None
-            if content_type == "story":
-                environment_reference = environment_plates.get(
-                    _scene_environment_key(scene)
-                )
-                if environment_reference:
-                    environment_reference = str(
-                        compose_scene_previsualization(
-                            environment_reference,
-                            _scene_polished_paths(scene, polished_cast_refs),
-                            job_dir / "reference" / f"scene_{idx:02d}_previs.png",
-                            camera=str(scene.get("camera") or "medium"),
-                        )
+                visuals = animation_result["visuals"]
+                manifest["animation_engine"] = animation_result["engine"]
+                manifest["animation_plan"] = animation_result["plan"]
+                manifest["animation_quality"] = animation_result["quality"]
+                manifest["duplicate_scene_regenerations"] = 0
+            else:
+                from .comfyui_client import health as comfyui_health
+                story_media_state = comfyui_health()
+                if not story_media_state.get("story_video_ready"):
+                    missing_story = ", ".join(
+                        story_media_state.get("missing_story_video_models") or []
+                    )
+                    raise RuntimeError(
+                        "Generative Story mode needs the LTX keyframe-to-video backend. "
+                        "Run install_story_video_models.bat, restart ComfyUI, then regenerate."
+                        + (f" Missing: {missing_story}." if missing_story else "")
                     )
 
-            visual = prepare_visual(
-                scene,
-                job_dir,
-                idx,
-                selected_topic,
-                duration=float(audio["duration"]),
-                reference_image=scene_reference if content_type == "story" else None,
-                identity_reference=scene_reference if content_type == "story" else None,
-                environment_reference=environment_reference,
-            )
-
-            if content_type == "story":
-                def frame_path(item: dict) -> str | None:
-                    value = item.get("keyframe_path")
-                    if value:
-                        return str(value)
-                    if item.get("kind") == "ai_generated_scene" and item.get("path"):
-                        return str(item["path"])
-                    return None
-
-                candidate_frame = frame_path(visual)
-                similarity = (
-                    visual_similarity(previous_story_frame, candidate_frame)
-                    if previous_story_frame and candidate_frame
-                    else 0.0
+                _stage(job_id, "Building polished Roblox R15 cast", 68)
+                polished_cast_refs = _ensure_polished_story_cast(
+                    job_dir,
+                    script.get("characters", []),
                 )
+                channel_cast_reference = str(
+                    compose_character_reference_sheet(
+                        list(polished_cast_refs.values()),
+                        job_dir / "reference" / "channel_cast_reference.png",
+                    )
+                )
+                manifest["polished_cast_references"] = polished_cast_refs
 
-                # If adjacent shots are visually near-identical, automatically
-                # regenerate with a different seed/composition instruction.
-                if similarity >= 0.82:
-                    best_visual = visual
-                    best_frame = candidate_frame
-                    best_similarity = similarity
-                    for attempt in (1, 2):
-                        retry = prepare_visual(
-                            scene,
-                            job_dir,
-                            idx,
-                            selected_topic,
-                            duration=float(audio["duration"]),
-                            reference_image=scene_reference,
-                            identity_reference=scene_reference,
-                            environment_reference=environment_reference,
-                            variation_attempt=attempt,
+                previous_story_frame = None
+                _stage(job_id, "Composing generative Roblox scenes", 72)
+                for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
+                    scene_reference = _scene_polished_reference(
+                        scene,
+                        polished_cast_refs,
+                        job_dir / "reference" / f"scene_{idx:02d}_cast.png",
+                    )
+
+                    environment_reference = environment_plates.get(
+                        _scene_environment_key(scene)
+                    )
+                    if environment_reference:
+                        environment_reference = str(
+                            compose_scene_previsualization(
+                                environment_reference,
+                                _scene_polished_paths(scene, polished_cast_refs),
+                                job_dir / "reference" / f"scene_{idx:02d}_previs.png",
+                                camera=str(scene.get("camera") or "medium"),
+                            )
                         )
-                        retry_frame = frame_path(retry)
-                        retry_similarity = (
-                            visual_similarity(previous_story_frame, retry_frame)
-                            if previous_story_frame and retry_frame
-                            else 0.0
-                        )
-                        duplicate_retry_count += 1
-                        if retry_similarity < best_similarity:
-                            best_visual = retry
-                            best_frame = retry_frame
-                            best_similarity = retry_similarity
-                        if retry_similarity < 0.78:
-                            break
-                    visual = best_visual
-                    candidate_frame = best_frame
-                    similarity = best_similarity
 
-                visual["previous_frame_similarity"] = round(similarity, 3)
-                if candidate_frame:
-                    previous_story_frame = candidate_frame
+                    visual = prepare_visual(
+                        scene,
+                        job_dir,
+                        idx,
+                        selected_topic,
+                        duration=float(audio["duration"]),
+                        reference_image=scene_reference,
+                        identity_reference=scene_reference,
+                        environment_reference=environment_reference,
+                    )
 
-            if channel_cast_reference:
-                visual["channel_cast_reference"] = channel_cast_reference
-            visuals.append(visual)
+                    def frame_path(item: dict) -> str | None:
+                        value = item.get("keyframe_path")
+                        if value:
+                            return str(value)
+                        if item.get("kind") == "ai_generated_scene" and item.get("path"):
+                            return str(item["path"])
+                        return None
 
-        manifest["duplicate_scene_regenerations"] = duplicate_retry_count
+                    candidate_frame = frame_path(visual)
+                    similarity = (
+                        visual_similarity(previous_story_frame, candidate_frame)
+                        if previous_story_frame and candidate_frame
+                        else 0.0
+                    )
+
+                    if similarity >= 0.82:
+                        best_visual = visual
+                        best_frame = candidate_frame
+                        best_similarity = similarity
+                        for attempt in (1, 2):
+                            retry = prepare_visual(
+                                scene,
+                                job_dir,
+                                idx,
+                                selected_topic,
+                                duration=float(audio["duration"]),
+                                reference_image=scene_reference,
+                                identity_reference=scene_reference,
+                                environment_reference=environment_reference,
+                                variation_attempt=attempt,
+                            )
+                            retry_frame = frame_path(retry)
+                            retry_similarity = (
+                                visual_similarity(previous_story_frame, retry_frame)
+                                if previous_story_frame and retry_frame
+                                else 0.0
+                            )
+                            duplicate_retry_count += 1
+                            if retry_similarity < best_similarity:
+                                best_visual = retry
+                                best_frame = retry_frame
+                                best_similarity = retry_similarity
+                            if retry_similarity < 0.78:
+                                break
+                        visual = best_visual
+                        candidate_frame = best_frame
+                        similarity = best_similarity
+
+                    visual["previous_frame_similarity"] = round(similarity, 3)
+                    if candidate_frame:
+                        previous_story_frame = candidate_frame
+                    visual["channel_cast_reference"] = channel_cast_reference
+                    visuals.append(visual)
+
+                manifest["duplicate_scene_regenerations"] = duplicate_retry_count
+        else:
+            _stage(job_id, "Generating visuals", 68)
+            for idx, (scene, audio) in enumerate(zip(script["scenes"], scene_audio), start=1):
+                visuals.append(
+                    prepare_visual(
+                        scene,
+                        job_dir,
+                        idx,
+                        selected_topic,
+                        duration=float(audio["duration"]),
+                    )
+                )
 
         real_video_count = sum(1 for v in visuals if v.get("kind") == "ai_generated_video")
         ltx_video_count = sum(
