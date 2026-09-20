@@ -25,6 +25,7 @@ from .tts import render_scene, render_story_narration
 from .visuals import prepare_visual, visual_similarity
 from .roblox_reference import (
     build_cast_reference,
+    build_environment_seed,
     compose_character_reference_sheet,
 )
 
