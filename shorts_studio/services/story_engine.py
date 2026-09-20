@@ -976,7 +976,8 @@ Return exactly:
   "shots":[
     {{
       "index":0,
-      "environment":"specific verified game area/background/set-piece",
+      "environment_key":"short stable set-piece name reused when scenes share the same location",
+      "environment":"specific verified game area/background/set-piece with useful visual detail",
       "action":"one physical visible action",
       "camera":"wide|medium|close-up|over-shoulder|follow|low-angle|high-angle",
       "emotion":"short pose/emotion direction",
@@ -1004,11 +1005,14 @@ Return exactly:
     for idx, scene in enumerate(scenes):
         shot = by_index.get(idx)
         if shot:
+            env_key = _clean(shot.get("environment_key"), 80).lower()
             env = _clean(shot.get("environment"), 220)
             action = _clean(shot.get("action"), 260)
             camera = _clean(shot.get("camera"), 60).lower()
             emotion = _clean(shot.get("emotion"), 90)
             priority = _clean(shot.get("motion_priority"), 12).lower()
+            if env_key:
+                scene["environment_key"] = env_key
             if env:
                 scene["environment"] = env
             if action:
