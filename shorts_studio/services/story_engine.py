@@ -1432,17 +1432,22 @@ Return:
     # Hard-stop only genuinely broken stories. Hook wording, narrator polish and
     # shot variety have dedicated later passes, so they should not endlessly
     # reject an otherwise coherent screenplay by a few subjective points.
-    passed = (
-        total >= 74
-        and scores["hook"] >= 72
-        and scores["payoff"] >= 72
-        and scores["coherence"] >= 75
-        and scores["cause_effect"] >= 74
-        and scores["setup_payoff"] >= 72
-        and scores["arc_fidelity"] >= 75
-        and scores["dialogue"] >= 70
-        and scores["game_specificity"] >= 78
-        and scores["cringe_avoidance"] >= 80
+    # Keep a strong editorial TARGET, but separate it from the production gate.
+    # The writer/director still aims for these higher standards and repair passes
+    # use the exact problems below. Production should only stop for genuinely
+    # broken stories, not because a subjective reviewer gave an otherwise usable
+    # hook/dialogue/visual score a few points under target.
+    quality_target_met = (
+        total >= 76
+        and scores["hook"] >= 74
+        and scores["payoff"] >= 74
+        and scores["coherence"] >= 76
+        and scores["cause_effect"] >= 75
+        and scores["setup_payoff"] >= 73
+        and scores["arc_fidelity"] >= 76
+        and scores["dialogue"] >= 72
+        and scores["game_specificity"] >= 80
+        and scores["cringe_avoidance"] >= 82
         and all(
             mechanical[key]
             for key in (
@@ -1457,12 +1462,36 @@ Return:
             )
         )
     )
+
+    # Temporary production gate: deliberately more forgiving while V3 is being
+    # tuned. These are the standards that must be non-broken before we spend time
+    # on narration/FLUX/Blender. Softer creative scores remain guidance, not blockers.
+    passed = (
+        total >= 62
+        and scores["coherence"] >= 62
+        and scores["cause_effect"] >= 60
+        and scores["setup_payoff"] >= 58
+        and scores["arc_fidelity"] >= 62
+        and scores["game_specificity"] >= 68
+        and scores["cringe_avoidance"] >= 68
+        and all(
+            mechanical[key]
+            for key in (
+                "scene_count_ok",
+                "arc_structure_ok",
+                "arc_fields_ok",
+                "single_narrator_ok",
+                "banned_phrase_ok",
+            )
+        )
+    )
     return {
         "scores": scores,
         "mechanical": mechanical,
         "total": total,
         "problems": problems,
         "rewrite_instructions": rewrite_instructions,
+        "quality_target_met": quality_target_met,
         "passed": passed,
     }
 
@@ -1539,22 +1568,31 @@ For player_behavior, 100 means believable decisions.
         for item in (result.get("fatal_problems") or [])
         if _clean(item, 220)
     ][:6]
+    # Keep the critic ambitious, but only block production when the plot is
+    # genuinely incoherent or unfaithful to the researched game.
+    quality_target_met = (
+        scores["causal_logic"] >= 76
+        and scores["player_behavior"] >= 72
+        and scores["game_truth"] >= 82
+        and scores["central_goal"] >= 76
+        and scores["escalation"] >= 72
+        and scores["turning_point"] >= 72
+        and scores["ending_logic"] >= 78
+        and scores["filler"] >= 74
+        and not fatal
+    )
     severe_logic_failure = (
-        scores["causal_logic"] < 65
-        or scores["game_truth"] < 70
-        or scores["central_goal"] < 65
-        or scores["ending_logic"] < 65
+        scores["causal_logic"] < 52
+        or scores["game_truth"] < 58
+        or scores["central_goal"] < 52
+        or scores["ending_logic"] < 52
     )
     passed = (
         not severe_logic_failure
-        and scores["causal_logic"] >= 74
-        and scores["player_behavior"] >= 70
-        and scores["game_truth"] >= 80
-        and scores["central_goal"] >= 74
-        and scores["escalation"] >= 70
-        and scores["turning_point"] >= 70
-        and scores["ending_logic"] >= 76
-        and scores["filler"] >= 72
+        and scores["causal_logic"] >= 60
+        and scores["game_truth"] >= 66
+        and scores["central_goal"] >= 60
+        and scores["ending_logic"] >= 60
     )
     return {
         "scores": scores,
@@ -1564,6 +1602,7 @@ For player_behavior, 100 means believable decisions.
             for item in (result.get("notes") or [])
             if _clean(item, 220)
         ][:8],
+        "quality_target_met": quality_target_met,
         "passed": passed,
     }
 
@@ -2012,9 +2051,10 @@ def _finalize_story_quality(
     best_story = story
     best_score: dict[str, Any] | None = None
 
-    # Four focused repair cycles are enough. Endless self-rewrites tend to make
-    # a small local model drift away from the original coherent arc.
-    for attempt in range(4):
+    # Aim for the strong quality target, but do not endlessly reject a usable
+    # story. Two focused repair cycles are enough before we accept a production-
+    # safe script and let the user judge the actual rendered result.
+    for attempt in range(3):
         candidate = _direct_story_shots(
             working_story,
             game_context=game_context,
@@ -2053,10 +2093,22 @@ def _finalize_story_quality(
             best_story = candidate
             best_score = score
 
-        if score.get("passed"):
+        strong_target_met = (
+            bool(score.get("quality_target_met"))
+            and bool(logic_audit.get("quality_target_met"))
+        )
+        if strong_target_met:
             return candidate
 
-        # IMPORTANT: any failed quality score now rewrites the screenplay itself.
+        # If it is already safe enough to render, give the editor one chance to
+        # improve it toward the strong target. After that, stop self-rewriting
+        # and let V3 render the usable story instead of looping forever.
+        if score.get("passed") and logic_audit.get("passed") and attempt >= 1:
+            score["accepted_below_target"] = True
+            candidate["story_score"] = score
+            return candidate
+
+        # IMPORTANT: any failed/under-target quality score rewrites the screenplay itself.
         # Previously hook/dialogue/payoff/arc failures just re-ran directing on the
         # same weak script and could never improve.
         try:
@@ -2114,6 +2166,13 @@ def _finalize_story_quality(
         target_seconds,
         game_context,
     )
+    # Final temporary V3 policy: if the best repaired candidate is production-safe
+    # according to the relaxed gate, allow it through even when the aspirational
+    # target was not reached. Problems remain attached for review/debugging.
+    if best_story["story_score"].get("passed"):
+        best_story["story_score"]["accepted_below_target"] = not bool(
+            best_story["story_score"].get("quality_target_met")
+        )
     return best_story
 
 
