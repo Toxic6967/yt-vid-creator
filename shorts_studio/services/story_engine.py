@@ -1581,6 +1581,8 @@ def create_story(
         temperature=0.54,
     )
     story = _normalise_story(draft, target_seconds, game_context)
+    if genre != "auto":
+        story["genre"] = genre
     story["arc_plan"] = arc_plan
     if selected_idea:
         story["idea_selection"] = selected_idea
@@ -1627,6 +1629,8 @@ retention, claims, warnings, source_ids, edit_instruction, pattern_interrupt or 
         retained_idea = story.get("idea_selection")
         retained_arc_plan = story.get("arc_plan") or arc_plan
         story = _normalise_story(rewritten, target_seconds, game_context)
+        if genre != "auto":
+            story["genre"] = genre
         story["arc_plan"] = retained_arc_plan
         if retained_idea:
             story["idea_selection"] = retained_idea
