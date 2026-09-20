@@ -948,6 +948,36 @@ def _direct_story_shots(
     if not scenes:
         return story
 
+    raw_setpieces = list(game_context.get("visual_setpieces") or [])
+    if len(raw_setpieces) < 4:
+        raw_setpieces.extend(game_context.get("locations") or [])
+
+    setpiece_catalog = []
+    seen_setpieces: set[str] = set()
+    for item in raw_setpieces:
+        if not isinstance(item, dict):
+            continue
+        name = _clean(item.get("name"), 100)
+        if not name:
+            continue
+        key = re.sub(r"\s+", " ", name.lower()).strip()
+        if key in seen_setpieces:
+            continue
+        seen_setpieces.add(key)
+        setpiece_catalog.append(
+            {
+                "index": len(setpiece_catalog),
+                "name": name,
+                "appearance": _clean(
+                    item.get("appearance") or item.get("description"),
+                    260,
+                ),
+                "story_use": _clean(item.get("story_use"), 200),
+            }
+        )
+        if len(setpiece_catalog) >= 8:
+            break
+
     compact = [
         {
             "index": idx,
@@ -969,6 +999,9 @@ GAME: {game_context.get("game_name")}
 VERIFIED GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
+ALLOWED VISUAL SET-PIECES (use these IDs; do not invent new locations):
+{json.dumps(setpiece_catalog, ensure_ascii=False)}
+
 LOCKED STORY BEATS:
 {json.dumps(compact, ensure_ascii=False)}
 
@@ -978,6 +1011,8 @@ Hard rules:
 - Return exactly {len(scenes)} shots in the same order.
 - Every shot must visibly communicate its narration beat.
 - Use only locations, mechanics, props, enemies or objectives supported by VERIFIED GAME CONTEXT.
+- For every shot choose a valid setpiece_index from ALLOWED VISUAL SET-PIECES whenever that list is non-empty.
+- Do not rename an allowed set-piece into a fake room/location.
 - The movie happens in one continuous game session, but it must VISIBLY MOVE FORWARD.
 - Prefer 4-7 distinct game areas/set-pieces across the longer Short when the verified game supports them.
 - Never give adjacent shots the same environment + camera combination.
@@ -995,6 +1030,7 @@ Return exactly:
   "shots":[
     {{
       "index":0,
+      "setpiece_index":0,
       "environment_key":"short stable set-piece name reused when scenes share the same location",
       "environment":"specific verified game area/background/set-piece with useful visual detail",
       "action":"one physical visible action",
@@ -1026,6 +1062,22 @@ Return exactly:
         if shot:
             env_key = _clean(shot.get("environment_key"), 80).lower()
             env = _clean(shot.get("environment"), 220)
+
+            if setpiece_catalog:
+                try:
+                    setpiece_index = int(shot.get("setpiece_index"))
+                except Exception:
+                    setpiece_index = -1
+                if 0 <= setpiece_index < len(setpiece_catalog):
+                    chosen = setpiece_catalog[setpiece_index]
+                    env_key = _clean(chosen.get("name"), 80).lower()
+                    appearance = _clean(chosen.get("appearance"), 220)
+                    env = (
+                        f"{chosen.get('name')}: {appearance}"
+                        if appearance
+                        else str(chosen.get("name") or env)
+                    )
+
             action = _clean(shot.get("action"), 260)
             camera = _clean(shot.get("camera"), 60).lower()
             emotion = _clean(shot.get("emotion"), 90)
