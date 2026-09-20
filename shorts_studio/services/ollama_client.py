@@ -82,7 +82,7 @@ def chat_json(system: str, user: str, *, temperature: float = 0.35) -> dict[str,
         "options": {
             "temperature": temperature,
             "num_ctx": 6144,
-            "num_predict": 2200,
+            "num_predict": 3200,
         },
     }
 
@@ -102,7 +102,7 @@ def chat_json(system: str, user: str, *, temperature: float = 0.35) -> dict[str,
                 retry_payload["options"] = {
                     "temperature": temperature,
                     "num_ctx": 4096,
-                    "num_predict": 1600,
+                    "num_predict": 2600,
                     "num_gpu": 0,
                 }
                 retry = client.post(
@@ -190,7 +190,7 @@ def chat_json(system: str, user: str, *, temperature: float = 0.35) -> dict[str,
         "options": {
             "temperature": min(float(temperature), 0.25),
             "num_ctx": 6144,
-            "num_predict": 2600,
+            "num_predict": 3400,
         },
     }
 
