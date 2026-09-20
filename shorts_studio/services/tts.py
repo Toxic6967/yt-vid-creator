@@ -33,10 +33,10 @@ FEMALE_PREFERENCES = (
 )
 
 KOKORO_VOICES = {
-    "auto-youthful-male": "am_michael",
-    "human-story-male": "am_michael",
-    "auto-youthful-female": "af_sarah",
-    "human-story-female": "af_sarah",
+    "auto-youthful-male": "am_fenrir",
+    "human-story-male": "am_fenrir",
+    "auto-youthful-female": "af_heart",
+    "human-story-female": "af_heart",
     "character-male-1": "am_michael",
     "character-male-2": "am_fenrir",
     "character-male-3": "am_adam",
@@ -170,6 +170,129 @@ def _render_kokoro(
         "speed": speed,
         "role": role,
         "backend": "kokoro-onnx",
+    }
+
+
+def render_story_narration(
+    scenes: list[dict[str, Any]],
+    voice: str,
+    output_path: Path,
+) -> dict[str, Any]:
+    """Render the whole Story in one Kokoro pass so cadence never resets between scenes."""
+    if not human_voice_health()["ready"]:
+        raise RuntimeError(
+            "Human narration backend is not ready. Run install_human_voice.bat and restart Shorts Studio."
+        )
+    if not scenes:
+        raise RuntimeError("Story has no narration scenes.")
+
+    lines: list[str] = []
+    scene_word_counts: list[int] = []
+    for scene in scenes:
+        line = re.sub(r"\s+", " ", str(scene.get("narration") or "")).strip()
+        if not line:
+            line = "..."
+        # Keep the writer's punctuation. Do not force a full stop on every scene;
+        # scene boundaries are editing boundaries, not speech boundaries.
+        lines.append(line)
+        scene_word_counts.append(
+            len(re.findall(r"[A-Za-z0-9][A-Za-z0-9'_-]*", line))
+        )
+
+    spoken_text = " ".join(lines)
+    spoken_text = re.sub(r"\s+", " ", spoken_text).strip()
+    if spoken_text and spoken_text[-1] not in ".!?":
+        spoken_text += "."
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    wav_path = output_path.with_suffix(".wav")
+    resolved_voice = KOKORO_VOICES.get(voice, "am_fenrir")
+    model = _get_kokoro()
+
+    import soundfile as sf
+
+    # Slightly slower than the old scene-by-scene voice. This avoids the
+    # clipped "AI Shorts" cadence and gives punctuation room to breathe.
+    samples, sample_rate = model.create(
+        spoken_text,
+        voice=resolved_voice,
+        speed=0.96,
+        lang="en-us",
+    )
+    sf.write(str(wav_path), samples, sample_rate)
+
+    duration = float(len(samples)) / float(sample_rate) if sample_rate else 0.0
+    master_words = _estimated_word_timings(spoken_text, duration)
+
+    total_expected = sum(scene_word_counts)
+    if not master_words or total_expected <= 0:
+        raise RuntimeError("Could not create narration word timings.")
+
+    # Split one continuous narration timeline back into per-scene timing windows
+    # without re-synthesizing or concatenating audio.
+    scene_audio: list[dict[str, Any]] = []
+    cursor = 0
+    timeline_start = 0.0
+    for idx, (scene, count) in enumerate(zip(scenes, scene_word_counts)):
+        count = max(1, count)
+        chunk = master_words[cursor: cursor + count]
+        if not chunk:
+            chunk = [master_words[min(cursor, len(master_words) - 1)]]
+
+        start = 0.0 if idx == 0 else float(chunk[0]["start"])
+        cursor += count
+
+        if idx + 1 < len(scene_word_counts) and cursor < len(master_words):
+            end = float(master_words[cursor]["start"])
+        else:
+            end = duration
+        end = max(start + 0.35, end)
+
+        relative_words = []
+        for word in chunk:
+            relative_words.append(
+                {
+                    "text": word.get("text", ""),
+                    "start": max(0.0, float(word.get("start", 0)) - start),
+                    "duration": float(word.get("duration", 0)),
+                }
+            )
+
+        scene_audio.append(
+            {
+                "path": str(wav_path),
+                "duration": end - start,
+                "start": start,
+                "end": end,
+                "words": relative_words,
+                "voice": resolved_voice,
+                "requested_voice": voice,
+                "role": scene.get("role", ""),
+                "backend": "kokoro-onnx-continuous",
+                "speaker": "narrator",
+            }
+        )
+        timeline_start = end
+
+    # Keep exact video duration aligned with the continuous narration.
+    if scene_audio:
+        correction = duration - sum(float(x["duration"]) for x in scene_audio)
+        scene_audio[-1]["duration"] = max(
+            0.35,
+            float(scene_audio[-1]["duration"]) + correction,
+        )
+        scene_audio[-1]["end"] = duration
+
+    return {
+        "path": str(wav_path),
+        "duration": duration,
+        "words": master_words,
+        "voice": resolved_voice,
+        "requested_voice": voice,
+        "speed": 0.96,
+        "backend": "kokoro-onnx-continuous",
+        "scene_audio": scene_audio,
+        "text": spoken_text,
     }
 
 
