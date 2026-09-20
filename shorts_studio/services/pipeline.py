@@ -361,6 +361,7 @@ def run_pipeline(job_id: str) -> None:
         visuals = []
         channel_cast_reference = None
         polished_cast_refs: dict[str, str] = {}
+        environment_plates: dict[str, str] = {}
         if content_type == "story":
             polished_cast_refs = _ensure_polished_story_cast(
                 job_dir,
@@ -373,6 +374,10 @@ def run_pipeline(job_id: str) -> None:
                 )
             )
             manifest["polished_cast_references"] = polished_cast_refs
+
+            _stage(job_id, "Building Roblox game environments", 66)
+            environment_plates = _ensure_story_environment_plates(job_dir, script)
+            manifest["environment_plates"] = environment_plates
 
         previous_story_frame = None
         duplicate_retry_count = 0
