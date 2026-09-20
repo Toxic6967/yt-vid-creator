@@ -109,8 +109,8 @@ WrapStyle: 2
 
 [V4+ Styles]
 Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding
-Style: Main,Arial,76,&H00FFFFFF,&H00FFFFFF,&H00101010,&H78000000,-1,0,0,0,100,100,0,0,1,7,2,2,92,92,315,1
-Style: Hook,Arial,84,&H00FFFFFF,&H00FFFFFF,&H00101010,&H84000000,-1,0,0,0,100,100,0,0,1,8,2,2,86,86,325,1
+Style: Main,Arial,80,&H00FFFFFF,&H00FFFFFF,&H00101010,&H60000000,-1,0,0,0,100,100,0,0,1,7,2,2,88,88,330,1
+Style: Hook,Arial,88,&H00FFFFFF,&H00FFFFFF,&H00101010,&H70000000,-1,0,0,0,100,100,0,0,1,8,2,2,82,82,340,1
 
 [Events]
 Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
@@ -129,7 +129,8 @@ Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text
             timeline += float(audio.get("duration", 0))
             continue
 
-        for chunk in _caption_chunks(words, max_words=4):
+        max_words = 3 if scene.get("game_name") or scene.get("character_visuals") else 4
+        for chunk in _caption_chunks(words, max_words=max_words):
             chunk_end = (
                 timeline
                 + float(chunk[-1].get("start", 0))
