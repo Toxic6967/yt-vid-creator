@@ -455,6 +455,43 @@ def _normalise_story(
 
 
 
+def _writer_view(story: dict) -> dict[str, Any]:
+    """Strip generated visual/continuity fields before asking Qwen to rewrite."""
+    return {
+        "title": story.get("title"),
+        "game_name": story.get("game_name"),
+        "genre": story.get("genre"),
+        "premise": story.get("premise"),
+        "hook": story.get("hook"),
+        "characters": [
+            {
+                "id": c.get("id"),
+                "name": c.get("name"),
+                "gender": c.get("gender"),
+                "visual_identity": c.get("visual_identity"),
+                "personality": c.get("personality"),
+            }
+            for c in (story.get("characters") or [])[:3]
+        ],
+        "scenes": [
+            {
+                "role": scene.get("role"),
+                "speaker": "narrator",
+                "narration": scene.get("narration"),
+                "characters": scene.get("characters") or [],
+                "environment": scene.get("environment"),
+                "action": scene.get("action"),
+                "camera": scene.get("camera"),
+                "emotion": scene.get("emotion"),
+                "on_screen_emphasis": scene.get("on_screen_emphasis"),
+                "sfx_cue": scene.get("sfx_cue"),
+                "motion_priority": scene.get("motion_priority"),
+            }
+            for scene in (story.get("scenes") or [])[:11]
+        ],
+    }
+
+
 def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, Any]:
     scenes = story.get("scenes") or []
     narration = str(story.get("narration") or "")
@@ -501,7 +538,7 @@ REAL GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
 STORY:
-{json.dumps(story, ensure_ascii=False)}
+{json.dumps(_writer_view(story), ensure_ascii=False)}
 
 Score 0-100:
 - hook: does the first 1-2 seconds make someone stay?
@@ -647,7 +684,7 @@ REAL GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
 CURRENT STORY:
-{json.dumps(story, ensure_ascii=False)}
+{json.dumps(_writer_view(story), ensure_ascii=False)}
 
 EDITOR SCORE:
 {json.dumps(score, ensure_ascii=False)}
@@ -658,7 +695,9 @@ Start inside the conflict. Make it more recognisable to players of {game_context
 The problem and payoff must depend on real mechanics from the supplied game context.
 Do not make it louder/randomer just to increase excitement.
 No fake moral, no forced slang, no babyish wording.
-Return the exact same story JSON shape.
+Return ONLY the compact writer JSON shape used in CURRENT STORY.
+Do not add character_visuals, keyframe_prompt, motion_prompt, visual_query, game_context,
+retention, claims, warnings, source_ids, edit_instruction, pattern_interrupt or any other derived fields.
 """,
             temperature=0.48,
         )
