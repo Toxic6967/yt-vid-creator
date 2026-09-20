@@ -95,8 +95,18 @@ def _ensure_story_backend_ready() -> None:
     if not state.get("image_ready"):
         raise HTTPException(
             409,
-            "Story Studio needs the SDXL image checkpoint for cinematic keyframes.",
+            "Story Studio needs a normal image checkpoint for the general image tools.",
         )
+    if not state.get("story_image_ready"):
+        missing_image = ", ".join(state.get("missing_story_image_models") or [])
+        message = (
+            "High-quality Roblox Story images are not installed yet. "
+            "Run upgrade_story_quality.bat (or install_story_image_models.bat), "
+            "restart ComfyUI, then try again."
+        )
+        if missing_image:
+            message += f" Missing: {missing_image}."
+        raise HTTPException(409, message)
     if not state.get("story_video_ready"):
         missing = ", ".join(state.get("missing_story_video_models") or [])
         message = (
