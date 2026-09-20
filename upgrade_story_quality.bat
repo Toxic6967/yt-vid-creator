@@ -1,0 +1,30 @@
+@echo off
+setlocal
+cd /d %~dp0
+echo ==========================================================
+echo Shorts Studio - Story Quality Upgrade
+echo ==========================================================
+echo.
+echo This checks/installs:
+echo   1. Human Kokoro narration
+echo   2. FLUX.2 Klein 4B Story keyframes
+echo   3. LTX 2B cinematic keyframe-to-video
+echo.
+echo Existing model files are skipped.
+echo.
+
+call install_human_voice.bat
+if errorlevel 1 exit /b 1
+
+call install_story_image_models.bat
+if errorlevel 1 exit /b 1
+
+call install_story_video_models.bat
+if errorlevel 1 exit /b 1
+
+echo.
+echo ==========================================================
+echo Story quality upgrade complete.
+echo Close ComfyUI completely, reopen it, then run: py run.py
+echo ==========================================================
+pause
