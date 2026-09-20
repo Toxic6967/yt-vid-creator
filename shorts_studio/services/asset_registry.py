@@ -153,8 +153,37 @@ def choose_clip_from_action(action: str, role: str = "") -> str:
     return "idle"
 
 
-def normalise_power_effect(value: str | None, *, allow_powers: bool) -> str:
+def choose_power_from_action(action: str) -> str:
+    text = re.sub(r"\s+", " ", str(action or "").lower())
+    checks = (
+        ("portal", "portal"),
+        ("telekin", "telekinesis"),
+        ("shield", "shield"),
+        ("shockwave", "shockwave"),
+        ("ground slam", "shockwave"),
+        ("lightning", "lightning"),
+        ("electric", "lightning"),
+        ("dash", "kinetic_dash"),
+        ("blast", "energy_blast"),
+        ("beam", "energy_blast"),
+        ("energy", "energy_orb"),
+        ("charge", "energy_orb"),
+    )
+    for needle, effect in checks:
+        if needle in text:
+            return effect
+    return "none"
+
+
+def normalise_power_effect(
+    value: str | None,
+    *,
+    allow_powers: bool,
+    action: str = "",
+) -> str:
     if not allow_powers:
         return "none"
     key = re.sub(r"[^a-z0-9_]+", "_", str(value or "").strip().lower()).strip("_")
-    return key if key in POWER_EFFECTS else "none"
+    if key in POWER_EFFECTS and key != "none":
+        return key
+    return choose_power_from_action(action)
