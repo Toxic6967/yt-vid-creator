@@ -1701,6 +1701,83 @@ Return exactly:
     return story
 
 
+def _repair_story_from_editor_score(
+    story: dict[str, Any],
+    *,
+    audience: str,
+    target_seconds: int,
+    game_context: dict[str, Any],
+    score: dict[str, Any],
+    logic_audit: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Rewrite the actual screenplay when the quality gate finds weak hook/payoff/arc/dialogue."""
+    audit = logic_audit or {}
+    result = chat_json(
+        "You are a senior Roblox Shorts story editor repairing a screenplay after a failed quality review. Return JSON only.",
+        f"""
+AUDIENCE: {audience}
+TARGET RUNTIME: {target_seconds} seconds
+GAME: {game_context.get("game_name")}
+
+VERIFIED GAME CONTEXT:
+{story_game_prompt_context(game_context)}
+
+POWER/FANTASY RULES:
+{_power_story_rules(story.get("genre"))}
+
+LOCKED CAUSAL ARC — FOLLOW THIS, DO NOT INVENT A DIFFERENT PLOT:
+{json.dumps(story.get("arc_plan") or {}, ensure_ascii=False)}
+
+CURRENT STORY:
+{json.dumps(_writer_view(story), ensure_ascii=False)}
+
+EDITOR SCORE / PROBLEMS:
+{json.dumps(score, ensure_ascii=False)}
+
+LOGIC AUDIT:
+{json.dumps(audit, ensure_ascii=False)}
+
+Rewrite the WHOLE compact screenplay so it actually passes the review.
+
+Priority order:
+1. HOOK: scene 1 starts at the problem, danger, mistake, impossible choice or immediate game pressure. No setup sentence before the conflict.
+2. CENTRAL ARC: every scene serves the SAME goal in LOCKED CAUSAL ARC. Remove unrelated twists and side plots.
+3. CAUSE/EFFECT: each scene happens because of the previous choice, failure, discovery or verified game mechanic.
+4. PAYOFF: the final 2-3 scenes use something established earlier to resolve the original hook and goal.
+5. HUMAN NARRATION: write like a real gamer recounting what happened, with contractions and varied sentence openings. No documentary/trailer voice.
+6. VISUAL PROGRESSION: use 4-8 VERIFIED game set-pieces/areas across the movie and at least 5 useful camera framings. Do not repeat one backdrop for the whole story.
+7. GAME TRUTH: no fake Brookhaven/Roblox mechanics, secret weapons, NPC lore, rooms or UI unless VERIFIED GAME CONTEXT supports them.
+8. LENGTH: keep the required number of purposeful scenes for {target_seconds} seconds. No filler.
+
+Hard requirements:
+- Keep the same recurring character identities.
+- Keep one narrator.
+- Every scene has non-empty narration, environment, action, because_of and changes.
+- Scene 1 role=hook; final scene role=payoff.
+- Include setup/build/reveal progression between them.
+- Most narration lines 6-14 words, max 16.
+- Preserve compact writer JSON only; do not add derived visual fields.
+
+Return ONLY the repaired compact writer JSON.
+""",
+        temperature=0.32,
+    )
+
+    result = _repair_scene_count(
+        result,
+        target_seconds=target_seconds,
+        game_context=game_context,
+        genre=str(story.get("genre") or "auto"),
+        arc_plan=story.get("arc_plan") or {},
+    )
+    repaired = _normalise_story(result, target_seconds, game_context)
+    repaired["arc_plan"] = story.get("arc_plan") or {}
+    repaired["genre"] = story.get("genre") or repaired.get("genre")
+    if story.get("idea_selection"):
+        repaired["idea_selection"] = story.get("idea_selection")
+    return repaired
+
+
 def _repair_story_logic(
     story: dict[str, Any],
     *,
@@ -1775,13 +1852,15 @@ def _finalize_story_quality(
     target_seconds: int,
     game_context: dict[str, Any],
 ) -> dict[str, Any]:
-    """Final cheap polish loop before any expensive audio/image/video generation starts."""
+    """Repair, re-direct and re-score before any expensive media generation starts."""
+    working_story = story
     best_story = story
     best_score: dict[str, Any] | None = None
 
-    for _ in range(3):
+    # Longer stories need enough chances to fix writing, narration and shot planning.
+    for attempt in range(4):
         candidate = _direct_story_shots(
-            best_story,
+            working_story,
             game_context=game_context,
         )
         candidate = _polish_narration(
@@ -1801,6 +1880,7 @@ def _finalize_story_quality(
             game_context=game_context,
         )
         score["logic_audit"] = logic_audit
+
         if not logic_audit.get("passed"):
             score["passed"] = False
             audit_problems = logic_audit.get("fatal_problems") or logic_audit.get("notes") or []
@@ -1813,7 +1893,6 @@ def _finalize_story_quality(
             )
 
         candidate["story_score"] = score
-
         if best_score is None or float(score.get("total") or 0) >= float(best_score.get("total") or 0):
             best_story = candidate
             best_score = score
@@ -1821,19 +1900,57 @@ def _finalize_story_quality(
         if score.get("passed"):
             return candidate
 
-        # A failed logic audit needs an actual plot rewrite; simply re-directing
-        # the same broken screenplay cannot repair coincidence or motivation.
-        if not logic_audit.get("passed"):
-            try:
-                best_story = _repair_story_logic(
-                    candidate,
-                    audience=audience,
-                    target_seconds=target_seconds,
-                    game_context=game_context,
-                    audit=logic_audit,
-                )
-            except Exception:
-                best_story = candidate
+        # IMPORTANT: any failed quality score now rewrites the screenplay itself.
+        # Previously hook/dialogue/payoff/arc failures just re-ran directing on the
+        # same weak script and could never improve.
+        try:
+            working_story = _repair_story_from_editor_score(
+                candidate,
+                audience=audience,
+                target_seconds=target_seconds,
+                game_context=game_context,
+                score=score,
+                logic_audit=logic_audit,
+            )
+        except Exception:
+            # If the broad editor repair fails, fall back to the narrower logic repair.
+            if not logic_audit.get("passed"):
+                try:
+                    working_story = _repair_story_logic(
+                        candidate,
+                        audience=audience,
+                        target_seconds=target_seconds,
+                        game_context=game_context,
+                        audit=logic_audit,
+                    )
+                except Exception:
+                    working_story = candidate
+            else:
+                working_story = candidate
+
+        # Last attempt: make the hook/payoff mechanically explicit rather than
+        # repeatedly returning an almost-good script that fails on the same weakness.
+        if attempt == 2:
+            scenes = working_story.get("scenes") or []
+            if scenes:
+                arc = working_story.get("arc_plan") or {}
+                hook_event = _clean(arc.get("hook_event"), 180)
+                payoff = _clean(arc.get("payoff"), 180)
+                if hook_event:
+                    scenes[0]["action"] = hook_event
+                    scenes[0]["because_of"] = "opening situation"
+                    scenes[0]["changes"] = _clean(
+                        f"The central problem is now active: {arc.get('stakes') or arc.get('central_goal')}",
+                        200,
+                    )
+                if payoff:
+                    scenes[-1]["action"] = payoff
+                    scenes[-1]["because_of"] = _clean(
+                        f"The climax resolves the central goal: {arc.get('central_goal')}",
+                        180,
+                    )
+                    scenes[-1]["changes"] = "The opening problem is resolved and the story ends."
+                working_story["scenes"] = scenes
 
     best_story["story_score"] = best_score or _score_story(
         best_story,
