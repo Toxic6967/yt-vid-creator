@@ -150,8 +150,20 @@ $modelMap = @(
 foreach ($entry in $modelMap) {
     $folder = $entry[0]
     $file = $entry[1]
-    Move-OneFile -Source (Join-Path (Join-Path $oldModels $folder) $file) -Destination (Join-Path (Join-Path $newModels $folder) $file)
-    Move-OneFile -Source (Join-Path (Join-Path $oldModels $folder) "$file.part") -Destination (Join-Path (Join-Path $newModels $folder) "$file.part")
+    $destination = Join-Path (Join-Path $newModels $folder) $file
+    $partialDestination = "$destination.part"
+
+    # Search the whole Comfy Desktop install because older installer versions
+    # may have placed models beside, rather than inside, the actual backend.
+    $foundFiles = Get-ChildItem -Path $installRoot -Filter $file -File -Recurse -ErrorAction SilentlyContinue
+    foreach ($found in $foundFiles) {
+        Move-OneFile -Source $found.FullName -Destination $destination
+    }
+
+    $foundPartials = Get-ChildItem -Path $installRoot -Filter "$file.part" -File -Recurse -ErrorAction SilentlyContinue
+    foreach ($found in $foundPartials) {
+        Move-OneFile -Source $found.FullName -Destination $partialDestination
+    }
 }
 
 $yamlPath = Join-Path $comfyRoot "extra_model_paths.yaml"
@@ -186,7 +198,7 @@ if (Test-Path $oldData) {
 }
 Say "[OK] Shorts Studio data now lives at $newData" Green
 
-Set-Content -LiteralPath $marker -Value $storageRoot -Encoding UTF8
+Set-Content -LiteralPath $marker -Value $storageRoot -Encoding ASCII
 Say "[OK] Storage marker written: $marker" Green
 
 Say ""
