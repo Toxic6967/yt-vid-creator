@@ -2,7 +2,7 @@
 
 Private/local-first **automatic Roblox YouTube Shorts studio** for Windows.
 
-The default workflow is now built around **real Roblox experiences** instead of a generic original world. Full Auto can choose a recognisable Roblox game, research its real mechanics and locations, write a short story around things players actually do, narrate it, build game-specific environment plates, animate consistent Roblox-style characters in Blender, add captions/SFX/music, and place the result in a manual review queue.
+The workflow is built **only around real Roblox experiences**. Full Auto chooses or accepts a recognisable Roblox game, researches its real mechanics and locations, writes a short story around things players actually do, narrates it, builds game-specific environment plates, animates consistent Roblox-style characters in Blender, adds captions/SFX/music, and places the result in a manual review queue.
 
 **Nothing is auto-published to YouTube.**
 
@@ -14,7 +14,7 @@ Default flow:
 
 `REAL GAME DISCOVERY → GAME RESEARCH → STORY → LOGIC AUDIT → NARRATION → GAME-SPECIFIC ENVIRONMENT PLATES → SHOT/BLOCKING PLAN → BLENDER ROBLOX MACHINIMA → CAPTIONS/SFX/MUSIC → QUALITY GATE → REVIEW`
 
-Real-game Story mode is now the recommended/default mode. The older original Max/Mia/Kai animated universe remains available as an optional Story world.
+There is no fictional channel universe or recurring named cast. Each Short is tied to the selected real Roblox game and uses only the player roles needed for that video.
 
 Typical real-game formats include DOORS-style survival/horror situations, teammate betrayal, rare-item luck, obbies, round-based games, server mysteries, funny reversals and satisfying wins. The writer is instructed not to invent mechanics that the research did not establish.
 
@@ -29,7 +29,6 @@ V5 instead builds a deterministic segmented Roblox-style avatar directly in Blen
 - proper floor/ground contact and shadow
 - reusable shoulder/elbow/hip/knee pivots
 - walk/run/dash cycles, jumps, crouches, reactions, pointing, pickups, buttons/doors, falls and celebrations
-- reusable power VFX for the optional original fantasy mode
 - game-action props such as doors, keys, buttons, chests and collectibles when the screenplay establishes them
 - vertical camera presets plus push, track, follow, orbit and reveal motion
 - foreground floor/depth geometry so the result reads as a 3D scene instead of a character pasted onto a slideshow
@@ -78,7 +77,6 @@ The animation installer checks/installs Blender. The old Roblox FBX download is 
 
 In Video Studio → Story:
 
-- **Story world:** Real Roblox game story
 - **Story genre:** Auto
 - **Target:** about 58 seconds
 - **Visual mode:** Animated / V5 machinima
