@@ -798,8 +798,15 @@ def run_pipeline(job_id: str) -> None:
         quality = {
             "duration_ok": (
                 (
-                    42 <= duration <= 75
-                    and abs(duration - target_duration) <= max(8.0, target_duration * 0.18)
+                    (
+                        50 <= duration <= 75
+                        and abs(duration - target_duration) <= max(7.0, target_duration * 0.12)
+                    )
+                    if str(job.get("story_world") or "original").lower() == "original"
+                    else (
+                        42 <= duration <= 75
+                        and abs(duration - target_duration) <= max(8.0, target_duration * 0.18)
+                    )
                 )
                 if content_type == "story"
                 else 20 <= duration <= 45
