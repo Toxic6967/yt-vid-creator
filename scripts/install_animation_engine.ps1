@@ -3,8 +3,8 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 
 Write-Host ""
-Write-Host "=== Shorts Studio V3 - Roblox Animation Engine ===" -ForegroundColor Cyan
-Write-Host "This installs/checks Blender for deterministic R15 animation."
+Write-Host "=== Shorts Studio V5 - Roblox Machinima Engine ===" -ForegroundColor Cyan
+Write-Host "This installs/checks Blender for deterministic Roblox-style 3D animation."
 Write-Host ""
 
 function Find-Blender {
@@ -60,49 +60,42 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $storageMarker = Join-Path $projectRoot ".shorts_studio_storage"
+$storageRoot = $null
 if (Test-Path $storageMarker) {
     $storageRoot = (Get-Content $storageMarker -Raw).Trim()
 }
-else {
-    $storageRoot = "E:\auto yt"
-}
-if (-not $storageRoot) {
-    throw "Storage root is empty. Run setup_external_storage.bat first."
-}
 
-$robloxAssetDir = Join-Path $storageRoot "data\assets\roblox_official"
-$robloxR15 = Join-Path $robloxAssetDir "BlockyCharacter.fbx"
-New-Item -ItemType Directory -Force -Path $robloxAssetDir | Out-Null
+# V5 no longer depends on Roblox's FBX importing correctly. It builds the
+# segmented Roblox-style character rig directly in Blender. Keep the official
+# reference as an OPTIONAL legacy asset when storage is configured, but never
+# fail installation just because Roblox changes or removes the download.
+if ($storageRoot) {
+    $robloxAssetDir = Join-Path $storageRoot "data\assets\roblox_official"
+    $robloxR15 = Join-Path $robloxAssetDir "BlockyCharacter.fbx"
+    New-Item -ItemType Directory -Force -Path $robloxAssetDir | Out-Null
 
-if (-not (Test-Path $robloxR15)) {
-    Write-Host ""
-    Write-Host "Downloading Roblox's official Blocky R15 reference character..." -ForegroundColor Yellow
-    $url = "https://prod.docsiteassets.roblox.com/assets/avatar/dynamic-heads/reference-files/BlockyCharacter.fbx"
-    try {
-        Invoke-WebRequest -Uri $url -OutFile $robloxR15 -UseBasicParsing
+    if (-not (Test-Path $robloxR15)) {
+        Write-Host ""
+        Write-Host "Optional: trying to download Roblox's legacy Blocky R15 reference..." -ForegroundColor DarkYellow
+        $url = "https://prod.docsiteassets.roblox.com/assets/avatar/dynamic-heads/reference-files/BlockyCharacter.fbx"
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $robloxR15 -UseBasicParsing
+            if ((Get-Item $robloxR15).Length -lt 100000) {
+                Remove-Item $robloxR15 -Force -ErrorAction SilentlyContinue
+                Write-Host "Legacy R15 reference download was incomplete; V5 will continue without it." -ForegroundColor DarkYellow
+            }
+            else {
+                Write-Host "Optional legacy R15 reference saved: $robloxR15" -ForegroundColor DarkGreen
+            }
+        }
+        catch {
+            if (Test-Path $robloxR15) { Remove-Item $robloxR15 -Force -ErrorAction SilentlyContinue }
+            Write-Host "Legacy R15 reference was unavailable; this does NOT block V5 rendering." -ForegroundColor DarkYellow
+        }
     }
-    catch {
-        if (Test-Path $robloxR15) { Remove-Item $robloxR15 -Force -ErrorAction SilentlyContinue }
-        throw "Could not download the official Roblox BlockyCharacter.fbx reference: $($_.Exception.Message)"
-    }
-}
-
-if ((Get-Item $robloxR15).Length -lt 100000) {
-    throw "The downloaded Roblox R15 reference looks incomplete: $robloxR15"
-}
-
-Write-Host "Official Roblox R15 reference:" -ForegroundColor Green
-Write-Host "  $robloxR15" -ForegroundColor Green
-
-Write-Host ""
-Write-Host "Testing that Blender can import the official Roblox R15 FBX..." -ForegroundColor Yellow
-$escapedR15 = $robloxR15.Replace("\", "\\")
-& $blender --background --factory-startup --python-expr "import bpy; bpy.ops.import_scene.fbx(filepath=r'$escapedR15'); print('Official Roblox R15 import OK', len(bpy.context.scene.objects))"
-if ($LASTEXITCODE -ne 0) {
-    throw "Blender is installed, but importing the official Roblox R15 reference failed."
 }
 
 Write-Host ""
-Write-Host "V3 Roblox animation engine is ready." -ForegroundColor Green
+Write-Host "V5 Roblox machinima engine is ready." -ForegroundColor Green
 Write-Host "Restart Shorts Studio after this installer finishes."
 Write-Host ""
