@@ -22,6 +22,11 @@ jobs:
           python - <<'PY'
           from shorts_studio.db import init_db, create_job, get_job
           from shorts_studio.services.animation_timeline import normalise_animation_plan
+          from shorts_studio.services.story_engine import (
+              _fallback_scene_scaffold,
+              _normalise_story,
+              _required_scene_count,
+          )
 
           init_db()
           create_job({
@@ -70,5 +75,60 @@ jobs:
           assert len(plan['shots']) == 6
           assert plan['shots'][2]['actors'][0]['power_effect'] == 'shield'
           assert plan['shots'][3]['actors'][0]['power_effect'] == 'energy_blast'
+
+          # Regression guard for the old "0 usable scenes / needs 14" failure.
+          minimum, desired = _required_scene_count(65)
+          context = {
+              'game_name': 'Test Roblox World',
+              'visual_setpieces': [
+                  {'name': 'Atrium'},
+                  {'name': 'Transit Tunnel'},
+                  {'name': 'Rooftop'},
+                  {'name': 'Core Room'},
+              ],
+              'locations': [],
+              'mechanics': [],
+              'player_situations': [],
+              'is_original_universe': True,
+          }
+          arc = {
+              'central_goal': 'Max has to shut down the unstable Core Drone before the district loses power.',
+              'stakes': 'The blackout will spread across the district.',
+              'hook_event': 'The Core Drone overloads while Max is standing beside it.',
+              'setup': 'Mia finds the safest route toward the Core Room.',
+              'first_obstacle': 'A power surge seals the direct route.',
+              'failed_attempt': 'Max forces a shortcut and makes the surge worse.',
+              'escalation': 'The blackout reaches the transit tunnel.',
+              'turning_point': 'Kai notices the drone reacts to Max charging too quickly.',
+              'climax': 'They combine their abilities carefully enough to stabilize the drone.',
+              'payoff': 'The lights return before the final district goes dark.',
+          }
+          scaffold = _fallback_scene_scaffold(
+              desired=desired,
+              game_context=context,
+              arc_plan=arc,
+          )
+          assert len(scaffold) >= minimum
+          normalized = _normalise_story(
+              {
+                  'title': 'CI Story',
+                  'game_name': context['game_name'],
+                  'genre': 'powers',
+                  'characters': [
+                      {'id':'max','name':'Max','gender':'male'},
+                      {'id':'mia','name':'Mia','gender':'female'},
+                  ],
+                  'story_goal': arc['central_goal'],
+                  'stakes': arc['stakes'],
+                  'turning_point': arc['turning_point'],
+                  'payoff': arc['payoff'],
+                  'scenes': scaffold,
+              },
+              65,
+              context,
+          )
+          assert len(normalized['scenes']) >= minimum
+          assert normalized['scenes'][0]['role'] == 'hook'
+          assert normalized['scenes'][-1]['role'] == 'payoff'
           print('V3 smoke test OK')
           PY
