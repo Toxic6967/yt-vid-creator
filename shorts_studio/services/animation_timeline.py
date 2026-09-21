@@ -229,8 +229,25 @@ def normalise_animation_plan(
             actors[0]["clip"] = inferred
             active_now += 1
 
+    # Repair repeated camera language before checking static shots. Even when a
+    # story revisits one location, consecutive cuts should reveal it differently
+    # instead of looking like the same background with another zoom.
+    camera_cycle = ("wide", "medium", "close-up", "over-shoulder", "follow", "low-angle", "high-angle")
+    motion_cycle_all = ("track_left", "track_right", "follow", "small_orbit", "reveal_pan", "push_in")
+    for idx in range(1, len(shots)):
+        prev = shots[idx - 1]
+        shot = shots[idx]
+        same_environment = str(prev.get("environment_key") or "") == str(shot.get("environment_key") or "")
+        same_combo = (
+            str(prev.get("camera") or "") == str(shot.get("camera") or "")
+            and str(prev.get("camera_motion") or "") == str(shot.get("camera_motion") or "")
+        )
+        if same_environment and same_combo:
+            shot["camera"] = camera_cycle[(idx + 2) % len(camera_cycle)]
+            shot["camera_motion"] = motion_cycle_all[(idx + 1) % len(motion_cycle_all)]
+
     # Repair an overly static camera plan as well. The shot's framing remains
-    # locked; only a subtle camera move is added.
+    # locked; only a deliberate camera move is added.
     max_static = max(3, round(len(shots) * 0.48))
     static_indexes = [
         idx for idx, shot in enumerate(shots)
@@ -249,8 +266,8 @@ def normalise_animation_plan(
                 ]
 
     return {
-        "version": "v3.0",
-        "render_style": "roblox_r15_animation",
+        "version": "v5.2",
+        "render_style": "roblox_3d_machinima",
         "game_name": script.get("game_name") or "Roblox",
         "genre": script.get("genre") or "relatable",
         "allow_powers": allow_powers,
@@ -283,8 +300,17 @@ def animation_plan_quality(plan: dict[str, Any]) -> dict[str, Any]:
         1 for shot in shots
         if str(shot.get("camera_motion") or "static") == "static"
     )
-    if static_cameras > max(3, round(len(shots) * 0.55)):
+    repeated_same_environment_combo = sum(
+        1
+        for idx in range(1, len(shots))
+        if str(shots[idx - 1].get("environment_key") or "") == str(shots[idx].get("environment_key") or "")
+        and str(shots[idx - 1].get("camera") or "") == str(shots[idx].get("camera") or "")
+        and str(shots[idx - 1].get("camera_motion") or "") == str(shots[idx].get("camera_motion") or "")
+    )
+    if static_cameras > max(3, round(len(shots) * 0.45)):
         problems.append("Too many shots use a completely static camera.")
+    if repeated_same_environment_combo:
+        problems.append("Repeated location shots reuse the exact same camera language.")
 
     if plan.get("allow_powers") and powered < 2:
         problems.append("Power-story mode needs at least two visible, story-motivated power VFX beats.")
@@ -296,6 +322,7 @@ def animation_plan_quality(plan: dict[str, Any]) -> dict[str, Any]:
         "environment_count": len(environments),
         "active_motion_shots": animated,
         "static_camera_shots": static_cameras,
+        "repeated_same_environment_camera_combos": repeated_same_environment_combo,
         "power_effect_shots": powered,
         "problems": problems,
     }
