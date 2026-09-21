@@ -52,11 +52,15 @@ def blender_executable() -> Path | None:
 
 def health() -> dict[str, Any]:
     exe = blender_executable()
+    r15 = Path(settings.roblox_r15_fbx)
+    ready = bool(exe and r15.exists() and r15.stat().st_size >= 100_000)
     return {
-        "ready": bool(exe),
-        "backend": "blender_r15_v3",
+        "ready": ready,
+        "backend": "blender_official_roblox_r15_v4",
         "executable": str(exe) if exe else None,
-        "install_hint": "Run install_animation_engine.bat" if not exe else None,
+        "official_r15_ready": r15.exists() and r15.stat().st_size >= 100_000 if r15.exists() else False,
+        "official_r15_path": str(r15),
+        "install_hint": "Run install_animation_engine.bat" if not ready else None,
     }
 
 
@@ -246,6 +250,8 @@ def render_animation_plan(
         str(plan_path),
         "--output-dir",
         str(clips_dir),
+        "--r15-template",
+        str(Path(settings.roblox_r15_fbx)),
     ]
     result = subprocess.run(
         command,
@@ -360,7 +366,7 @@ def render_animation_plan(
             {
                 "path": str(clip),
                 "kind": "blender_animated_scene",
-                "backend": "blender_r15_v3",
+                "backend": "blender_official_roblox_r15_v4",
                 "query": shot.get("action") or "",
                 "animation_clip_count": len(shot.get("actors") or []),
                 "camera": shot.get("camera"),
