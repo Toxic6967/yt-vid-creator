@@ -19,7 +19,6 @@ from .research import (
 from .retention import optimize_retention
 from .story_engine import create_story
 from .story_game import research_story_game
-from .original_universe import original_story_context
 from .ollama_client import unload_model
 from .comfyui_client import free_models as free_comfyui_models
 from .tts import render_scene, render_story_narration
@@ -282,7 +281,7 @@ def run_pipeline(job_id: str) -> None:
         "tone": tone,
         "content_type": job.get("content_type", "auto"),
         "story_genre": job.get("story_genre", "auto"),
-        "story_world": job.get("story_world", "original"),
+        "story_world": "game",
         "visual_mode": visual_mode,
         "pipeline_version": "5.0.0",
     }
@@ -290,7 +289,7 @@ def run_pipeline(job_id: str) -> None:
     try:
         requested_type = job.get("content_type", "auto")
         if requested_type == "story":
-            selected_topic = job.get("requested_topic") or "Auto-generated Astra City Roblox episode"
+            selected_topic = job.get("requested_topic") or "Auto-generated Roblox game story"
             content_type = "story"
             topic_pick = {
                 "topic": selected_topic,
@@ -315,29 +314,17 @@ def run_pipeline(job_id: str) -> None:
         update_job(job_id, selected_topic=selected_topic, content_type=content_type)
 
         if content_type == "story":
-            story_world = str(job.get("story_world") or "original").lower()
             idea_hint = None if selected_topic.startswith("Auto-generated") else selected_topic
 
-            if story_world == "original":
-                _stage(job_id, "Loading Astra City story bible", 14)
-                research = original_story_context()
-                if job.get("story_genre", "auto") == "auto":
-                    job["story_genre"] = "powers"
-                story_tone = (
-                    "Natural cinematic Roblox animation told like a real creator recounting one clean episode. "
-                    "The story should feel like an actual mini-episode with character choices, setup/payoff and cool visual action, "
-                    "never random gameplay filler, never a random player chase and never fake-hype."
-                )
-            else:
-                _stage(job_id, "Choosing a real Roblox game + mechanics", 14)
-                research = research_story_game(idea_hint)
-                story_tone = (
-                    "Natural conversational Roblox story told like a real young gaming creator recounting "
-                    "what just happened to a friend; casual, specific, lightly expressive, never documentary, "
-                    "never announcer-like and never fake-hype."
-                )
+            _stage(job_id, "Choosing a real Roblox game + mechanics", 14)
+            research = research_story_game(idea_hint)
+            story_tone = (
+                "Natural conversational Roblox story told like a real young gaming creator recounting "
+                "what just happened in the game; casual, specific, lightly expressive, never documentary, "
+                "never announcer-like and never fake-hype."
+            )
 
-            manifest["story_world"] = story_world
+            manifest["story_world"] = "game"
             manifest["story_tone"] = story_tone
 
             # Quality is more important than speed. A single local-model attempt can
@@ -346,7 +333,7 @@ def run_pipeline(job_id: str) -> None:
             story_attempt_summaries: list[dict] = []
             script = None
             best_total = -1.0
-            max_story_attempts = 5 if story_world == "original" else 3
+            max_story_attempts = 3
             for story_attempt in range(1, max_story_attempts + 1):
                 _stage(
                     job_id,
@@ -416,47 +403,6 @@ def run_pipeline(job_id: str) -> None:
                 mechanical = story_score.get("mechanical") or {}
                 logic_audit = story_score.get("logic_audit") or {}
                 logic_scores = logic_audit.get("scores") or {}
-
-                # The original series is the flagship mode, but a near-good script
-                # should reach the renderer as REVIEW NEEDED instead of producing
-                # an endless wall of failed cards. Keep a stronger minimum than
-                # real-game mode and never allow random-player filler or broken arcs.
-                if story_world == "original":
-                    original_renderable = (
-                        float(story_score.get("total") or 0) >= 58
-                        and bool(mechanical.get("scene_count_ok"))
-                        and bool(mechanical.get("arc_structure_ok"))
-                        and bool(mechanical.get("arc_fields_ok"))
-                        and bool(mechanical.get("causal_chain_ok"))
-                        and bool(mechanical.get("coincidence_free_ok"))
-                        and bool(mechanical.get("single_narrator_ok"))
-                        and bool(mechanical.get("banned_phrase_ok"))
-                        and bool(mechanical.get("original_conflict_ok", True))
-                        and float(story_scores.get("coherence") or 0) >= 56
-                        and float(story_scores.get("cause_effect") or 0) >= 54
-                        and float(story_scores.get("arc_fidelity") or 0) >= 56
-                        and float(story_scores.get("cringe_avoidance") or 0) >= 64
-                        and float(logic_scores.get("causal_logic") or 100) >= 56
-                        and float(logic_scores.get("game_truth") or 100) >= 62
-                        and float(logic_scores.get("central_goal") or 100) >= 56
-                        and float(logic_scores.get("ending_logic") or 100) >= 56
-                    )
-                    if original_renderable:
-                        story_score["passed"] = True
-                        story_score["accepted_below_target"] = True
-                        story_score["production_safe"] = True
-                        story_score["review_required"] = True
-                        story_score["final_gate_note"] = (
-                            "Structurally safe original-series script rendered for review, "
-                            "but it remained below the aspirational creative target."
-                        )
-                        script["story_score"] = story_score
-                    else:
-                        problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:8])
-                        raise RuntimeError(
-                            "Original-series story is still structurally weak after automatic rebuilds. "
-                            + (f"Remaining blockers: {problems}" if problems else "The episode premise/arc was not strong enough.")
-                        )
 
                 production_safe = bool(story_score.get("production_safe")) or (
                     float(story_score.get("total") or 0) >= 48
@@ -841,15 +787,8 @@ def run_pipeline(job_id: str) -> None:
         quality = {
             "duration_ok": (
                 (
-                    (
-                        50 <= duration <= 75
-                        and abs(duration - target_duration) <= max(7.0, target_duration * 0.12)
-                    )
-                    if str(job.get("story_world") or "original").lower() == "original"
-                    else (
-                        42 <= duration <= 75
-                        and abs(duration - target_duration) <= max(8.0, target_duration * 0.18)
-                    )
+                    42 <= duration <= 75
+                    and abs(duration - target_duration) <= max(8.0, target_duration * 0.18)
                 )
                 if content_type == "story"
                 else 20 <= duration <= 45
