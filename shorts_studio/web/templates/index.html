@@ -62,8 +62,8 @@
                 </select></label>
                 <label>Target length<select name="target_seconds">
                   <option value="50">~50 sec</option>
-                  <option value="58">~58 sec</option>
-                  <option value="65" selected>~65 sec — recommended</option>
+                  <option value="58" selected>~58 sec — recommended</option>
+                  <option value="65">~65 sec</option>
                   <option value="70">~70 sec</option>
                   <option value="75">~75 sec</option>
                 </select></label>
@@ -165,18 +165,18 @@
 
             <div id="video-mode-short" class="mode-pane">
               <form id="video-form" class="creator-form">
-                <label class="prompt-label">Story idea <span class="muted">(optional)</span>
-                  <textarea name="topic" rows="5" placeholder="Leave blank for a strong original episode. Or try: Max overloads his kinetic power while Mia is trapped on the Skybridge"></textarea>
+                <label class="prompt-label">Roblox game / story idea <span class="muted">(optional)</span>
+                  <textarea name="topic" rows="5" placeholder="Leave blank and Full Auto will pick a strong real Roblox game. Or type something like: DOORS, Dandy's World, Murder Mystery 2, 99 Nights in the Forest"></textarea>
                 </label>
                 <input type="hidden" name="content_type" value="story">
                 <label>Story world<select name="story_world">
-                  <option value="original" selected>Original animated series — recommended</option>
-                  <option value="game">Real Roblox game story — experimental</option>
+                  <option value="game" selected>Real Roblox game story — recommended</option>
+                  <option value="original">Original animated series — optional</option>
                 </select></label>
-                <div class="director-note">Recommended mode is now an original recurring Roblox animated series with Max, Mia and Kai. It uses fixed locations, character relationships, power limits and proper cause→effect stories instead of inventing random player chases inside unrelated games.</div>
+                <div class="director-note">Recommended mode researches a real Roblox experience first, then builds the story around verified mechanics, recognisable areas and things players actually do. The original Max/Mia/Kai universe is still available when you want a fictional series.</div>
                 <label>Story genre<select name="story_genre">
-                  <option value="powers" selected>Powers / animated action — recommended</option>
-                  <option value="auto">Auto — pick the strongest idea</option>
+                  <option value="auto" selected>Auto — choose the strongest format for the game</option>
+                  <option value="powers">Powers / animated action — original fantasy abilities</option>
                   <option value="funny">Funny / relatable</option>
                   <option value="horror">Horror / creepy</option>
                   <option value="mystery">Mystery</option>
@@ -196,7 +196,7 @@
                   <option value="70">~70 sec</option>
                   <option value="75">~75 sec</option>
                 </select></label>
-                <div class="director-note">V3 keeps fixed Roblox R15 rigs and animates them with controlled reusable actions/cameras over AI-built Roblox environment plates. Power stories can trigger reusable VFX such as energy, shields, shockwaves and portals. The old full-generative FLUX→LTX path is still available as a fallback. All readable English text is added afterward by the editor.</div>
+                <div class="director-note">V5 uses a deterministic Roblox-style 3D character stage with real body proportions, ground contact, reusable actions, props and cinematic camera movement over researched game-specific environment plates. Full-generative FLUX→LTX remains an optional fallback. All readable English text is added afterward by the editor.</div>
                 <button class="primary generate-wide" type="submit">CREATE FULL SHORT</button>
               </form>
             </div>
