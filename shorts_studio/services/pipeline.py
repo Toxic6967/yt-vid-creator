@@ -19,6 +19,7 @@ from .research import (
 from .retention import optimize_retention
 from .story_engine import create_story
 from .story_game import research_story_game
+from .original_universe import original_story_context
 from .ollama_client import unload_model
 from .comfyui_client import free_models as free_comfyui_models
 from .tts import render_scene, render_story_narration
@@ -276,6 +277,7 @@ def run_pipeline(job_id: str) -> None:
         "tone": tone,
         "content_type": job.get("content_type", "auto"),
         "story_genre": job.get("story_genre", "auto"),
+        "story_world": job.get("story_world", "original"),
         "visual_mode": visual_mode,
         "pipeline_version": "3.2.0",
     }
@@ -308,15 +310,29 @@ def run_pipeline(job_id: str) -> None:
         update_job(job_id, selected_topic=selected_topic, content_type=content_type)
 
         if content_type == "story":
-            _stage(job_id, "Choosing a real Roblox game + mechanics", 14)
+            story_world = str(job.get("story_world") or "original").lower()
             idea_hint = None if selected_topic.startswith("Auto-generated") else selected_topic
-            research = research_story_game(idea_hint)
 
-            story_tone = (
-                "Natural conversational Roblox story told like a real young gaming creator recounting "
-                "what just happened to a friend; casual, specific, lightly expressive, never documentary, "
-                "never announcer-like and never fake-hype."
-            )
+            if story_world == "original":
+                _stage(job_id, "Loading Astra City story bible", 14)
+                research = original_story_context()
+                if job.get("story_genre", "auto") == "auto":
+                    job["story_genre"] = "powers"
+                story_tone = (
+                    "Natural cinematic Roblox animation told like a real creator recounting one clean episode. "
+                    "The story should feel like an actual mini-episode with character choices, setup/payoff and cool visual action, "
+                    "never random gameplay filler, never a random player chase and never fake-hype."
+                )
+            else:
+                _stage(job_id, "Choosing a real Roblox game + mechanics", 14)
+                research = research_story_game(idea_hint)
+                story_tone = (
+                    "Natural conversational Roblox story told like a real young gaming creator recounting "
+                    "what just happened to a friend; casual, specific, lightly expressive, never documentary, "
+                    "never announcer-like and never fake-hype."
+                )
+
+            manifest["story_world"] = story_world
             manifest["story_tone"] = story_tone
 
             # Quality is more important than speed. A single local-model attempt can
