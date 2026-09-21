@@ -279,13 +279,13 @@ def run_pipeline(job_id: str) -> None:
         "story_genre": job.get("story_genre", "auto"),
         "story_world": job.get("story_world", "original"),
         "visual_mode": visual_mode,
-        "pipeline_version": "3.2.0",
+        "pipeline_version": "4.0.0",
     }
 
     try:
         requested_type = job.get("content_type", "auto")
         if requested_type == "story":
-            selected_topic = job.get("requested_topic") or "Auto-generated relatable Roblox mini-movie"
+            selected_topic = job.get("requested_topic") or "Auto-generated Astra City Roblox episode"
             content_type = "story"
             topic_pick = {
                 "topic": selected_topic,
@@ -715,7 +715,7 @@ def run_pipeline(job_id: str) -> None:
         )
         blender_animation_count = sum(
             1 for v in visuals
-            if v.get("backend") == "blender_r15_v3"
+            if v.get("backend") == "blender_official_roblox_r15_v4"
         )
         required_story_motion = 0
         if content_type == "story":
@@ -772,7 +772,7 @@ def run_pipeline(job_id: str) -> None:
         fallback_visuals = [v for v in visuals if v.get("kind") == "storyboard_fallback"]
         ai_visuals = [v for v in visuals if v.get("kind") == "ai_generated_scene"]
         ai_videos = [v for v in visuals if v.get("kind") == "ai_generated_video"]
-        blender_videos = [v for v in visuals if v.get("backend") == "blender_r15_v3"]
+        blender_videos = [v for v in visuals if v.get("backend") == "blender_official_roblox_r15_v4"]
         adjacent_similarities = [
             float(v.get("previous_frame_similarity", 0.0))
             for v in visuals
