@@ -126,11 +126,17 @@ def _ensure_story_backend_ready(visual_mode: str = "animated") -> None:
     if visual_mode == "animated":
         animation = animation_health()
         if not animation.get("ready"):
-            raise HTTPException(
-                409,
-                "V3 AI-directed Roblox animation is selected, but Blender is not installed. "
-                "Run install_animation_engine.bat, restart Shorts Studio, then try again.",
-            )
+            if not animation.get("official_r15_ready"):
+                detail = (
+                    "The official Roblox R15 reference character is missing. "
+                    "Run install_animation_engine.bat so Shorts Studio can download and validate Roblox's official BlockyCharacter.fbx."
+                )
+            else:
+                detail = (
+                    "Blender is not ready for animated Story mode. "
+                    "Run install_animation_engine.bat and restart Shorts Studio."
+                )
+            raise HTTPException(409, detail)
     else:
         if not state.get("story_video_ready"):
             missing = ", ".join(state.get("missing_story_video_models") or [])
