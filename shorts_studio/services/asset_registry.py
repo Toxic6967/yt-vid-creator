@@ -91,8 +91,7 @@ CAMERA_MOTIONS = {
 
 def power_prompt_context() -> str:
     lines = [
-        "These are ORIGINAL FICTIONAL CHARACTER POWERS for animated stories. "
-        "They are not claims about the real Roblox game's mechanics.",
+        "These are reusable visual effects. Use them only when the selected real Roblox game's verified mechanics call for the effect.",
     ]
     for key, value in POWER_EFFECTS.items():
         if key == "none":
