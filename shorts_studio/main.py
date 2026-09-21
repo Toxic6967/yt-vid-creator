@@ -91,7 +91,7 @@ def api_health() -> JSONResponse:
         "app": {
             "ok": True,
             "name": settings.app_name,
-            "build": "v5-roblox-machinima-20260921",
+            "build": "v5.2-roblox-machinima-20260921",
         },
         "ollama": _safe_health_component("ollama", ollama_health),
         "ffmpeg": _safe_health_component("ffmpeg", ffmpeg_health),
