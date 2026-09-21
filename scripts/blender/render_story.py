@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import shutil
+import re
 import sys
 from pathlib import Path
 
@@ -11,8 +11,8 @@ import bpy
 from mathutils import Vector
 
 
-FPS = 30
-RENDERER_VERSION = "v3.6-blender5-compositor-fix"
+FPS = 24
+TARGET_AVATAR_HEIGHT = 5.4
 
 
 def parse_args():
@@ -21,6 +21,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--plan", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--r15-template", required=True)
     return parser.parse_args(argv)
 
 
@@ -29,20 +30,49 @@ def clear_scene():
     bpy.ops.object.delete(use_global=False)
 
 
-def mat(name, color, *, emission=0.0, alpha=1.0):
-    m = bpy.data.materials.new(name)
-    m.use_nodes = True
-    nodes = m.node_tree.nodes
+def rgb(hex_value: str):
+    value = hex_value.lstrip("#")
+    return tuple(int(value[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
+
+
+PALETTES = {
+    "max": {
+        "skin": rgb("#E2B584"),
+        "shirt": rgb("#2864D7"),
+        "pants": rgb("#202630"),
+        "shoe": rgb("#F4F5F7"),
+        "hair": rgb("#4B3023"),
+        "accent": rgb("#173D8F"),
+    },
+    "mia": {
+        "skin": rgb("#DDAA7E"),
+        "shirt": rgb("#8149C7"),
+        "pants": rgb("#252733"),
+        "shoe": rgb("#F1F1F4"),
+        "hair": rgb("#2C2028"),
+        "accent": rgb("#E4D8FF"),
+    },
+    "kai": {
+        "skin": rgb("#D5A377"),
+        "shirt": rgb("#B33740"),
+        "pants": rgb("#20232B"),
+        "shoe": rgb("#C53A43"),
+        "hair": rgb("#1D1D22"),
+        "accent": rgb("#11151B"),
+    },
+}
+
+
+def new_material(name, color, *, emission=0.0, alpha=1.0):
+    material = bpy.data.materials.new(name)
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
     bsdf = nodes.get("Principled BSDF")
     if bsdf:
-        bsdf.inputs["Base Color"].default_value = (*color[:3], 1)
-        bsdf.inputs["Roughness"].default_value = 0.40
-        if "Metallic" in bsdf.inputs:
-            bsdf.inputs["Metallic"].default_value = 0.0
-        if "IOR" in bsdf.inputs:
-            bsdf.inputs["IOR"].default_value = 1.46
-        if "Specular IOR Level" in bsdf.inputs:
-            bsdf.inputs["Specular IOR Level"].default_value = 0.32
+        if "Base Color" in bsdf.inputs:
+            bsdf.inputs["Base Color"].default_value = (*color[:3], 1)
+        if "Roughness" in bsdf.inputs:
+            bsdf.inputs["Roughness"].default_value = 0.52
         if "Alpha" in bsdf.inputs:
             bsdf.inputs["Alpha"].default_value = alpha
         if emission > 0:
@@ -52,69 +82,19 @@ def mat(name, color, *, emission=0.0, alpha=1.0):
                 bsdf.inputs["Emission"].default_value = (*color[:3], 1)
             if "Emission Strength" in bsdf.inputs:
                 bsdf.inputs["Emission Strength"].default_value = emission
-    m.diffuse_color = (*color[:3], alpha)
+    material.diffuse_color = (*color[:3], alpha)
     if alpha < 1:
         try:
-            m.surface_render_method = "DITHERED"
+            material.surface_render_method = "DITHERED"
         except Exception:
             try:
-                m.blend_method = "BLEND"
+                material.blend_method = "BLEND"
             except Exception:
                 pass
-    return m
+    return material
 
 
-def add_box(name, loc, size, material, parent=None, bevel=0.08):
-    bpy.ops.mesh.primitive_cube_add(location=loc)
-    obj = bpy.context.object
-    obj.name = name
-    obj.scale = (size[0] / 2, size[1] / 2, size[2] / 2)
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    if material:
-        obj.data.materials.append(material)
-    if bevel:
-        mod = obj.modifiers.new(name="Roblox bevel", type="BEVEL")
-        mod.width = bevel
-        mod.segments = 3
-    if parent:
-        obj.parent = parent
-    return obj
-
-
-def add_tapered_box(name, loc, *, top_width, bottom_width, depth, height, material, parent=None, bevel=0.08):
-    """R15-style tapered torso block: game-like, but not a Minecraft cube."""
-    z0 = -height / 2
-    z1 = height / 2
-    td = depth / 2
-    verts = [
-        (-bottom_width/2,-td,z0),(bottom_width/2,-td,z0),
-        (bottom_width/2,td,z0),(-bottom_width/2,td,z0),
-        (-top_width/2,-td,z1),(top_width/2,-td,z1),
-        (top_width/2,td,z1),(-top_width/2,td,z1),
-    ]
-    faces = [
-        (0,1,2,3),(4,7,6,5),
-        (0,4,5,1),(1,5,6,2),
-        (2,6,7,3),(4,0,3,7),
-    ]
-    mesh = bpy.data.meshes.new(name + "_Mesh")
-    mesh.from_pydata(verts,[],faces)
-    mesh.update()
-    obj = bpy.data.objects.new(name,mesh)
-    bpy.context.collection.objects.link(obj)
-    obj.location = loc
-    if material:
-        obj.data.materials.append(material)
-    if bevel:
-        mod = obj.modifiers.new(name="R15 bevel",type="BEVEL")
-        mod.width = bevel
-        mod.segments = 3
-    if parent:
-        obj.parent = parent
-    return obj
-
-
-def add_uv(name, loc, scale, material, parent=None, segments=24, rings=12):
+def add_uv(name, loc, scale, material, parent=None, segments=20, rings=10):
     bpy.ops.mesh.primitive_uv_sphere_add(
         segments=segments,
         ring_count=rings,
@@ -127,7 +107,24 @@ def add_uv(name, loc, scale, material, parent=None, segments=24, rings=12):
     if material:
         obj.data.materials.append(material)
     if parent:
-        obj.parent = parent
+        parent_keep_world(obj, parent)
+    return obj
+
+
+def add_box(name, loc, size, material, parent=None, bevel=0.05):
+    bpy.ops.mesh.primitive_cube_add(location=loc)
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = (size[0] / 2, size[1] / 2, size[2] / 2)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    if material:
+        obj.data.materials.append(material)
+    if bevel:
+        mod = obj.modifiers.new(name="SoftRobloxEdge", type="BEVEL")
+        mod.width = bevel
+        mod.segments = 2
+    if parent:
+        parent_keep_world(obj, parent)
     return obj
 
 
@@ -135,8 +132,8 @@ def add_torus(name, loc, major, minor, material, parent=None, rotation=(0, 0, 0)
     bpy.ops.mesh.primitive_torus_add(
         major_radius=major,
         minor_radius=minor,
-        major_segments=32,
-        minor_segments=8,
+        major_segments=36,
+        minor_segments=10,
         location=loc,
         rotation=rotation,
     )
@@ -145,283 +142,89 @@ def add_torus(name, loc, major, minor, material, parent=None, rotation=(0, 0, 0)
     if material:
         obj.data.materials.append(material)
     if parent:
-        obj.parent = parent
+        parent_keep_world(obj, parent)
     return obj
 
 
-def add_empty(name, loc, parent=None):
-    obj = bpy.data.objects.new(name, None)
-    bpy.context.collection.objects.link(obj)
-    obj.location = loc
-    if parent:
-        obj.parent = parent
-    return obj
-
-
-def reparent_keep_world(obj, parent):
-    world = obj.matrix_world.copy()
+def parent_keep_world(obj, parent):
+    matrix = obj.matrix_world.copy()
     obj.parent = parent
-    obj.matrix_world = world
+    obj.matrix_world = matrix
 
 
-def rgb(hex_value):
-    value = hex_value.lstrip("#")
-    return tuple(int(value[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+def norm(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
-PALETTES = {
-    "max": {
-        "skin": rgb("#E1B47F"),
-        "shirt": rgb("#2E63CB"),
-        "pants": rgb("#252832"),
-        "shoe": rgb("#F2F3F5"),
-        "hair": rgb("#4A2E22"),
-    },
-    "mia": {
-        "skin": rgb("#DCAA7E"),
-        "shirt": rgb("#7D46BE"),
-        "pants": rgb("#272933"),
-        "shoe": rgb("#F0F0F3"),
-        "hair": rgb("#2D2027"),
-    },
-    "kai": {
-        "skin": rgb("#D3A276"),
-        "shirt": rgb("#A83239"),
-        "pants": rgb("#24262C"),
-        "shoe": rgb("#B83238"),
-        "hair": rgb("#1E1E22"),
-    },
-}
-
-
-def create_r15(cid, lane):
-    palette = PALETTES.get(cid, PALETTES["max"])
-    mats = {k: mat(f"{cid}_{k}", v) for k, v in palette.items()}
-    black = mat(f"{cid}_face", (0.035, 0.035, 0.04))
-    root = bpy.data.objects.new(f"{cid}_ROOT", None)
-    bpy.context.collection.objects.link(root)
-    root.location = (lane, 0, 0)
-
-    parts = {}
-    parts["lower_torso"] = add_tapered_box(
-        f"{cid}_LowerTorso",
-        (0,0,2.55),
-        top_width=1.44,
-        bottom_width=1.24,
-        depth=0.70,
-        height=0.78,
-        material=mats["shirt"],
-        parent=root,
-        bevel=0.10,
-    )
-    parts["upper_torso"] = add_tapered_box(
-        f"{cid}_UpperTorso",
-        (0,0,3.35),
-        top_width=1.76,
-        bottom_width=1.48,
-        depth=0.74,
-        height=0.92,
-        material=mats["shirt"],
-        parent=root,
-        bevel=0.11,
-    )
-    parts["head"] = add_box(
-        f"{cid}_Head", (0, 0, 4.55), (1.28, 1.02, 1.12), mats["skin"], root, 0.16
-    )
-
-    for side, sign in (("L", -1), ("R", 1)):
-        x = 1.05 * sign
-        parts[f"{side}_upper_arm"] = add_box(
-            f"{cid}_{side}_UpperArm", (x, 0, 3.38), (0.42, 0.56, 0.84), mats["shirt"], root, 0.09
-        )
-        parts[f"{side}_lower_arm"] = add_box(
-            f"{cid}_{side}_LowerArm", (x, 0, 2.70), (0.39, 0.52, 0.66), mats["skin"], root, 0.08
-        )
-        parts[f"{side}_hand"] = add_box(
-            f"{cid}_{side}_Hand", (x, -0.01, 2.25), (0.42, 0.50, 0.30), mats["skin"], root, 0.10
-        )
-        # Rounded joint caps make the segmented body read as R15 rather than voxel/Minecraft.
-        parts[f"{side}_shoulder_joint"] = add_uv(
-            f"{cid}_{side}_ShoulderJoint",
-            (x, 0, 3.82),
-            (0.22, 0.24, 0.22),
-            mats["shirt"],
-            root,
-            16,
-            8,
-        )
-        parts[f"{side}_elbow_joint"] = add_uv(
-            f"{cid}_{side}_ElbowJoint",
-            (x, 0, 3.02),
-            (0.19, 0.20, 0.19),
-            mats["skin"],
-            root,
-            16,
-            8,
-        )
-
-        lx = 0.43 * sign
-        parts[f"{side}_upper_leg"] = add_box(
-            f"{cid}_{side}_UpperLeg", (lx, 0, 1.55), (0.58, 0.66, 0.86), mats["pants"], root, 0.09
-        )
-        parts[f"{side}_lower_leg"] = add_box(
-            f"{cid}_{side}_LowerLeg", (lx, 0, 0.82), (0.54, 0.62, 0.64), mats["pants"], root, 0.08
-        )
-        parts[f"{side}_foot"] = add_box(
-            f"{cid}_{side}_Foot", (lx, -0.10, 0.34), (0.62, 0.88, 0.32), mats["shoe"], root, 0.09
-        )
-        parts[f"{side}_hip_joint"] = add_uv(
-            f"{cid}_{side}_HipJoint",
-            (lx, 0, 2.02),
-            (0.24, 0.25, 0.22),
-            mats["pants"],
-            root,
-            16,
-            8,
-        )
-        parts[f"{side}_knee_joint"] = add_uv(
-            f"{cid}_{side}_KneeJoint",
-            (lx, 0, 1.16),
-            (0.21, 0.22, 0.19),
-            mats["pants"],
-            root,
-            16,
-            8,
-        )
-
-    # Small neck/joint separation is another strong R15 silhouette cue.
-    add_uv(
-        f"{cid}_NeckJoint",
-        (0, 0, 4.02),
-        (0.22, 0.22, 0.18),
-        mats["skin"],
-        root,
-        16,
-        8,
-    )
-
-    for eye_index, x in enumerate((-0.22,0.22)):
-        eye = add_uv(
-            f"{cid}_Eye_{eye_index}",
-            (x,-0.515,4.65),
-            (0.055,0.018,0.085),
-            black,
-            root,
-            16,
-            8,
-        )
-        eye.rotation_euler[0] = math.radians(90)
-        parts[f"eye_{eye_index}"] = eye
-
-    for smile_index, (x,z,rz) in enumerate(((-0.14,4.38,-0.22),(0,4.32,0),(0.14,4.38,0.22))):
-        smile = add_box(
-            f"{cid}_Smile_{smile_index}",
-            (x,-0.526,z),
-            (0.16,0.026,0.045),
-            black,
-            root,
-            0.015,
-        )
-        smile.rotation_euler[1] = rz
-        parts[f"smile_{smile_index}"] = smile
-
-    # Character-specific catalog-hair silhouettes keep the recurring cast readable.
-    if cid == "mia":
-        for x, z, scale in (
-            (-0.30, 5.13, (0.34, 0.48, 0.24)),
-            (0.10, 5.20, (0.46, 0.50, 0.27)),
-            (0.38, 5.05, (0.28, 0.42, 0.22)),
-        ):
-            add_uv(f"{cid}_Hair", (x, 0.02, z), scale, mats["hair"], root, 16, 8)
-        for y, z, scale in (
-            (0.52, 4.95, (0.24, 0.24, 0.30)),
-            (0.68, 4.62, (0.22, 0.22, 0.34)),
-            (0.76, 4.26, (0.19, 0.19, 0.31)),
-        ):
-            add_uv(f"{cid}_Ponytail", (0.34, y, z), scale, mats["hair"], root, 16, 8)
-    elif cid == "kai":
-        for x, z, scale in (
-            (-0.30, 5.08, (0.31, 0.40, 0.18)),
-            (0.02, 5.13, (0.39, 0.42, 0.20)),
-            (0.32, 5.07, (0.29, 0.37, 0.17)),
-        ):
-            add_uv(f"{cid}_Hair", (x, 0, z), scale, mats["hair"], root, 16, 8)
-    else:
-        for x, z, scale in (
-            (-0.38, 5.12, (0.34, 0.48, 0.24)),
-            (0.0, 5.20, (0.45, 0.50, 0.28)),
-            (0.36, 5.10, (0.32, 0.45, 0.25)),
-            (-0.18, 5.30, (0.26, 0.34, 0.20)),
-        ):
-            add_uv(f"{cid}_Hair", (x, 0, z), scale, mats["hair"], root, 16, 8)
-
-    # Simple clothing accents distinguish the cast without generating text/logos.
-    if cid == "kai":
-        accent = mat(f"{cid}_accent", rgb("#15171C"))
-        add_box(f"{cid}_JacketStripe", (0, -0.39, 3.35), (0.34, 0.035, 0.76), accent, root, 0.015)
-    elif cid == "mia":
-        accent = mat(f"{cid}_accent", rgb("#E4D8FF"))
-        add_box(f"{cid}_JacketZip", (0, -0.39, 3.35), (0.08, 0.035, 0.72), accent, root, 0.01)
-    else:
-        accent = mat(f"{cid}_accent", rgb("#173D8F"))
-        add_box(f"{cid}_HoodiePocket", (0, -0.39, 3.10), (0.68, 0.035, 0.24), accent, root, 0.03)
-
-    add_uv(
-        f"{cid}_Shadow",
-        (0, 0.22, 0.08),
-        (0.72, 0.30, 0.045),
-        mat(f"{cid}_shadow_mat", (0.03, 0.03, 0.035), alpha=0.30),
-        root,
-        20,
-        8,
-    )
-
-    # Simple hierarchical controls make limb motion pivot at Roblox joints
-    # instead of rotating disconnected blocks around their centres.
-    controls = {}
-    for side, sign in (("L", -1), ("R", 1)):
-        shoulder = add_empty(f"{cid}_{side}_Shoulder_CTRL", (1.05 * sign, 0, 3.82), root)
-        elbow = add_empty(f"{cid}_{side}_Elbow_CTRL", (1.05 * sign, 0, 3.02), root)
-        reparent_keep_world(elbow, shoulder)
-        for name in (f"{side}_upper_arm",):
-            reparent_keep_world(parts[name], shoulder)
-        for name in (f"{side}_lower_arm", f"{side}_hand", f"{side}_elbow_joint"):
-            reparent_keep_world(parts[name], elbow)
-        controls[f"{side}_shoulder"] = shoulder
-        controls[f"{side}_elbow"] = elbow
-
-        hip = add_empty(f"{cid}_{side}_Hip_CTRL", (0.43 * sign, 0, 2.02), root)
-        knee = add_empty(f"{cid}_{side}_Knee_CTRL", (0.43 * sign, 0, 1.16), root)
-        reparent_keep_world(knee, hip)
-        reparent_keep_world(parts[f"{side}_upper_leg"], hip)
-        for name in (f"{side}_lower_leg", f"{side}_foot", f"{side}_knee_joint"):
-            reparent_keep_world(parts[name], knee)
-        controls[f"{side}_hip"] = hip
-        controls[f"{side}_knee"] = knee
-
-    # Upper-body controls give the character weight, eye-line and reactions.
-    spine = add_empty(f"{cid}_Spine_CTRL", (0, 0, 2.92), root)
-    reparent_keep_world(parts["upper_torso"], spine)
-    for obj in list(bpy.data.objects):
-        if not obj.name.startswith(f"{cid}_"):
+def object_bounds(objects):
+    points = []
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    for obj in objects:
+        if obj.type != "MESH" or obj.hide_render:
             continue
-        if any(token in obj.name for token in ("HoodiePocket", "JacketStripe", "JacketZip")):
-            reparent_keep_world(obj, spine)
-
-    head = add_empty(f"{cid}_Head_CTRL", (0, 0, 4.02), spine)
-    for obj in list(bpy.data.objects):
-        if not obj.name.startswith(f"{cid}_"):
-            continue
-        if any(token in obj.name for token in ("Head", "Eye", "Smile", "Hair", "Ponytail", "NeckJoint")):
-            if obj not in {head, spine}:
-                reparent_keep_world(obj, head)
-
-    controls["spine"] = spine
-    controls["head"] = head
-    return {"root": root, "parts": parts, "controls": controls}
+        try:
+            evaluated = obj.evaluated_get(depsgraph)
+            points.extend(evaluated.matrix_world @ Vector(corner) for corner in evaluated.bound_box)
+        except Exception:
+            points.extend(obj.matrix_world @ Vector(corner) for corner in obj.bound_box)
+    if not points:
+        return (-1, 1, -0.5, 0.5, 0, TARGET_AVATAR_HEIGHT)
+    xs = [p.x for p in points]
+    ys = [p.y for p in points]
+    zs = [p.z for p in points]
+    return min(xs), max(xs), min(ys), max(ys), min(zs), max(zs)
 
 
-def key(obj, frame, *, location=None, rotation=None, scale=None):
+def set_mesh_material(obj, material):
+    if obj.type != "MESH":
+        return
+    if len(obj.data.materials):
+        for index in range(len(obj.data.materials)):
+            obj.data.materials[index] = material
+    else:
+        obj.data.materials.append(material)
+
+
+def classify_body_material(name: str, mats):
+    key = norm(name)
+    if any(x in key for x in ("cage", "attachment", "attgeo", "facial", "lash", "brow")):
+        return None
+    if any(x in key for x in ("uppertorso", "lowertorso", "torso")):
+        return mats["shirt"]
+    if any(x in key for x in ("upperleg", "lowerleg", "leg")):
+        return mats["pants"]
+    if any(x in key for x in ("foot", "shoe")):
+        return mats["shoe"]
+    if any(x in key for x in ("head", "upperarm", "lowerarm", "hand", "arm")):
+        return mats["skin"]
+    return None
+
+
+def find_pose_bone(armature, candidates):
+    if not armature or armature.type != "ARMATURE":
+        return None
+    normalized = {norm(bone.name): bone for bone in armature.pose.bones}
+    for candidate in candidates:
+        target = norm(candidate)
+        if target in normalized:
+            return normalized[target]
+    for candidate in candidates:
+        target = norm(candidate)
+        for key, bone in normalized.items():
+            if key.endswith(target) or target in key:
+                return bone
+    return None
+
+
+def key_rotation(bone, frame, xyz):
+    if not bone:
+        return
+    bone.rotation_mode = "XYZ"
+    bone.rotation_euler = xyz
+    bone.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+
+def key_object(obj, frame, *, location=None, rotation=None, scale=None):
     if location is not None:
         obj.location = location
         obj.keyframe_insert(data_path="location", frame=frame)
@@ -433,779 +236,489 @@ def key(obj, frame, *, location=None, rotation=None, scale=None):
         obj.keyframe_insert(data_path="scale", frame=frame)
 
 
-def _iter_action_fcurves(action):
-    """Yield F-Curves across both legacy Blender Actions and Blender 5.x layered Actions."""
-    if action is None:
-        return
+def import_official_r15(cid: str, lane: float, template_path: Path):
+    if not template_path.exists():
+        raise RuntimeError(f"Official Roblox R15 template is missing: {template_path}")
 
-    seen = set()
+    before = {obj.name for obj in bpy.context.scene.objects}
+    bpy.ops.import_scene.fbx(filepath=str(template_path), use_anim=False)
+    imported = [obj for obj in bpy.context.scene.objects if obj.name not in before]
+    if not imported:
+        raise RuntimeError("Blender imported no objects from the official Roblox R15 FBX.")
 
-    # Blender <= 4.x / legacy Action API.
-    legacy = getattr(action, "fcurves", None)
-    if legacy is not None:
-        try:
-            for fcurve in legacy:
-                pointer = fcurve.as_pointer() if hasattr(fcurve, "as_pointer") else id(fcurve)
-                if pointer not in seen:
-                    seen.add(pointer)
-                    yield fcurve
-        except Exception:
-            pass
+    imported_names = {obj.name for obj in imported}
+    for obj in imported:
+        low = obj.name.lower()
+        if "cage" in low or "attachment" in low or low.endswith("_att"):
+            obj.hide_render = True
+            obj.hide_viewport = True
 
-    # Blender 5.x stores F-Curves in Action layers -> keyframe strips ->
-    # per-slot channelbags. Action.fcurves no longer exists there.
-    layers = getattr(action, "layers", None)
-    if layers is not None:
-        try:
-            for layer in layers:
-                for strip in getattr(layer, "strips", ()):
-                    for channelbag in getattr(strip, "channelbags", ()):
-                        for fcurve in getattr(channelbag, "fcurves", ()):
-                            pointer = fcurve.as_pointer() if hasattr(fcurve, "as_pointer") else id(fcurve)
-                            if pointer not in seen:
-                                seen.add(pointer)
-                                yield fcurve
-        except Exception:
-            pass
+    armatures = [obj for obj in imported if obj.type == "ARMATURE" and not obj.hide_render]
+    armature = armatures[0] if armatures else None
+    if armature and armature.animation_data:
+        armature.animation_data_clear()
 
+    meshes = [obj for obj in imported if obj.type == "MESH" and not obj.hide_render]
+    if not meshes:
+        raise RuntimeError("Official Roblox R15 FBX contains no visible body meshes.")
 
-def smooth_curves(*objects):
-    """Use clean eased curves without depending on one Blender Action API version."""
-    for obj in objects:
-        if obj is None:
-            continue
-        action = getattr(getattr(obj, "animation_data", None), "action", None)
-        if not action:
-            continue
-        try:
-            for fcurve in _iter_action_fcurves(action):
-                for point in fcurve.keyframe_points:
-                    point.interpolation = "BEZIER"
-                    point.handle_left_type = "AUTO_CLAMPED"
-                    point.handle_right_type = "AUTO_CLAMPED"
-        except Exception as exc:
-            # Curve smoothing is visual polish only. Never abort a whole Story
-            # because Blender changed animation API internals again.
-            print(f"[Shorts Studio] Curve smoothing skipped for {getattr(obj, 'name', 'object')}: {exc}")
+    root = bpy.data.objects.new(f"{cid}_OFFICIAL_R15_ROOT", None)
+    bpy.context.collection.objects.link(root)
+    top_level = [
+        obj for obj in imported
+        if obj.parent is None or obj.parent.name not in imported_names
+    ]
+    for obj in top_level:
+        parent_keep_world(obj, root)
 
+    bpy.context.view_layer.update()
+    min_x, max_x, min_y, max_y, min_z, max_z = object_bounds(meshes)
+    height = max(0.01, max_z - min_z)
+    uniform = TARGET_AVATAR_HEIGHT / height
+    root.scale = (uniform, uniform, uniform)
+    root.location = (lane, 0, -min_z * uniform)
+    bpy.context.view_layer.update()
 
-def add_point_light(name, loc, color, energy=650.0, parent=None):
-    data = bpy.data.lights.new(name=name, type="POINT")
-    data.energy = energy
-    data.color = color[:3]
-    data.shadow_soft_size = 1.2
-    obj = bpy.data.objects.new(name, data)
-    bpy.context.collection.objects.link(obj)
-    obj.location = loc
-    if parent:
-        obj.parent = parent
-    return obj
+    palette = PALETTES.get(cid, PALETTES["max"])
+    mats = {
+        key: new_material(f"{cid}_{key}", color)
+        for key, color in palette.items()
+    }
+    for obj in meshes:
+        material = classify_body_material(obj.name, mats)
+        if material:
+            set_mesh_material(obj, material)
+
+    # Recalculate final bounds after normalization.
+    min_x, max_x, min_y, max_y, min_z, max_z = object_bounds(meshes)
+    center_x = (min_x + max_x) / 2
+    front_y = min_y - 0.015
+    head_height = max_z - min_z
+    head_z = min_z + head_height * 0.86
+    width = max_x - min_x
+
+    # Guaranteed classic Roblox-readable face aimed toward our camera.
+    face_mat = new_material(f"{cid}_classic_face", (0.025, 0.025, 0.03))
+    eye_dx = max(0.09, width * 0.07)
+    for ex in (center_x - eye_dx, center_x + eye_dx):
+        eye = add_uv(
+            f"{cid}_ClassicEye",
+            (ex, front_y, head_z + head_height * 0.025),
+            (0.045, 0.014, 0.070),
+            face_mat,
+            root,
+            16,
+            8,
+        )
+        eye.rotation_euler[0] = math.radians(90)
+    for dx, dz, tilt in (
+        (-0.10, -0.08, -0.20),
+        (0.0, -0.11, 0.0),
+        (0.10, -0.08, 0.20),
+    ):
+        mouth = add_box(
+            f"{cid}_ClassicSmile",
+            (center_x + dx, front_y - 0.008, head_z + dz),
+            (0.12, 0.022, 0.032),
+            face_mat,
+            root,
+            0.01,
+        )
+        mouth.rotation_euler[1] = tilt
+
+    # Simple recurring catalog-hair silhouettes; body geometry itself is Roblox official.
+    hair_z = max_z + 0.03
+    if cid == "mia":
+        for xoff, zoff, scale in (
+            (-0.20, 0.00, (0.25, 0.23, 0.16)),
+            (0.04, 0.05, (0.31, 0.24, 0.17)),
+            (0.25, -0.01, (0.22, 0.21, 0.15)),
+        ):
+            add_uv(f"{cid}_Hair", (center_x + xoff, (min_y + max_y)/2, hair_z + zoff), scale, mats["hair"], root)
+        for yoff, zoff, scale in (
+            (0.28, -0.15, (0.18, 0.17, 0.22)),
+            (0.42, -0.38, (0.16, 0.15, 0.24)),
+        ):
+            add_uv(f"{cid}_Ponytail", (center_x + 0.20, max_y + yoff, hair_z + zoff), scale, mats["hair"], root)
+    elif cid == "kai":
+        for xoff, zoff, scale in (
+            (-0.18, 0.00, (0.22, 0.20, 0.12)),
+            (0.02, 0.04, (0.27, 0.21, 0.13)),
+            (0.21, 0.00, (0.20, 0.19, 0.12)),
+        ):
+            add_uv(f"{cid}_Hair", (center_x + xoff, (min_y + max_y)/2, hair_z + zoff), scale, mats["hair"], root)
+    else:
+        for xoff, zoff, scale in (
+            (-0.25, 0.00, (0.24, 0.23, 0.16)),
+            (-0.03, 0.08, (0.31, 0.25, 0.18)),
+            (0.24, 0.02, (0.23, 0.22, 0.15)),
+        ):
+            add_uv(f"{cid}_Hair", (center_x + xoff, (min_y + max_y)/2, hair_z + zoff), scale, mats["hair"], root)
+
+    # Soft screen-space grounding shadow.
+    shadow_mat = new_material(f"{cid}_shadow", (0.015, 0.015, 0.02), alpha=0.22)
+    add_uv(
+        f"{cid}_GroundShadow",
+        (lane, 0.25, 0.08),
+        (0.72, 0.30, 0.045),
+        shadow_mat,
+        root,
+        20,
+        8,
+    )
+
+    return {
+        "root": root,
+        "armature": armature,
+        "meshes": meshes,
+        "bounds": (min_x, max_x, min_y, max_y, min_z, max_z),
+    }
 
 
 def animate_actor(actor, rig, frame_end):
     root = rig["root"]
-    controls = rig.get("controls") or {}
+    arm = rig.get("armature")
     clip = str(actor.get("clip") or "idle")
-    emotion = str(actor.get("emotion") or "").lower()
     start_x = float(actor.get("start_lane") or 0.0)
     end_x = float(actor.get("end_lane") if actor.get("end_lane") is not None else start_x)
-    facing = -1.0 if str(actor.get("facing") or "right").lower() == "left" else 1.0
-    base_yaw = math.radians(7.0 * facing)
-
-    mid = max(2, frame_end // 2)
+    base_z = root.location.z
     q1 = max(2, frame_end // 4)
+    mid = max(2, frame_end // 2)
     q3 = max(q1 + 1, frame_end * 3 // 4)
 
-    key(root, 1, location=(start_x, 0, 0), rotation=(0, 0, base_yaw))
-    key(root, frame_end, location=(end_x, 0, 0), rotation=(0, 0, base_yaw))
-    key(controls["spine"], 1, rotation=(0, 0, 0))
-    key(controls["head"], 1, rotation=(0, 0, 0))
-    key(controls["spine"], frame_end, rotation=(0, 0, 0))
-    key(controls["head"], frame_end, rotation=(0, 0, 0))
+    key_object(root, 1, location=(start_x, 0, base_z), rotation=(0, 0, 0))
+    key_object(root, frame_end, location=(end_x, 0, base_z))
 
-    def locomotion(*, stride, cycles, bounce, lean):
-        steps = max(4, cycles * 2 + 1)
-        for i in range(steps):
-            t = i / (steps - 1)
-            frame = 1 + round((frame_end - 1) * t)
-            sign = 1 if i % 2 == 0 else -1
-            x = start_x + (end_x - start_x) * t
-            z = bounce if i % 2 else 0.0
-            key(root, frame, location=(x, 0, z), rotation=(0, 0, base_yaw))
-            key(controls["spine"], frame, rotation=(lean, 0, math.radians(-2.5 * sign)))
-            key(controls["head"], frame, rotation=(math.radians(-lean * 10), 0, math.radians(2.0 * sign)))
-            controls["L_shoulder"].rotation_euler[0] = stride * sign
-            controls["R_shoulder"].rotation_euler[0] = -stride * sign
-            controls["L_hip"].rotation_euler[0] = -stride * 0.78 * sign
-            controls["R_hip"].rotation_euler[0] = stride * 0.78 * sign
-            controls["L_knee"].rotation_euler[0] = max(0.0, -stride * 0.42 * sign)
-            controls["R_knee"].rotation_euler[0] = max(0.0, stride * 0.42 * sign)
-            controls["L_elbow"].rotation_euler[0] = max(0.0, -stride * 0.24 * sign)
-            controls["R_elbow"].rotation_euler[0] = max(0.0, stride * 0.24 * sign)
-            for name in (
-                "L_shoulder","R_shoulder","L_hip","R_hip",
-                "L_knee","R_knee","L_elbow","R_elbow",
-            ):
-                controls[name].keyframe_insert(data_path="rotation_euler", frame=frame)
+    bones = {
+        "lua": find_pose_bone(arm, ("LeftUpperArm", "LeftShoulder")),
+        "rua": find_pose_bone(arm, ("RightUpperArm", "RightShoulder")),
+        "lla": find_pose_bone(arm, ("LeftLowerArm", "LeftElbow")),
+        "rla": find_pose_bone(arm, ("RightLowerArm", "RightElbow")),
+        "lul": find_pose_bone(arm, ("LeftUpperLeg", "LeftHip")),
+        "rul": find_pose_bone(arm, ("RightUpperLeg", "RightHip")),
+        "lll": find_pose_bone(arm, ("LeftLowerLeg", "LeftKnee")),
+        "rll": find_pose_bone(arm, ("RightLowerLeg", "RightKnee")),
+        "torso": find_pose_bone(arm, ("UpperTorso", "LowerTorso", "Torso")),
+        "head": find_pose_bone(arm, ("Head",)),
+    }
 
-    if clip == "run":
-        locomotion(stride=math.radians(48), cycles=4, bounce=0.10, lean=math.radians(9))
-    elif clip == "walk":
-        locomotion(stride=math.radians(26), cycles=3, bounce=0.045, lean=math.radians(3))
-    elif clip == "dash":
-        locomotion(stride=math.radians(58), cycles=3, bounce=0.07, lean=math.radians(15))
-        key(root, q1, scale=(0.96, 1.0, 1.04))
-        key(root, mid, scale=(1.05, 1.0, 0.95))
-        key(root, frame_end, scale=(1, 1, 1))
-    elif clip == "stop":
-        key(controls["spine"], 1, rotation=(math.radians(10), 0, 0))
-        key(controls["spine"], mid, rotation=(math.radians(-7), 0, 0))
-        key(controls["spine"], frame_end, rotation=(0, 0, 0))
-        key(root, mid, location=(start_x + (end_x-start_x)*0.8, 0, 0.04))
+    def walk_cycle(amount):
+        for frame, sign in ((1, 1), (q1, -1), (mid, 1), (q3, -1), (frame_end, 1)):
+            key_rotation(bones["lua"], frame, (amount * sign, 0, 0))
+            key_rotation(bones["rua"], frame, (-amount * sign, 0, 0))
+            key_rotation(bones["lul"], frame, (-amount * 0.72 * sign, 0, 0))
+            key_rotation(bones["rul"], frame, (amount * 0.72 * sign, 0, 0))
+            key_rotation(bones["lll"], frame, (max(0, amount * 0.28 * sign), 0, 0))
+            key_rotation(bones["rll"], frame, (max(0, -amount * 0.28 * sign), 0, 0))
+
+    if clip in {"walk", "run", "dash"}:
+        walk_cycle(0.24 if clip == "walk" else (0.38 if clip == "run" else 0.48))
+        bob = 0.08 if clip == "walk" else 0.13
+        key_object(root, q1, location=(start_x + (end_x-start_x)*0.25, 0, base_z + bob))
+        key_object(root, mid, location=(start_x + (end_x-start_x)*0.50, 0, base_z))
+        key_object(root, q3, location=(start_x + (end_x-start_x)*0.75, 0, base_z + bob))
     elif clip == "jump":
-        key(root, q1, location=(start_x + (end_x-start_x)*0.22, 0, 0.22))
-        key(root, mid, location=((start_x + end_x) / 2, 0, 1.18))
-        key(root, q3, location=(start_x + (end_x-start_x)*0.82, 0, 0.28))
-        key(root, frame_end, location=(end_x, 0, 0))
-        for name in ("L_shoulder","R_shoulder"):
-            key(controls[name], q1, rotation=(math.radians(-55),0,0))
-            key(controls[name], mid, rotation=(math.radians(-105),0,0))
-            key(controls[name], frame_end, rotation=(0,0,0))
-        key(controls["spine"], mid, rotation=(math.radians(-8),0,0))
+        key_object(root, mid, location=((start_x + end_x)/2, 0, base_z + 1.05))
+        key_rotation(bones["lua"], mid, (-0.45, 0, 0))
+        key_rotation(bones["rua"], mid, (-0.45, 0, 0))
     elif clip in {"crouch", "hide"}:
-        key(root, q1, location=(start_x, 0, -0.18))
-        key(root, mid, location=((start_x + end_x) / 2, 0, -0.58))
-        key(root, frame_end, location=(end_x, 0, -0.45 if clip == "hide" else 0))
-        key(controls["spine"], mid, rotation=(math.radians(13),0,0))
-        key(controls["head"], mid, rotation=(math.radians(-7),0,math.radians(8*facing)))
-        for side in ("L","R"):
-            key(controls[f"{side}_hip"], mid, rotation=(math.radians(38),0,0))
-            key(controls[f"{side}_knee"], mid, rotation=(math.radians(-55),0,0))
+        key_object(root, mid, location=((start_x + end_x)/2, 0, base_z - 0.48))
+        key_object(root, frame_end, location=(end_x, 0, base_z - (0.34 if clip == "hide" else 0.12)))
+        key_rotation(bones["torso"], mid, (0.16, 0, 0))
     elif clip in {"react", "look_back", "turn"}:
-        turn_amount = 22 if clip == "react" else (48 if clip == "look_back" else 62)
-        key(controls["spine"], q1, rotation=(math.radians(-5),0,math.radians(turn_amount*0.35*facing)))
-        key(controls["head"], q1, rotation=(math.radians(-4),0,math.radians(turn_amount*facing)))
-        key(controls["head"], mid, rotation=(math.radians(2),0,math.radians(turn_amount*0.82*facing)))
-        if clip == "turn":
-            key(root, frame_end, rotation=(0,0,base_yaw + math.radians(48*facing)))
-        else:
-            key(controls["head"], frame_end, rotation=(0,0,0))
-        for name in ("L_shoulder","R_shoulder"):
-            key(controls[name], mid, rotation=(math.radians(-28),0,0))
+        angle = 0.20 if clip != "turn" else 0.45
+        key_object(root, mid, rotation=(0, 0, angle))
+        key_object(root, frame_end, rotation=(0, 0, 0 if clip != "turn" else angle * 0.65))
+        key_rotation(bones["head"], mid, (0, 0, -0.20 if clip == "look_back" else 0.12))
     elif clip == "point":
-        key(controls["R_shoulder"], q1, rotation=(math.radians(-35),0,math.radians(-8)))
-        key(controls["R_shoulder"], mid, rotation=(math.radians(-82),0,math.radians(-8)))
-        key(controls["R_elbow"], mid, rotation=(math.radians(-14),0,0))
-        key(controls["head"], mid, rotation=(0,0,math.radians(-10)))
+        key_rotation(bones["rua"], q1, (-0.72, 0, -0.08))
+        key_rotation(bones["rla"], q1, (-0.24, 0, 0))
+        key_rotation(bones["rua"], frame_end, (-0.62, 0, -0.08))
     elif clip in {"open", "push", "pickup"}:
-        key(controls["spine"], q1, rotation=(math.radians(6),0,0))
-        key(controls["R_shoulder"], mid, rotation=(math.radians(-72),0,0))
-        key(controls["R_elbow"], mid, rotation=(math.radians(-48),0,0))
+        key_rotation(bones["rua"], mid, (-0.62, 0, 0))
+        key_rotation(bones["rla"], mid, (-0.48, 0, 0))
         if clip == "pickup":
-            key(root, mid, location=((start_x + end_x)/2,0,-0.34))
-            key(controls["spine"], mid, rotation=(math.radians(20),0,0))
+            key_object(root, mid, location=((start_x + end_x)/2, 0, base_z - 0.30))
+            key_rotation(bones["torso"], mid, (0.28, 0, 0))
     elif clip in {"attack", "power_cast", "ground_slam", "shield"}:
-        key(controls["spine"], q1, rotation=(math.radians(-9),0,math.radians(-4*facing)))
-        key(controls["head"], q1, rotation=(math.radians(3),0,math.radians(4*facing)))
-        key(controls["R_shoulder"], q1, rotation=(math.radians(-105),0,math.radians(-15)))
-        key(controls["L_shoulder"], q1, rotation=(math.radians(-62),0,math.radians(12)))
-        key(controls["R_elbow"], q1, rotation=(math.radians(-42),0,0))
+        key_rotation(bones["rua"], q1, (-0.78, 0, -0.10))
+        key_rotation(bones["lua"], q1, (-0.48, 0, 0.10))
+        key_rotation(bones["rua"], mid, (0.28, 0, 0))
+        key_rotation(bones["lua"], mid, (0.18, 0, 0))
         if clip == "ground_slam":
-            key(root, q1, location=(start_x,0,0.62))
-            key(root, mid, location=((start_x + end_x)/2,0,-0.08))
-            key(controls["spine"], mid, rotation=(math.radians(22),0,0))
-            key(controls["R_shoulder"], mid, rotation=(math.radians(28),0,0))
-            key(controls["L_shoulder"], mid, rotation=(math.radians(28),0,0))
-        elif clip == "shield":
-            key(controls["R_shoulder"], mid, rotation=(math.radians(-70),0,math.radians(-35)))
-            key(controls["L_shoulder"], mid, rotation=(math.radians(-70),0,math.radians(35)))
-        else:
-            key(controls["R_shoulder"], mid, rotation=(math.radians(-25),0,math.radians(-8)))
-            key(controls["L_shoulder"], mid, rotation=(math.radians(-20),0,math.radians(8)))
+            key_object(root, q1, location=(start_x, 0, base_z + 0.55))
+            key_object(root, mid, location=((start_x+end_x)/2, 0, base_z - 0.05))
     elif clip in {"fall", "stumble"}:
-        key(controls["spine"], q1, rotation=(math.radians(14),0,math.radians(10*facing)))
-        key(root, mid, rotation=(math.radians(9),0,base_yaw + math.radians(16*facing)))
+        key_object(root, mid, rotation=(0.16, 0, 0.22))
         if clip == "fall":
-            key(root, frame_end, location=(end_x,0,-1.10), rotation=(math.radians(78),0,math.radians(10*facing)))
+            key_object(root, frame_end, location=(end_x, 0, base_z - 0.65), rotation=(0.85, 0, 0.20))
         else:
-            key(root, frame_end, rotation=(0,0,base_yaw))
-            key(controls["spine"], frame_end, rotation=(0,0,0))
+            key_object(root, frame_end, rotation=(0, 0, 0))
     elif clip == "celebrate":
-        for name in ("L_shoulder","R_shoulder"):
-            key(controls[name], q1, rotation=(math.radians(-85),0,0))
-            key(controls[name], mid, rotation=(math.radians(-148),0,0))
-        key(root, q1, location=(start_x,0,0.05))
-        key(root, mid, location=((start_x+end_x)/2,0,0.24))
-        key(root, frame_end, location=(end_x,0,0))
-        key(controls["head"], mid, rotation=(math.radians(-8),0,0))
+        key_rotation(bones["lua"], mid, (-1.25, 0, 0))
+        key_rotation(bones["rua"], mid, (-1.25, 0, 0))
+        key_object(root, mid, location=((start_x+end_x)/2, 0, base_z + 0.15))
     else:
-        # Breathing/weight shift so even a quiet shot never looks frozen.
-        key(root, q1, location=(start_x,0,0.025))
-        key(root, mid, location=((start_x+end_x)/2,0,0.055))
-        key(root, q3, location=(end_x,0,0.025))
-        key(controls["spine"], q1, rotation=(math.radians(-1.5),0,math.radians(-2)))
-        key(controls["spine"], q3, rotation=(math.radians(1.5),0,math.radians(2)))
-        key(controls["head"], mid, rotation=(math.radians(-2),0,math.radians(3*facing)))
+        key_object(root, mid, location=((start_x+end_x)/2, 0, base_z + 0.035))
 
-    # Emotion adds subtle acting without changing the planned action.
-    if any(word in emotion for word in ("scared","panic","nervous","worried")):
-        key(controls["head"], q3, rotation=(math.radians(-5),0,math.radians(9*facing)))
-        key(controls["spine"], q3, rotation=(math.radians(-6),0,math.radians(-4*facing)))
-    elif any(word in emotion for word in ("angry","determined","focused")):
-        key(controls["head"], q3, rotation=(math.radians(3),0,0))
-        key(controls["spine"], q3, rotation=(math.radians(7),0,0))
-    elif any(word in emotion for word in ("sad","defeated")):
-        key(controls["head"], q3, rotation=(math.radians(10),0,0))
-        key(controls["spine"], q3, rotation=(math.radians(6),0,0))
-
-    # One subtle blink gives close-ups life without turning the classic Roblox
-    # face into a human facial-animation system.
-    blink_frame = max(4,min(frame_end-3,round(frame_end*0.34)))
-    for eye_name in ("eye_0","eye_1"):
-        eye = rig["parts"].get(eye_name)
-        if not eye:
-            continue
-        key(eye,blink_frame-2,scale=(1,1,1))
-        key(eye,blink_frame,scale=(1,1,0.12))
-        key(eye,blink_frame+2,scale=(1,1,1))
-        smooth_curves(eye)
-
-    smooth_curves(root,*controls.values())
 
 def create_power_effect(effect, rig, frame_end):
     if not effect or effect == "none":
         return
     root = rig["root"]
-    glow_blue = mat("PowerBlue", (0.08, 0.48, 1.0), emission=12.0, alpha=0.66)
-    glow_cyan = mat("PowerCyan", (0.10, 0.95, 1.0), emission=14.0, alpha=0.58)
-    glow_purple = mat("PowerPurple", (0.62, 0.16, 1.0), emission=12.0, alpha=0.62)
+    min_x, max_x, min_y, max_y, min_z, max_z = rig["bounds"]
+    chest_z = min_z + (max_z-min_z) * 0.60
+    front_y = min_y - 0.30
     mid = max(2, frame_end // 2)
-    q1 = max(2, frame_end // 4)
-    q3 = max(q1 + 1, frame_end * 3 // 4)
+    glow_blue = new_material("PowerBlue", (0.08, 0.50, 1.0), emission=7.0, alpha=0.72)
+    glow_purple = new_material("PowerPurple", (0.55, 0.15, 1.0), emission=7.0, alpha=0.68)
 
-    if effect in {"energy_orb", "energy_blast"}:
-        orb = add_uv("PowerOrb", (0.98, -0.42, 2.72), (0.08, 0.08, 0.08), glow_cyan, root, 28, 14)
-        light = add_point_light("PowerOrbLight", (0.98,-0.42,2.72), (0.1,0.65,1.0), 250, root)
-        key(orb, 1, scale=(0.05,0.05,0.05))
-        key(orb, q1, scale=(0.24,0.24,0.24))
-        key(orb, mid, scale=(0.52,0.52,0.52))
-        light.data.energy = 250
-        light.data.keyframe_insert(data_path="energy", frame=1)
-        light.data.energy = 1150
-        light.data.keyframe_insert(data_path="energy", frame=mid)
+    if effect in {"energy_orb", "energy_blast", "lightning"}:
+        orb = add_uv(
+            "PowerOrb",
+            (max_x + 0.35, front_y, chest_z),
+            (0.08, 0.08, 0.08),
+            glow_blue,
+            root,
+            20,
+            10,
+        )
+        key_object(orb, 1, scale=(0.25, 0.25, 0.25))
+        key_object(orb, mid, scale=(1.0, 1.0, 1.0))
         if effect == "energy_blast":
-            beam = add_box("EnergyBeam", (1.95,-0.42,2.72), (0.20,0.16,0.16), glow_blue, root, 0.06)
-            key(beam, q1, scale=(0.05,1,1))
-            key(beam, mid, scale=(8.0,1.0,1.0))
-            key(beam, q3, scale=(10.5,0.65,0.65))
-            key(beam, frame_end, scale=(0.05,0.05,0.05))
-            key(orb, q3, location=(3.6,-0.42,2.72), scale=(0.18,0.18,0.18))
+            key_object(orb, frame_end, location=(max_x + 2.8, front_y, chest_z + 0.20), scale=(0.45, 0.45, 0.45))
         else:
-            key(orb, frame_end, scale=(0.18,0.18,0.18))
-        smooth_curves(orb)
-    elif effect == "lightning":
-        for i in range(7):
-            x = 0.72 + i * 0.42
-            z = 2.75 + (0.18 if i % 2 else -0.10)
-            bolt = add_box(
-                f"Lightning_{i}",
-                (x,-0.40,z),
-                (0.48,0.055,0.055),
-                glow_cyan,
-                root,
-                0.025,
-            )
-            bolt.rotation_euler[1] = math.radians(18 if i % 2 else -16)
-            key(bolt, q1, scale=(0.05,0.05,0.05))
-            key(bolt, mid, scale=(1,1,1))
-            key(bolt, q3, scale=(0.55,0.55,0.55))
-            key(bolt, frame_end, scale=(0.03,0.03,0.03))
-        add_point_light("LightningLight", (1.8,-0.4,2.8), (0.2,0.8,1.0), 1250, root)
+            key_object(orb, frame_end, scale=(0.55, 0.55, 0.55))
     elif effect == "shield":
-        bubble = add_uv("Shield", (0,0,2.7), (0.3,0.3,0.3), glow_blue, root, 36, 18)
-        key(bubble, 1, scale=(0.20,0.20,0.20))
-        key(bubble, q1, scale=(1.25,0.95,1.60))
-        key(bubble, mid, scale=(1.85,1.35,2.45))
-        key(bubble, frame_end, scale=(1.70,1.25,2.30))
-        add_point_light("ShieldLight", (0,-0.2,3.0), (0.15,0.55,1.0), 700, root)
-        smooth_curves(bubble)
-    elif effect == "shockwave":
-        for ring_index in range(3):
-            ring = add_torus(
-                f"Shockwave_{ring_index}",
-                (0,0,0.16 + ring_index*0.035),
-                0.55 + ring_index*0.18,
-                0.055,
-                glow_cyan,
-                root,
-            )
-            start = min(frame_end-1, mid + ring_index*2)
-            key(ring, start, scale=(0.15,0.15,0.15))
-            key(ring, min(frame_end, start+8), scale=(2.1,2.1,2.1))
-            key(ring, frame_end, scale=(3.4,3.4,3.4))
-            smooth_curves(ring)
-        add_point_light("ShockwaveLight", (0,0,0.45), (0.15,0.65,1.0), 900, root)
-    elif effect == "kinetic_dash":
-        for i in range(6):
-            trail = add_uv(
-                f"DashTrail_{i}",
-                (-0.28-i*0.32,0.20,2.6),
-                (0.18,0.08,0.55),
-                glow_blue,
-                root,
-                16,
-                8,
-            )
-            key(trail, 1, scale=(0.02,0.02,0.02))
-            key(trail, mid, scale=(1.0,1.0,1.0))
-            key(trail, frame_end, scale=(0.12,0.12,0.12))
-        add_point_light("DashLight", (0,-0.2,2.8), (0.1,0.55,1.0), 850, root)
+        bubble = add_uv(
+            "Shield",
+            ((min_x+max_x)/2, 0, min_z + (max_z-min_z)*0.48),
+            (0.30, 0.30, 0.30),
+            glow_blue,
+            root,
+            28,
+            14,
+        )
+        key_object(bubble, 1, scale=(0.15, 0.15, 0.15))
+        key_object(bubble, mid, scale=(4.7, 3.0, 5.9))
+        key_object(bubble, frame_end, scale=(4.3, 2.8, 5.4))
+    elif effect in {"shockwave", "kinetic_dash"}:
+        ring = add_torus(
+            "Shockwave",
+            ((min_x+max_x)/2, 0, min_z + 0.12),
+            0.55,
+            0.055,
+            glow_blue,
+            root,
+        )
+        key_object(ring, 1, scale=(0.30, 0.30, 0.30))
+        key_object(ring, mid, scale=(2.0, 2.0, 2.0))
+        key_object(ring, frame_end, scale=(3.2, 3.2, 3.2))
     elif effect == "portal":
         ring = add_torus(
             "Portal",
-            (1.8,0.8,2.6),
-            1.08,
-            0.115,
+            (max_x + 1.1, 0.8, chest_z),
+            0.85,
+            0.09,
             glow_purple,
             None,
-            rotation=(math.radians(90),0,0),
+            rotation=(math.radians(90), 0, 0),
         )
-        inner = add_uv("PortalCore", (1.8,0.82,2.6), (0.12,0.12,0.12), glow_purple, None, 28, 14)
-        key(ring, 1, scale=(0.15,0.15,0.15))
-        key(ring, mid, scale=(1.28,1.28,1.28))
-        key(ring, frame_end, scale=(1.06,1.06,1.06))
-        key(inner, 1, scale=(0.05,0.05,0.05))
-        key(inner, mid, scale=(6.8,1.0,6.8))
-        key(inner, frame_end, scale=(5.9,1.0,5.9))
-        ring.rotation_euler[2] = 0
-        ring.keyframe_insert(data_path="rotation_euler", frame=1)
-        ring.rotation_euler[2] = math.radians(130)
-        ring.keyframe_insert(data_path="rotation_euler", frame=frame_end)
-        add_point_light("PortalLight", (1.8,0.0,2.6), (0.65,0.2,1.0), 1100)
-        smooth_curves(ring, inner)
+        key_object(ring, 1, scale=(0.15, 0.15, 0.15))
+        key_object(ring, mid, scale=(1.15, 1.15, 1.15))
+        key_object(ring, frame_end, scale=(1.0, 1.0, 1.0))
     elif effect == "telekinesis":
-        for i, x in enumerate((-1.1,0.0,1.1)):
+        for index, xoff in enumerate((-0.9, 0, 0.9)):
             cube = add_box(
-                f"TelekineticProp{i}",
-                (x,1.2,0.55),
-                (0.45,0.45,0.45),
+                f"TelekineticProp{index}",
+                ((min_x+max_x)/2 + xoff, 0.7, min_z + 0.45),
+                (0.34, 0.34, 0.34),
                 glow_purple,
                 None,
-                0.05,
+                0.04,
             )
-            key(cube, 1, location=(x,1.2,0.55), rotation=(0,0,0))
-            key(cube, mid, location=(x*0.8,1.0,2.0+i*0.25), rotation=(0.3*i,0.4,0.6*i))
-            key(cube, frame_end, location=(x*1.1,1.2,1.5), rotation=(0.8,0.5*i,1.2))
-            smooth_curves(cube)
-        add_point_light("TelekinesisLight", (0,0.2,2.5), (0.65,0.2,1.0), 900)
-
-def _sample_lower_image_color(image):
-    try:
-        width, height = int(image.size[0]), int(image.size[1])
-        if width <= 0 or height <= 0:
-            raise ValueError
-        samples = []
-        for xr in (0.35,0.50,0.65):
-            x = min(width-1, max(0, int(width*xr)))
-            y = min(height-1, max(0, int(height*0.13)))
-            index = (y*width+x)*4
-            pixels = image.pixels[index:index+3]
-            samples.append(tuple(float(v) for v in pixels))
-        return tuple(sum(sample[i] for sample in samples)/len(samples) for i in range(3))
-    except Exception:
-        return (0.12,0.13,0.16)
+            key_object(cube, 1, location=(cube.location.x, 0.7, min_z + 0.45))
+            key_object(cube, mid, location=(cube.location.x, 0.55, chest_z + index * 0.22))
+            key_object(cube, frame_end, location=(cube.location.x + xoff*0.25, 0.65, chest_z - 0.15))
 
 
 def background_plate(path):
     if not path:
         return
-    p = Path(path)
-    if not p.exists():
+    source = Path(path)
+    if not source.exists():
         return
-    try:
-        image = bpy.data.images.load(str(p), check_existing=True)
-        material = bpy.data.materials.new("EnvironmentPlate")
-        material.use_nodes = True
-        nodes = material.node_tree.nodes
-        links = material.node_tree.links
-        nodes.clear()
-        tex = nodes.new("ShaderNodeTexImage")
-        tex.image = image
-        tex.interpolation = "Linear"
-        emission = nodes.new("ShaderNodeEmission")
-        emission.inputs["Strength"].default_value = 0.82
-        out = nodes.new("ShaderNodeOutputMaterial")
-        links.new(tex.outputs["Color"], emission.inputs["Color"])
-        links.new(emission.outputs["Emission"], out.inputs["Surface"])
 
-        bpy.ops.mesh.primitive_plane_add(location=(0,5.5,4.8), rotation=(math.radians(90),0,0))
-        plane = bpy.context.object
-        plane.name = "EnvironmentBackplate"
-        plane.scale = (6.4,11.4,1)
-        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-        plane.data.materials.append(material)
+    image = bpy.data.images.load(str(source), check_existing=True)
+    material = bpy.data.materials.new("RobloxEnvironmentPlate")
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    nodes.clear()
+    tex = nodes.new("ShaderNodeTexImage")
+    tex.image = image
+    emission = nodes.new("ShaderNodeEmission")
+    emission.inputs["Strength"].default_value = 0.95
+    output = nodes.new("ShaderNodeOutputMaterial")
+    links.new(tex.outputs["Color"], emission.inputs["Color"])
+    links.new(emission.outputs["Emission"], output.inputs["Surface"])
 
-        # A colour-matched ground plane receives proper character/power shadows
-        # and prevents the actors from looking pasted onto a flat image.
-        floor_color = _sample_lower_image_color(image)
-        floor_mat = mat("EnvironmentFloor", floor_color)
-        floor_bsdf = floor_mat.node_tree.nodes.get("Principled BSDF")
-        if floor_bsdf:
-            floor_bsdf.inputs["Roughness"].default_value = 0.78
-        bpy.ops.mesh.primitive_plane_add(size=28, location=(0,1.5,-0.03))
-        floor = bpy.context.object
-        floor.name = "EnvironmentGround"
-        floor.data.materials.append(floor_mat)
-    except Exception:
-        pass
+    bpy.ops.mesh.primitive_plane_add(
+        location=(0, 3.6, 5.0),
+        rotation=(math.radians(90), 0, 0),
+    )
+    plane = bpy.context.object
+    plane.name = "RobloxEnvironmentBackplate"
+    plane.scale = (5.1, 9.1, 1)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    plane.data.materials.append(material)
+
 
 def look_at(obj, target):
     direction = Vector(target) - obj.location
     obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
 
 
-def setup_camera(camera_name, motion, frame_end, *, target_x=0.0, high_energy=False):
+def setup_camera(camera_name, motion, frame_end):
     bpy.ops.object.camera_add()
     cam = bpy.context.object
     cam.name = "StoryCamera"
     bpy.context.scene.camera = cam
-
     presets = {
-        "wide": ((0,-13.8,4.5), 39),
-        "medium": ((0,-10.4,4.0), 50),
-        "close-up": ((0,-7.4,4.35), 64),
-        "over-shoulder": ((-1.7,-8.9,4.1), 54),
-        "follow": ((0,-10.9,3.8), 47),
-        "low-angle": ((0,-9.5,2.45), 46),
-        "high-angle": ((0,-10.8,6.7), 50),
+        "wide": ((0, -12.2, 3.7), 46),
+        "medium": ((0, -9.5, 3.6), 52),
+        "close-up": ((0, -7.2, 4.0), 62),
+        "over-shoulder": ((-1.35, -8.7, 3.7), 54),
+        "follow": ((0, -10.0, 3.5), 50),
+        "low-angle": ((0, -8.8, 2.25), 50),
+        "high-angle": ((0, -9.8, 5.8), 54),
     }
     loc, lens = presets.get(camera_name, presets["medium"])
-    start_loc = Vector((loc[0] + target_x*0.20, loc[1], loc[2]))
-    target = Vector((target_x,0,2.75))
-
-    focus = add_empty("CameraFocus", target)
-    cam.data.dof.use_dof = True
-    cam.data.dof.focus_object = focus
-    cam.data.dof.aperture_fstop = 4.6 if camera_name != "close-up" else 3.4
-
-    cam.location = start_loc
+    cam.location = loc
     cam.data.lens = lens
-    look_at(cam, target)
+    look_at(cam, (0, 0, 2.7))
     cam.keyframe_insert(data_path="location", frame=1)
     cam.keyframe_insert(data_path="rotation_euler", frame=1)
-    cam.data.keyframe_insert(data_path="lens", frame=1)
 
-    end_loc = Vector(start_loc)
-    end_lens = lens
+    end = Vector(loc)
     if motion == "push_in":
-        end_loc.y += 1.15
-        end_lens += 2.0
+        end.y += 0.85
     elif motion == "pull_back":
-        end_loc.y -= 1.25
-        end_lens -= 1.5
+        end.y -= 0.85
     elif motion == "track_left":
-        end_loc.x -= 1.25
+        end.x -= 0.85
     elif motion == "track_right":
-        end_loc.x += 1.25
+        end.x += 0.85
     elif motion == "follow":
-        end_loc.x += 0.85
-        end_loc.y += 0.42
+        end.x += 0.55
+        end.y += 0.35
     elif motion == "small_orbit":
-        end_loc.x += 1.15
-        end_loc.y += 0.62
+        end.x += 0.75
+        end.y += 0.30
     elif motion == "reveal_pan":
-        cam.location.x -= 1.05
+        cam.location.x -= 0.8
         cam.keyframe_insert(data_path="location", frame=1)
-        end_loc.x += 1.05
+        end.x = 0.8
 
-    cam.location = end_loc
-    cam.data.lens = end_lens
-    look_at(cam, target)
+    cam.location = end
+    look_at(cam, (0, 0, 2.7))
     cam.keyframe_insert(data_path="location", frame=frame_end)
     cam.keyframe_insert(data_path="rotation_euler", frame=frame_end)
-    cam.data.keyframe_insert(data_path="lens", frame=frame_end)
 
-    if high_energy and frame_end > 12:
-        impact = max(5, frame_end//2)
-        impact_t = max(0.0, min(1.0, impact / max(1, frame_end)))
-        base = start_loc.lerp(end_loc, impact_t)
-        for offset, dx, dz in ((-3,-0.035,0.025),(-1,0.045,-0.020),(1,-0.025,0.018),(3,0.018,-0.012)):
-            frame = max(2,min(frame_end-1,impact+offset))
-            cam.location = base + Vector((dx,0,dz))
-            look_at(cam,target)
-            cam.keyframe_insert(data_path="location",frame=frame)
-            cam.keyframe_insert(data_path="rotation_euler",frame=frame)
-        cam.location = end_loc
 
-    smooth_curves(cam, cam.data)
-    return cam
-
-def setup_lighting(*, role="build", powered=False):
+def setup_lighting():
     world = bpy.context.scene.world
     world.use_nodes = True
     bg = world.node_tree.nodes.get("Background")
     if bg:
-        bg.inputs["Color"].default_value = (0.018,0.022,0.035,1)
-        bg.inputs["Strength"].default_value = 0.28
+        bg.inputs["Color"].default_value = (0.055, 0.065, 0.09, 1)
+        bg.inputs["Strength"].default_value = 0.45
 
-    bpy.ops.object.light_add(type="AREA", location=(-4.2,-3.8,8.2))
+    bpy.ops.object.light_add(type="AREA", location=(-4.0, -4.2, 7.8))
     key_light = bpy.context.object
-    key_light.name = "KeyLight"
-    key_light.data.energy = 1250 if role in {"hook","reveal","payoff"} else 1050
+    key_light.data.energy = 950
     key_light.data.shape = "DISK"
-    key_light.data.size = 5.2
-    key_light.data.color = (1.0,0.87,0.72)
-    look_at(key_light,(0,0,2.7))
+    key_light.data.size = 4.5
+    look_at(key_light, (0, 0, 2.8))
 
-    bpy.ops.object.light_add(type="AREA", location=(4.4,-1.0,5.6))
+    bpy.ops.object.light_add(type="AREA", location=(4.2, -0.4, 5.8))
     fill = bpy.context.object
-    fill.name = "FillLight"
-    fill.data.energy = 500
-    fill.data.size = 4.5
-    fill.data.color = (0.52,0.68,1.0)
-    look_at(fill,(0,0,2.8))
-
-    bpy.ops.object.light_add(type="AREA", location=(3.8,2.6,7.0))
-    rim = bpy.context.object
-    rim.name = "RimLight"
-    rim.data.energy = 950 if powered else 680
-    rim.data.color = (0.20,0.55,1.0) if powered else (0.42,0.58,1.0)
-    rim.data.size = 3.2
-    look_at(rim,(0,0,3.0))
-
-def _configure_compositor(scene, *, powered=False):
-    """Configure optional bloom without ever making compositing a render blocker.
-
-    Blender 5.x removed Scene.node_tree and moved compositing to the
-    Scene.compositing_node_group data block. The renderer supports both APIs.
-    If a future Blender build changes compositor nodes again, we disable the
-    compositor and continue rendering instead of failing the whole Story.
-    """
-    try:
-        if bpy.app.version >= (5, 0, 0):
-            tree = bpy.data.node_groups.new(
-                f"ShortsStudioComp_{scene.name}",
-                "CompositorNodeTree",
-            )
-            scene.compositing_node_group = tree
-
-            render_layers = tree.nodes.new(type="CompositorNodeRLayers")
-            glare = tree.nodes.new(type="CompositorNodeGlare")
-            output = tree.nodes.new(type="NodeGroupOutput")
-
-            tree.interface.new_socket(
-                name="Image",
-                in_out="OUTPUT",
-                socket_type="NodeSocketColor",
-            )
-
-            # Blender 5 converted most old Glare properties into node inputs.
-            # Set only sockets/properties that exist in this exact build.
-            for socket_name, value in (
-                ("Threshold", 0.8 if powered else 2.8),
-                ("Size", 0.55 if powered else 0.30),
-                ("Strength", 1.10 if powered else 0.35),
-            ):
-                socket = glare.inputs.get(socket_name)
-                if socket is not None:
-                    try:
-                        socket.default_value = value
-                    except Exception:
-                        pass
-
-            type_socket = glare.inputs.get("Type")
-            if type_socket is not None:
-                try:
-                    type_socket.default_value = "FOG_GLOW"
-                except Exception:
-                    pass
-
-            quality_socket = glare.inputs.get("Quality")
-            if quality_socket is not None:
-                try:
-                    quality_socket.default_value = "HIGH"
-                except Exception:
-                    pass
-
-            # links.new() accepts sockets regardless of argument order differences
-            # seen across compositor API examples; use the normal output->input form.
-            tree.links.new(render_layers.outputs["Image"], glare.inputs["Image"])
-            tree.links.new(glare.outputs["Image"], output.inputs["Image"])
-
-            try:
-                scene.render.use_compositing = True
-            except Exception:
-                pass
-            return
-
-        # Blender 4.x compatibility.
-        scene.use_nodes = True
-        tree = scene.node_tree
-        tree.nodes.clear()
-        render_layers = tree.nodes.new("CompositorNodeRLayers")
-        glare = tree.nodes.new("CompositorNodeGlare")
-        try:
-            glare.glare_type = "FOG_GLOW"
-            glare.quality = "HIGH"
-            glare.threshold = 0.8 if powered else 2.8
-            glare.size = 6
-        except Exception:
-            pass
-        composite = tree.nodes.new("CompositorNodeComposite")
-        tree.links.new(render_layers.outputs["Image"], glare.inputs["Image"])
-        tree.links.new(glare.outputs["Image"], composite.inputs["Image"])
-    except Exception as exc:
-        # Bloom is cosmetic. Never throw away a whole 65-second Story because a
-        # Blender compositor API changed.
-        print(f"[Shorts Studio] compositor disabled: {exc}")
-        try:
-            scene.render.use_compositing = False
-        except Exception:
-            pass
+    fill.data.energy = 650
+    fill.data.color = (0.58, 0.70, 1.0)
+    fill.data.size = 4.0
+    look_at(fill, (0, 0, 2.8))
 
 
-def configure_scene(frame_end, frame_dir, *, powered=False):
+def configure_scene(frame_end, output):
     scene = bpy.context.scene
     try:
         scene.render.engine = "BLENDER_EEVEE_NEXT"
     except Exception:
         scene.render.engine = "BLENDER_EEVEE"
 
-    scene.render.resolution_x = 1080
-    scene.render.resolution_y = 1920
+    scene.render.resolution_x = 720
+    scene.render.resolution_y = 1280
     scene.render.resolution_percentage = 100
     scene.render.fps = FPS
     scene.frame_start = 1
     scene.frame_end = frame_end
-    scene.render.film_transparent = False
-
+    scene.render.image_settings.file_format = "FFMPEG"
+    scene.render.ffmpeg.format = "MPEG4"
+    scene.render.ffmpeg.codec = "H264"
+    scene.render.ffmpeg.audio_codec = "NONE"
+    scene.render.filepath = str(output)
     try:
-        scene.render.use_motion_blur = True
-        scene.render.motion_blur_shutter = 0.35
+        scene.render.ffmpeg.constant_rate_factor = "MEDIUM"
     except Exception:
         pass
-    try:
-        scene.eevee.taa_render_samples = 64
-        scene.eevee.use_gtao = True
-        scene.eevee.gtao_distance = 3
-        scene.eevee.gtao_factor = 1.15
-    except Exception:
-        pass
-
-    _configure_compositor(scene, powered=powered)
-
-    # Blender 5.2 no longer accepts FFMPEG as an image_settings file format.
-    # Render an ordinary frame sequence and let Shorts Studio's known-good
-    # FFmpeg binary encode it afterward. This is stable across Blender 4/5.
-    frame_dir = Path(frame_dir)
-    frame_dir.mkdir(parents=True, exist_ok=True)
-    scene.render.image_settings.file_format = "JPEG"
-    try:
-        scene.render.image_settings.quality = 95
-    except Exception:
-        pass
-    scene.render.use_file_extension = True
-    scene.render.filepath = str(frame_dir / "frame_")
-
     try:
         scene.view_settings.look = "AgX - Medium High Contrast"
     except Exception:
         pass
 
-def render_shot(shot, output_dir):
+
+def render_shot(shot, output_dir, template_path):
     clear_scene()
-    duration = max(1.3,min(6.5,float(shot.get("duration") or 3.0)))
-    frame_end = max(2,round(duration*FPS))
-    power_effects = [
-        str(actor.get("power_effect") or "none")
-        for actor in (shot.get("actors") or [])
-    ]
-    powered = any(effect != "none" for effect in power_effects)
-    role = str(shot.get("role") or "build")
+    duration = max(1.3, min(6.5, float(shot.get("duration") or 3.0)))
+    frame_end = max(2, round(duration * FPS))
 
     background_plate(shot.get("background_path"))
-    setup_lighting(role=role,powered=powered)
-
-    actors = shot.get("actors") or []
-    target_x = (
-        sum(
-            (float(actor.get("start_lane") or 0.0)+float(actor.get("end_lane") or actor.get("start_lane") or 0.0))/2
-            for actor in actors
-        ) / len(actors)
-        if actors else 0.0
-    )
+    setup_lighting()
     setup_camera(
         str(shot.get("camera") or "medium"),
         str(shot.get("camera_motion") or "static"),
         frame_end,
-        target_x=target_x,
-        high_energy=powered or role in {"reveal","payoff"},
     )
 
-    for actor in actors:
+    for actor in shot.get("actors") or []:
         cid = str(actor.get("id") or "max").lower()
-        rig = create_r15(cid,float(actor.get("start_lane") or 0.0))
-        animate_actor(actor,rig,frame_end)
-        create_power_effect(str(actor.get("power_effect") or "none"),rig,frame_end)
+        rig = import_official_r15(
+            cid,
+            float(actor.get("start_lane") or 0.0),
+            template_path,
+        )
+        animate_actor(actor, rig, frame_end)
+        create_power_effect(str(actor.get("power_effect") or "none"), rig, frame_end)
 
-    index = int(shot.get("index") or 0)+1
-    output = output_dir/f"scene_{index:02d}.mp4"
-    frame_dir = output_dir / f"scene_{index:02d}_frames"
-
-    if frame_dir.exists():
-        shutil.rmtree(frame_dir, ignore_errors=True)
-    frame_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        output.unlink(missing_ok=True)
-    except Exception:
-        pass
-
-    configure_scene(frame_end,frame_dir,powered=powered)
+    index = int(shot.get("index") or 0) + 1
+    output = output_dir / f"scene_{index:02d}.mp4"
+    configure_scene(frame_end, output)
     bpy.context.scene.frame_set(1)
     bpy.ops.render.render(animation=True)
 
-    rendered_frames = sorted(frame_dir.glob("frame_*.jpg"))
-    if len(rendered_frames) < frame_end:
-        files = ", ".join(path.name for path in rendered_frames[-8:])
-        raise RuntimeError(
-            f"Blender finished scene {index} but only rendered {len(rendered_frames)}/{frame_end} JPEG frames. "
-            f"Last frames: {files or 'none'}"
-        )
-
-    report = {
-        "renderer_version": RENDERER_VERSION,
-        "scene": index,
-        "duration": duration,
-        "frames": frame_end,
-        "fps": FPS,
-        "output": str(output),
-        "frames_dir": str(frame_dir),
-        "frame_pattern": "frame_%04d.jpg",
-        "rendered_frame_count": len(rendered_frames),
-        "camera": shot.get("camera"),
-        "camera_motion": shot.get("camera_motion"),
-        "actors": [
-            {
-                "id": actor.get("id"),
-                "clip": actor.get("clip"),
-                "power_effect": actor.get("power_effect"),
-            }
-            for actor in actors
-        ],
-    }
-    (output_dir / f"scene_{index:02d}.json").write_text(
-        json.dumps(report, indent=2),
-        encoding="utf-8",
-    )
 
 def main():
     args = parse_args()
     plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    template_path = Path(args.r15_template)
+
+    if not template_path.exists():
+        raise SystemExit(f"Official Roblox R15 template missing: {template_path}")
 
     for shot in plan.get("shots") or []:
-        render_shot(shot, output_dir)
+        render_shot(shot, output_dir, template_path)
 
 
 if __name__ == "__main__":
