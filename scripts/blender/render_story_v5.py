@@ -680,11 +680,13 @@ def build_stage(background_path: str | None, environment: str, shot_index: int =
         add_child_box("MidTrim", stage_root, (0, 5.15, 4.45), (7.2, 0.38, 0.32), trim_mat, 0.05)
 
 
-def add_context_props(shot):
+def add_context_props(shot, frame_end):
     text = " ".join(
         str(x or "")
         for x in (shot.get("action"), shot.get("environment"), shot.get("emotion"))
     ).lower()
+    mid = max(2, frame_end // 2)
+    q1 = max(2, frame_end // 4)
     props = []
     root = add_empty("ShotProps")
     neutral = new_material("PropNeutral", (0.24, 0.27, 0.32), roughness=0.52)
@@ -693,18 +695,45 @@ def add_context_props(shot):
 
     if "door" in text or "closet" in text or "locker" in text:
         x = 2.4 if "left" not in text else -2.4
-        door = add_child_box("StoryDoor", root, (x, 1.55, 2.15), (1.55, 0.30, 4.25), neutral, 0.08)
-        knob = add_child_sphere("DoorKnob", root, (x + (0.48 if x < 0 else -0.48), 1.37, 2.05), (0.10, 0.08, 0.10), gold, 16, 8)
+        hinge_sign = 1.0 if x > 0 else -1.0
+        pivot = add_empty("StoryDoorPivot", root, (x + 0.775 * hinge_sign, 1.55, 2.15))
+        door = add_child_box(
+            "StoryDoor", pivot, (-0.775 * hinge_sign, 0.0, 0.0),
+            (1.55, 0.30, 4.25), neutral, 0.08,
+        )
+        knob = add_child_sphere(
+            "DoorKnob", pivot,
+            (-1.22 * hinge_sign, -0.18, -0.10),
+            (0.10, 0.08, 0.10), gold, 16, 8,
+        )
+        if any(word in text for word in ("open", "opened", "opening", "push", "escape", "enter")):
+            key_rotation(pivot, 1, (0, 0, 0))
+            key_rotation(pivot, q1, (0, 0, 0))
+            key_rotation(pivot, mid, (0, 0, -1.05 * hinge_sign))
+            key_rotation(pivot, frame_end, (0, 0, -1.18 * hinge_sign))
+            set_linear_interpolation(pivot)
         props.extend([door, knob])
 
     if "key" in text:
-        key = add_child_box("StoryKey", root, (0.85, -0.10, 0.32), (0.62, 0.12, 0.18), gold, 0.05)
-        ring = add_child_torus("StoryKeyRing", root, (1.13, -0.10, 0.32), 0.18, 0.045, gold, (math.radians(90), 0, 0))
+        key_root = add_empty("StoryKeyRoot", root, (0.85, -0.10, 0.32))
+        key = add_child_box("StoryKey", key_root, (0, 0, 0), (0.62, 0.12, 0.18), gold, 0.05)
+        ring = add_child_torus("StoryKeyRing", key_root, (0.28, 0, 0), 0.18, 0.045, gold, (math.radians(90), 0, 0))
+        if any(word in text for word in ("pickup", "pick up", "grab", "take", "collect")):
+            key_location(key_root, 1, (0.85, -0.10, 0.32))
+            key_location(key_root, mid, (0.35, -0.30, 1.25))
+            key_location(key_root, frame_end, (0.20, -0.20, 2.10))
+            key_rotation(key_root, mid, (0, 0.20, 0.35))
+            set_linear_interpolation(key_root)
         props.extend([key, ring])
 
     if any(x in text for x in ("button", "switch", "lever")):
         console = add_child_box("StoryConsole", root, (-1.9, 0.75, 0.85), (0.95, 0.70, 1.50), neutral, 0.08)
         button = add_child_box("StoryButton", root, (-1.9, 0.34, 1.08), (0.36, 0.10, 0.36), glow, 0.05)
+        if any(word in text for word in ("press", "push", "hit", "activate", "switch")):
+            key_scale(button, 1, (1.0, 1.0, 1.0))
+            key_scale(button, mid, (1.0, 0.42, 1.0))
+            key_scale(button, frame_end, (1.0, 0.72, 1.0))
+            set_linear_interpolation(button)
         props.extend([console, button])
 
     if any(x in text for x in ("chest", "crate", "loot", "box")):
@@ -714,6 +743,12 @@ def add_context_props(shot):
 
     if any(x in text for x in ("gem", "crystal", "coin", "rare item", "artifact")):
         item = add_child_sphere("StoryCollectible", root, (-0.90, 0.35, 0.48), (0.25, 0.18, 0.34), glow, 20, 10)
+        if any(word in text for word in ("pickup", "pick up", "grab", "take", "collect")):
+            key_location(item, 1, (-0.90, 0.35, 0.48))
+            key_location(item, mid, (-0.45, -0.10, 1.45))
+            key_location(item, frame_end, (0.0, -0.15, 2.25))
+            key_scale(item, frame_end, (0.12, 0.12, 0.12))
+            set_linear_interpolation(item)
         props.append(item)
 
     if "flashlight" in text:
@@ -878,7 +913,7 @@ def render_shot(shot, output_dir: Path):
 
     build_stage(shot.get("background_path"), environment, int(shot.get("index") or 0))
     setup_lighting(environment)
-    add_context_props(shot)
+    add_context_props(shot, frame_end)
 
     actors = shot.get("actors") or []
     start_lanes = []
