@@ -165,13 +165,18 @@
 
             <div id="video-mode-short" class="mode-pane">
               <form id="video-form" class="creator-form">
-                <label class="prompt-label">Game or story idea <span class="muted">(optional)</span>
-                  <textarea name="topic" rows="5" placeholder="Leave blank and Story Studio picks a real Roblox game. Or try: DOORS — my teammate steals the last hiding spot"></textarea>
+                <label class="prompt-label">Story idea <span class="muted">(optional)</span>
+                  <textarea name="topic" rows="5" placeholder="Leave blank for a strong original episode. Or try: Max overloads his kinetic power while Mia is trapped on the Skybridge"></textarea>
                 </label>
                 <input type="hidden" name="content_type" value="story">
-                <div class="director-note">Full Shorts are now 50–75 second Roblox mini-movies, with ~65 seconds recommended. Story Studio researches a real game, locks a goal→setback→turn→climax→payoff arc, then red-teams the plot for nonsense before rendering.</div>
+                <label>Story world<select name="story_world">
+                  <option value="original" selected>Original animated series — recommended</option>
+                  <option value="game">Real Roblox game story — experimental</option>
+                </select></label>
+                <div class="director-note">Recommended mode is now an original recurring Roblox animated series with Max, Mia and Kai. It uses fixed locations, character relationships, power limits and proper cause→effect stories instead of inventing random player chases inside unrelated games.</div>
                 <label>Story genre<select name="story_genre">
-                  <option value="auto" selected>Auto — pick the strongest idea</option>
+                  <option value="powers" selected>Powers / animated action — recommended</option>
+                  <option value="auto">Auto — pick the strongest idea</option>
                   <option value="funny">Funny / relatable</option>
                   <option value="horror">Horror / creepy</option>
                   <option value="mystery">Mystery</option>
