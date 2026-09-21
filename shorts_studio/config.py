@@ -50,7 +50,7 @@ for path in (DATA_DIR, OUTPUT_DIR, MEDIA_OUTPUT_DIR, ASSET_DIR, MUSIC_DIR, SFX_D
 
 @dataclass(frozen=True)
 class Settings:
-    app_name: str = "Shorts Studio V3"
+    app_name: str = "Shorts Studio V5"
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     ollama_model: str = os.getenv("SHORTS_STUDIO_MODEL", "qwen3:8b")
     default_voice: str = os.getenv("SHORTS_STUDIO_VOICE", "auto-youthful-male")
