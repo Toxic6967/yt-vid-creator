@@ -169,7 +169,7 @@ def _queue_short(
     target_seconds: int,
     content_type: str = "auto",
     story_genre: str = "auto",
-    story_world: str = "original",
+    story_world: str = "game",
     visual_mode: str = "animated",
 ) -> dict:
     job_id = uuid.uuid4().hex[:12]
@@ -213,7 +213,7 @@ def auto_generate() -> dict:
         int(profile["target_seconds"]),
         "story",
         "auto",
-        "original",
+        "game",
         "animated",
     )
 
@@ -311,7 +311,7 @@ def remake_as_story(job_id: str) -> dict:
         old["target_seconds"],
         "story",
         "auto",
-        old.get("story_world", "original"),
+        old.get("story_world", "game"),
         old.get("visual_mode", "animated"),
     )
 
@@ -345,7 +345,7 @@ def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
         old["target_seconds"],
         old.get("content_type", "auto"),
         old.get("story_genre", "auto"),
-        old.get("story_world", "original"),
+        old.get("story_world", "game"),
         old.get("visual_mode", "animated"),
     )
 
