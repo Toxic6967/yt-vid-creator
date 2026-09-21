@@ -154,9 +154,8 @@ def normalise_animation_plan(
                 for x in ((power_rules.get(cid) or {}).get("abilities") or [])
             }
             if allowed_for_character and power_effect not in allowed_for_character:
-                # Original-series powers are character-specific. Never let Max
-                # suddenly use Mia's shield or Kai's lightning because the
-                # animation planner guessed an effect.
+                # Keep special effects character/mechanic-specific when a
+                # verified game context supplies an explicit ability list.
                 power_effect = "none"
 
             actors.append(
