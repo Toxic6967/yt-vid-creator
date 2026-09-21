@@ -55,7 +55,10 @@ async function loadHealth(){
     if(!chatterboxReady) missing.push('natural narrator not installed');
     if(!h.comfyui || !h.comfyui.ok) missing.push('ComfyUI not running');
     else if(!h.comfyui.story_image_ready) missing.push('FLUX Story models not ready');
-    if(!animationReady) missing.push('Blender animation engine not ready');
+    if(!animationReady){
+      if(h.animation && h.animation.official_r15_ready===false) missing.push('official Roblox R15 asset missing — run install_animation_engine.bat');
+      else missing.push('Blender animation engine not ready');
+    }
 
     const componentError =
       (h.animation && h.animation.error) ||
