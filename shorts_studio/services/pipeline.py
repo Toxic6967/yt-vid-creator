@@ -283,7 +283,7 @@ def run_pipeline(job_id: str) -> None:
         "story_genre": job.get("story_genre", "auto"),
         "story_world": "game",
         "visual_mode": visual_mode,
-        "pipeline_version": "5.0.0",
+        "pipeline_version": "5.2.0",
     }
 
     try:
