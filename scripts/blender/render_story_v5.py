@@ -412,6 +412,11 @@ def animate_actor(actor, rig, frame_end, depth=0.0):
             key_rotation(p["r_hip"], frame, (stride * 0.62 * sign, 0, 0))
             key_rotation(p["l_knee"], frame, (max(0.0, stride * 0.46 * sign), 0, 0))
             key_rotation(p["r_knee"], frame, (max(0.0, -stride * 0.46 * sign), 0, 0))
+        # Secondary head/body motion keeps locomotion from looking like a
+        # rigid mannequin sliding across the floor.
+        head_sway = -0.07 if facing == "left" else 0.07
+        key_rotation(p["head"], q1, (0.025, 0, head_sway))
+        key_rotation(p["head"], q3, (-0.018, 0, -head_sway * 0.65))
         if clip == "dash":
             key_rotation(p["body"], q1, (0.08, 0, -0.12 if facing == "left" else 0.12))
             key_rotation(p["body"], q3, (0.04, 0, 0))
@@ -425,6 +430,11 @@ def animate_actor(actor, rig, frame_end, depth=0.0):
         key_rotation(p["r_hip"], mid, (0.34, 0, 0))
         key_rotation(p["l_knee"], mid, (0.48, 0, 0))
         key_rotation(p["r_knee"], mid, (0.48, 0, 0))
+        # Landing anticipation and recovery instead of one floaty arc.
+        key_rotation(p["body"], q1, (-0.08, 0, 0))
+        key_rotation(p["body"], q3, (0.14, 0, 0))
+        key_rotation(p["l_shoulder"], q3, (0.42, -0.08, 0))
+        key_rotation(p["r_shoulder"], q3, (0.42, 0.08, 0))
     elif clip in {"crouch", "hide"}:
         drop = -0.56 if clip == "hide" else -0.38
         key_location(root, mid, ((start_x + end_x) / 2, depth, drop))
@@ -444,15 +454,25 @@ def animate_actor(actor, rig, frame_end, depth=0.0):
         if clip == "react":
             key_rotation(p["l_shoulder"], mid, (0.72, -0.25, 0))
             key_rotation(p["r_shoulder"], mid, (0.72, 0.25, 0))
+        key_rotation(p["head"], q3, (0, 0, yaw * 0.18))
+        key_rotation(p["body"], q3, (0, 0, yaw * 0.24))
     elif clip == "point":
         key_rotation(p["r_shoulder"], q1, (1.48, -0.18, -0.05))
         key_rotation(p["r_elbow"], q1, (-0.22, 0, 0))
         key_rotation(p["r_shoulder"], mid, (1.62, -0.22, -0.06))
         key_rotation(p["head"], mid, (0, 0, -0.10))
+        key_rotation(p["r_shoulder"], q3, (0.70, -0.10, -0.03))
+        key_rotation(p["r_elbow"], q3, (-0.10, 0, 0))
+        key_rotation(p["head"], q3, (0, 0, -0.04))
     elif clip in {"open", "push", "pickup"}:
         key_rotation(p["r_shoulder"], q1, (1.12, -0.08, 0))
         key_rotation(p["r_elbow"], q1, (-0.38, 0, 0))
         key_rotation(p["r_shoulder"], mid, (1.38, -0.12, 0))
+        key_rotation(p["r_elbow"], mid, (-0.52, 0, 0))
+        key_rotation(p["r_shoulder"], q3, (0.46, -0.04, 0))
+        key_rotation(p["r_elbow"], q3, (-0.12, 0, 0))
+        key_rotation(p["head"], q1, (0.06, 0, -0.08 if facing == "left" else 0.08))
+        key_rotation(p["head"], q3, (0, 0, 0))
         if clip == "pickup":
             key_location(root, mid, ((start_x + end_x) / 2, depth, -0.28))
             key_rotation(p["body"], mid, (0.30, 0, 0))
@@ -483,12 +503,16 @@ def animate_actor(actor, rig, frame_end, depth=0.0):
         key_rotation(p["l_shoulder"], mid, (2.30, -0.48, 0))
         key_rotation(p["r_shoulder"], mid, (2.30, 0.48, 0))
         key_rotation(p["head"], mid, (0, 0, 0.12))
+        key_rotation(p["l_shoulder"], q3, (1.05, -0.22, 0))
+        key_rotation(p["r_shoulder"], q3, (1.05, 0.22, 0))
     else:
         # Visible breathing / weight shift so "idle" is never a frozen cut-out.
         key_location(root, q1, (start_x, depth, 0.035))
         key_location(root, mid, ((start_x + end_x) / 2, depth, 0.0))
         key_location(root, q3, (end_x, depth, 0.03))
         key_rotation(p["body"], mid, (0.015, 0, -0.025 if facing == "left" else 0.025))
+        key_rotation(p["head"], q1, (0.02, 0, -0.055 if facing == "left" else 0.055))
+        key_rotation(p["head"], q3, (-0.015, 0, 0.04 if facing == "left" else -0.04))
 
     for obj in [root, *p.values()]:
         set_linear_interpolation(obj)
