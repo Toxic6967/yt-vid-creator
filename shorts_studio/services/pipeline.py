@@ -174,9 +174,12 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
                 f"Location: {environment}. "
                 f"Verified visual set-piece context: {visual_context}. "
                 "Polished Roblox Studio map, readable game-scale geometry, smooth stylized materials, "
-                "current Roblox lighting, clear depth and playable layout. "
-                "No characters. No Minecraft voxel terrain. No photoreal real-world film set. "
-                "Keep the center area open for Roblox avatars. No readable text, UI, logos or watermarks."
+                "current Roblox lighting, clear depth and playable layout. Use a believable player-height camera, "
+                "a coherent horizon/vanishing point and one obvious solid walkable floor in the lower foreground so 3D avatars "
+                "can stand in the scene with correct ground contact. Keep the foreground uncluttered and the important game landmarks "
+                "in the middle/background. No characters, humanoid silhouettes, floating decorative spheres, random vehicles or props "
+                "unless the verified set-piece specifically requires them. No Minecraft voxel terrain. No photoreal real-world film set. "
+                "No readable text, UI, logos or watermarks."
             ),
             reference_path=seed_ref,
             seed=seed,
@@ -187,7 +190,9 @@ def _ensure_story_environment_plates(job_dir: Path, script: dict) -> dict[str, s
                 f"Polish this exact empty {game_name} Roblox environment plate for a cinematic gameplay scene. "
                 f"The intended set-piece is: {environment}. Preserve the layout and recognisable landmarks, but make the materials, "
                 "lighting, proportions and props look like a high-quality current Roblox Studio game map. "
-                "Keep geometry readable and stylized, not Minecraft/voxel and not photoreal. No characters. "
+                "Keep geometry readable and stylized, not Minecraft/voxel and not photoreal. Preserve a clear solid floor in the "
+                "lower foreground, player-height perspective and coherent depth for compositing animated Roblox avatars. "
+                "Remove accidental humanoids, floating blobs/orbs and unrelated foreground clutter. No characters. "
                 "All signs/screens/boards stay blank or pictorial; no letters, numbers, usernames, UI, logos or watermarks."
             ),
             reference_path=first_plate["path"],
@@ -279,7 +284,7 @@ def run_pipeline(job_id: str) -> None:
         "story_genre": job.get("story_genre", "auto"),
         "story_world": job.get("story_world", "original"),
         "visual_mode": visual_mode,
-        "pipeline_version": "4.0.0",
+        "pipeline_version": "5.0.0",
     }
 
     try:
@@ -762,7 +767,7 @@ def run_pipeline(job_id: str) -> None:
         )
         blender_animation_count = sum(
             1 for v in visuals
-            if v.get("backend") == "blender_official_roblox_r15_v4"
+            if str(v.get("backend") or "").startswith("blender_roblox")
         )
         required_story_motion = 0
         if content_type == "story":
@@ -770,7 +775,7 @@ def run_pipeline(job_id: str) -> None:
                 required_story_motion = len(script.get("scenes", []))
                 if blender_animation_count != required_story_motion:
                     raise RuntimeError(
-                        f"V3 animation returned {blender_animation_count} rendered shots for "
+                        f"V5 machinima animation returned {blender_animation_count} rendered shots for "
                         f"{required_story_motion} Story scenes."
                     )
             else:
@@ -819,7 +824,10 @@ def run_pipeline(job_id: str) -> None:
         fallback_visuals = [v for v in visuals if v.get("kind") == "storyboard_fallback"]
         ai_visuals = [v for v in visuals if v.get("kind") == "ai_generated_scene"]
         ai_videos = [v for v in visuals if v.get("kind") == "ai_generated_video"]
-        blender_videos = [v for v in visuals if v.get("backend") == "blender_official_roblox_r15_v4"]
+        blender_videos = [
+            v for v in visuals
+            if str(v.get("backend") or "").startswith("blender_roblox")
+        ]
         adjacent_similarities = [
             float(v.get("previous_frame_similarity", 0.0))
             for v in visuals
