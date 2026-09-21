@@ -53,11 +53,16 @@ def blender_executable() -> Path | None:
 def health() -> dict[str, Any]:
     exe = blender_executable()
     r15 = Path(settings.roblox_r15_fbx)
-    ready = bool(exe and r15.exists() and r15.stat().st_size >= 100_000)
+    # V5 builds a deterministic segmented Roblox-style avatar directly in
+    # Blender. The legacy official FBX is still reported for compatibility, but
+    # it is no longer allowed to block rendering when an FBX import behaves
+    # differently across Blender versions.
+    ready = bool(exe)
     return {
         "ready": ready,
-        "backend": "blender_official_roblox_r15_v4",
+        "backend": "blender_roblox_machinima_v5",
         "executable": str(exe) if exe else None,
+        "procedural_avatar_ready": bool(exe),
         "official_r15_ready": r15.exists() and r15.stat().st_size >= 100_000 if r15.exists() else False,
         "official_r15_path": str(r15),
         "install_hint": "Run install_animation_engine.bat" if not ready else None,
@@ -225,7 +230,7 @@ def render_animation_plan(
     exe = blender_executable()
     if not exe:
         raise RuntimeError(
-            "The V3 Roblox animation engine needs Blender. "
+            "The V5 Roblox machinima engine needs Blender. "
             "Run install_animation_engine.bat, then restart Shorts Studio."
         )
 
@@ -235,7 +240,7 @@ def render_animation_plan(
     plan_path = animation_dir / "animation_plan.json"
     plan_path.write_text(json.dumps(plan, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    script = ROOT_DIR / "scripts" / "blender" / "render_story.py"
+    script = ROOT_DIR / "scripts" / "blender" / "render_story_v5.py"
     if not script.exists():
         raise RuntimeError(f"Blender Story renderer is missing: {script}")
 
@@ -366,7 +371,7 @@ def render_animation_plan(
             {
                 "path": str(clip),
                 "kind": "blender_animated_scene",
-                "backend": "blender_official_roblox_r15_v4",
+                "backend": "blender_roblox_machinima_v5",
                 "query": shot.get("action") or "",
                 "animation_clip_count": len(shot.get("actors") or []),
                 "camera": shot.get("camera"),
