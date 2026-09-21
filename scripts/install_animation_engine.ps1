@@ -1,5 +1,7 @@
 $ErrorActionPreference = "Stop"
 
+$projectRoot = Split-Path -Parent $PSScriptRoot
+
 Write-Host ""
 Write-Host "=== Shorts Studio V3 - Roblox Animation Engine ===" -ForegroundColor Cyan
 Write-Host "This installs/checks Blender for deterministic R15 animation."
@@ -55,6 +57,49 @@ Write-Host "Testing headless Blender..." -ForegroundColor Yellow
 & $blender --background --factory-startup --python-expr "import bpy; print('Shorts Studio Blender OK', bpy.app.version_string)"
 if ($LASTEXITCODE -ne 0) {
     throw "Blender is installed but the headless test failed."
+}
+
+$storageMarker = Join-Path $projectRoot ".shorts_studio_storage"
+if (Test-Path $storageMarker) {
+    $storageRoot = (Get-Content $storageMarker -Raw).Trim()
+}
+else {
+    $storageRoot = "E:\auto yt"
+}
+if (-not $storageRoot) {
+    throw "Storage root is empty. Run setup_external_storage.bat first."
+}
+
+$robloxAssetDir = Join-Path $storageRoot "data\assets\roblox_official"
+$robloxR15 = Join-Path $robloxAssetDir "BlockyCharacter.fbx"
+New-Item -ItemType Directory -Force -Path $robloxAssetDir | Out-Null
+
+if (-not (Test-Path $robloxR15)) {
+    Write-Host ""
+    Write-Host "Downloading Roblox's official Blocky R15 reference character..." -ForegroundColor Yellow
+    $url = "https://prod.docsiteassets.roblox.com/assets/avatar/dynamic-heads/reference-files/BlockyCharacter.fbx"
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $robloxR15 -UseBasicParsing
+    }
+    catch {
+        if (Test-Path $robloxR15) { Remove-Item $robloxR15 -Force -ErrorAction SilentlyContinue }
+        throw "Could not download the official Roblox BlockyCharacter.fbx reference: $($_.Exception.Message)"
+    }
+}
+
+if ((Get-Item $robloxR15).Length -lt 100000) {
+    throw "The downloaded Roblox R15 reference looks incomplete: $robloxR15"
+}
+
+Write-Host "Official Roblox R15 reference:" -ForegroundColor Green
+Write-Host "  $robloxR15" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "Testing that Blender can import the official Roblox R15 FBX..." -ForegroundColor Yellow
+$escapedR15 = $robloxR15.Replace("\", "\\")
+& $blender --background --factory-startup --python-expr "import bpy; bpy.ops.import_scene.fbx(filepath=r'$escapedR15'); print('Official Roblox R15 import OK', len(bpy.context.scene.objects))"
+if ($LASTEXITCODE -ne 0) {
+    throw "Blender is installed, but importing the official Roblox R15 reference failed."
 }
 
 Write-Host ""
