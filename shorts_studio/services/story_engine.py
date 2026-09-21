@@ -811,6 +811,15 @@ def _generate_scene_batches(
         game_context=game_context,
         arc_plan=arc_plan,
     )
+    original_series = bool(game_context.get("is_original_universe"))
+    mode_rules = (
+        "ORIGINAL SERIES RULES: narrate about Max/Mia/Kai in third person; never invent a random player/guy chasing them; "
+        "use only named Astra City locations and established Core Drone/Rift/blackout/power-limit conflicts; "
+        "powers belong to their established character and have costs."
+        if original_series
+        else
+        "REAL-GAME RULES: keep every beat faithful to verified game mechanics and locations."
+    )
     collected: list[dict[str, Any]] = []
     existing = [
         _coerce_writer_scene(scene, idx)
@@ -842,6 +851,9 @@ VERIFIED GAME CONTEXT:
 POWER/FANTASY RULES:
 {_power_story_rules(genre)}
 
+MODE RULES:
+{mode_rules}
+
 LOCKED CAUSAL ARC:
 {json.dumps(arc_plan, ensure_ascii=False)}
 
@@ -863,7 +875,7 @@ Rules:
 - use recurring ids max, mia, kai;
 - every beat is caused by an earlier action, choice, mistake or verified mechanic;
 - keep the one central goal and locked payoff;
-- use real verified game locations/mechanics; powers only when POWER/FANTASY RULES allow them;
+- obey MODE RULES; use exact supplied location names when possible; powers only when the supplied character power rules allow them;
 - no filler, coincidence, fake lore, random secrets or unrelated twists;
 - continue naturally from PREVIOUS TWO SCENES;
 - vary camera and visual action;
@@ -912,6 +924,15 @@ def _repair_scene_count(
         return current
 
     arc = arc_plan or {}
+    original_series = bool(game_context.get("is_original_universe"))
+    mode_rules = (
+        "Write a third-person Astra City animated-series episode about Max/Mia/Kai. "
+        "No random player/guy chase, no server/gameplay recap, no invented threat. "
+        "Use established powers, limits, threats and exact location names from context."
+        if original_series
+        else
+        "Keep the screenplay faithful to the verified real Roblox game."
+    )
     existing = current.get("scenes") if isinstance(current.get("scenes"), list) else []
 
     # One compact whole-array repair is cheap enough to try first.
@@ -930,6 +951,9 @@ VERIFIED GAME CONTEXT:
 POWER/FANTASY RULES:
 {_power_story_rules(genre)}
 
+MODE RULES:
+{mode_rules}
+
 LOCKED CAUSAL ARC:
 {json.dumps(arc, ensure_ascii=False)}
 
@@ -942,7 +966,7 @@ because_of, changes, camera, emotion, on_screen_emphasis, sfx_cue, motion_priori
 
 Every narration must be non-empty natural English, normally 6-14 words.
 Scene 1 is hook; final scene is payoff. One central goal. Real cause-and-effect.
-No filler/coincidence. Use verified game facts and approved powers only.
+No filler/coincidence. Obey MODE RULES. Use supplied world/game facts and approved character powers only.
 Return ONLY {{"scenes":[...]}}.
 """,
             temperature=0.24,
@@ -988,6 +1012,26 @@ Return ONLY {{"scenes":[...]}}.
     current.setdefault("title", f"{game_context.get('game_name') or 'Roblox'} Story")
     return current
 
+def _canonical_original_environment(value: str, game_context: dict[str, Any], index: int) -> str:
+    if not game_context.get("is_original_universe"):
+        return value
+    names = [
+        _clean(item.get("name"), 100)
+        for item in (game_context.get("visual_setpieces") or [])
+        if isinstance(item, dict) and _clean(item.get("name"), 100)
+    ]
+    if not names:
+        return value
+    low = value.lower()
+    for name in names:
+        if name.lower() in low or low in name.lower():
+            return name
+    # Do not allow the writer to silently invent a new map. Use a stable
+    # supplied location as a safe fallback and let the shot director choose
+    # the best exact set-piece later.
+    return names[index % min(4, len(names))]
+
+
 def _normalise_story(
     raw: dict,
     target_seconds: int,
@@ -1025,7 +1069,8 @@ def _normalise_story(
         ]
 
         game_name = _clean(raw.get("game_name") or game_context.get("game_name"), 80)
-        environment = _clean(item.get("environment"), 180) or f"recognisable {game_name} Roblox gameplay area"
+        environment = _clean(item.get("environment"), 180) or f"recognisable {game_name} Roblox area"
+        environment = _canonical_original_environment(environment, game_context, idx)
         action = _clean(item.get("action"), 220) or _clean(item.get("narration"), 220)
         because_of = _clean(item.get("because_of"), 180)
         changes = _clean(item.get("changes"), 200)
