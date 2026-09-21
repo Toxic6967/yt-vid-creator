@@ -108,15 +108,24 @@ def normalise_animation_plan(
                     scene.get("changes"),
                 )
             )
-            inferred_clip = choose_clip_from_action(
-                action_context,
-                str(scene.get("role") or ""),
+            actor_name = str(characters[cid].get("name") or cid)
+            lower_context = action_context.lower()
+            actor_is_named = (
+                cid in lower_context
+                or actor_name.lower() in lower_context
+                or len(visible) == 1
+            )
+            inferred_clip = (
+                choose_clip_from_action(
+                    action_context,
+                    str(scene.get("role") or ""),
+                )
+                if actor_is_named
+                else ("react" if str(scene.get("role") or "") in {"hook", "reveal"} else "idle")
             )
             if clip not in ANIMATION_CLIPS:
                 clip = inferred_clip
             elif clip == "idle" and inferred_clip != "idle":
-                # The AI director often returns a technically valid "idle"
-                # even when the screenplay clearly describes movement.
                 clip = inferred_clip
 
             try:
@@ -138,7 +147,7 @@ def normalise_animation_plan(
             power_effect = normalise_power_effect(
                 proposed.get("power_effect"),
                 allow_powers=allow_powers,
-                action=(str(scene.get("action") or "") if actor_index == 0 else ""),
+                action=(action_context if actor_is_named else ""),
             )
             allowed_for_character = {
                 str(x).lower()
