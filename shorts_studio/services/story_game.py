@@ -250,6 +250,7 @@ def story_game_prompt_context(game_context: dict[str, Any]) -> str:
             "player_situations": game_context.get("player_situations", []),
             "power_rules": game_context.get("power_rules", {}),
             "recurring_threats": game_context.get("recurring_threats", []),
+            "episode_blueprints": game_context.get("episode_blueprints", []),
             "is_original_universe": bool(game_context.get("is_original_universe")),
             "avoid_inventing": game_context.get("avoid_inventing", []),
         },
