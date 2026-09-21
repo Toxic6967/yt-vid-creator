@@ -1263,8 +1263,15 @@ def _deterministic_story_checks(
     total_words = len(re.findall(r"\b[\w'-]+\b", narration))
     required_scene_min, desired_scene_count = _required_scene_count(target_seconds)
     required_scene_max = min(14, max(desired_scene_count + 2, required_scene_min))
-    expected_min = max(80, round(target_seconds * 1.65))
-    expected_max = min(175, round(target_seconds * 2.30))
+    original_series = bool((game_context or {}).get("is_original_universe"))
+    expected_min = max(
+        90,
+        round(target_seconds * (1.90 if original_series else 1.65)),
+    )
+    expected_max = min(
+        180,
+        round(target_seconds * (2.35 if original_series else 2.30)),
+    )
     banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
     original_universe = bool((game_context or {}).get("is_original_universe"))
     original_bad_conflict_patterns = (
