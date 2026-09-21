@@ -45,8 +45,7 @@ def _clean(value: Any, limit: int = 500) -> str:
 
 
 def _default_character(idx: int) -> dict[str, str]:
-    # These are per-video fallback roles only. They are NOT recurring channel
-    # characters and carry no lore between Shorts.
+    # These are per-video fallback roles only and carry no lore between Shorts.
     defaults = [
         {
             "id": "player",
@@ -164,7 +163,7 @@ AUDIENCE: {audience}
 CHANNEL TONE: {tone}
 REQUESTED GENRE: {genre}
 
-POWER/FANTASY RULES:
+VERIFIED ABILITY RULES:
 {_power_story_rules(genre)}
 
 REAL ROBLOX GAME CONTEXT:
@@ -355,7 +354,7 @@ Design ONE coherent mini-movie arc.
 Rules:
 - One central player goal only.
 - Every major problem must come from a VERIFIED game mechanic, player choice or earlier mistake.
-- Do not invent random hackers, secret weapons, mystery NPCs, fake items or lore. Follow POWER/FANTASY RULES exactly.
+- Do not invent random hackers, secret weapons, mystery NPCs, fake items or lore. Follow VERIFIED ABILITY RULES exactly.
 - The failed attempt must make the next problem worse or more urgent.
 - The turning point must be something the player notices/decides/uses, not coincidence.
 - The climax must resolve the same goal established near the beginning.
@@ -428,7 +427,7 @@ LOCKED CAUSAL STORY ARC:
 {json.dumps(arc_plan, ensure_ascii=False, indent=2)}
 
 CHARACTERS:
-Create only the 1-3 Roblox player roles needed for THIS video. They are not recurring channel characters and have no lore outside this Short.
+Create only the 1-3 Roblox player roles needed for THIS video. They have no lore outside this Short.
 
 NARRATION MODE:
 {narration_mode}
@@ -1520,7 +1519,6 @@ Return:
                 "coincidence_free_ok",
                 "single_narrator_ok",
                 "banned_phrase_ok",
-                "original_conflict_ok",
             )
         )
     )
