@@ -412,15 +412,46 @@ def run_pipeline(job_id: str) -> None:
                 logic_audit = story_score.get("logic_audit") or {}
                 logic_scores = logic_audit.get("scores") or {}
 
-                # The original series is the flagship mode. Do not render a weak
-                # script just because it is technically parseable; that produced
-                # the nonsense "run from another player" videos.
+                # The original series is the flagship mode, but a near-good script
+                # should reach the renderer as REVIEW NEEDED instead of producing
+                # an endless wall of failed cards. Keep a stronger minimum than
+                # real-game mode and never allow random-player filler or broken arcs.
                 if story_world == "original":
-                    problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:8])
-                    raise RuntimeError(
-                        "Original-series story did not meet the quality bar after five independent builds. "
-                        + (f"Remaining blockers: {problems}" if problems else "The episode premise/arc was not strong enough.")
+                    original_renderable = (
+                        float(story_score.get("total") or 0) >= 58
+                        and bool(mechanical.get("scene_count_ok"))
+                        and bool(mechanical.get("arc_structure_ok"))
+                        and bool(mechanical.get("arc_fields_ok"))
+                        and bool(mechanical.get("causal_chain_ok"))
+                        and bool(mechanical.get("coincidence_free_ok"))
+                        and bool(mechanical.get("single_narrator_ok"))
+                        and bool(mechanical.get("banned_phrase_ok"))
+                        and bool(mechanical.get("original_conflict_ok", True))
+                        and float(story_scores.get("coherence") or 0) >= 56
+                        and float(story_scores.get("cause_effect") or 0) >= 54
+                        and float(story_scores.get("arc_fidelity") or 0) >= 56
+                        and float(story_scores.get("cringe_avoidance") or 0) >= 64
+                        and float(logic_scores.get("causal_logic") or 100) >= 56
+                        and float(logic_scores.get("game_truth") or 100) >= 62
+                        and float(logic_scores.get("central_goal") or 100) >= 56
+                        and float(logic_scores.get("ending_logic") or 100) >= 56
                     )
+                    if original_renderable:
+                        story_score["passed"] = True
+                        story_score["accepted_below_target"] = True
+                        story_score["production_safe"] = True
+                        story_score["review_required"] = True
+                        story_score["final_gate_note"] = (
+                            "Structurally safe original-series script rendered for review, "
+                            "but it remained below the aspirational creative target."
+                        )
+                        script["story_score"] = story_score
+                    else:
+                        problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:8])
+                        raise RuntimeError(
+                            "Original-series story is still structurally weak after automatic rebuilds. "
+                            + (f"Remaining blockers: {problems}" if problems else "The episode premise/arc was not strong enough.")
+                        )
 
                 production_safe = bool(story_score.get("production_safe")) or (
                     float(story_score.get("total") or 0) >= 48
@@ -434,10 +465,13 @@ def run_pipeline(job_id: str) -> None:
                     and float(logic_scores.get("game_truth") or 100) >= 52
                     and float(logic_scores.get("ending_logic") or 100) >= 46
                 )
-                if production_safe:
+                if story_score.get("passed"):
+                    script["story_score"] = story_score
+                elif production_safe:
                     story_score["passed"] = True
                     story_score["accepted_below_target"] = True
                     story_score["production_safe"] = True
+                    story_score["review_required"] = True
                     script["story_score"] = story_score
                 else:
                     problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:6])
@@ -449,6 +483,7 @@ def run_pipeline(job_id: str) -> None:
                 "passed": bool(story_score.get("passed")),
                 "quality_target_met": bool(story_score.get("quality_target_met")),
                 "accepted_below_target": bool(story_score.get("accepted_below_target")),
+                "review_required": bool(story_score.get("review_required")),
                 "total": story_score.get("total"),
                 "scores": {
                     "hook": story_scores.get("hook"),
@@ -917,10 +952,15 @@ def run_pipeline(job_id: str) -> None:
         manifest_path = job_dir / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
         set_manifest(job_id, manifest, render_info["path"])
+        creative_review_required = bool(
+            (script.get("retention") or {}).get("review_required")
+            or (script.get("retention") or {}).get("accepted_below_target")
+        )
+        final_ready = bool(quality["passed"] and not creative_review_required)
         update_job(
             job_id,
-            status="ready" if quality["passed"] else "review_needed",
-            stage="Ready for review" if quality["passed"] else "Review needed",
+            status="ready" if final_ready else "review_needed",
+            stage="Ready for review" if final_ready else "Review needed",
             progress=100,
         )
     except Exception as exc:
