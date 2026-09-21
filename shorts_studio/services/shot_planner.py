@@ -19,7 +19,7 @@ def build_animation_plan(
     environment_plates: dict[str, str],
 ) -> dict[str, Any]:
     scenes = script.get("scenes") or []
-    allow_powers = str(script.get("genre") or "").lower() == "powers"
+    allow_powers = False
 
     compact = [
         {
@@ -71,16 +71,15 @@ Rules:
 - Keep positions within lanes -2.4 to +2.4.
 - start_lane/end_lane are screen-space staging positions, not game coordinates.
 - Use camera movement deliberately; characters must stay readable on a phone.
-- Prefer a subtle push, follow, track, reveal or orbit on important beats rather than freezing the camera.
+- The camera must behave like Roblox machinima, not a slideshow. Prefer lateral tracking, follow, reveal pans and small orbits that expose foreground/midground depth. Use push-in only when the story beat truly calls for emphasis.
+- If two scenes use the same researched location, change physical blocking and framing: enter from another side, move the player across the frame, reveal a prop/door/obstacle, or use a different camera axis. Never make repeated scenes feel like the exact same background crop with another zoom.
 - Avoid every shot being centered/medium/static.
 - Do not repeat the same camera + motion combination more than twice in a row.
 - Running/walking/dashing actors should visibly travel across the staging lanes instead of running in place.
 - Reactions should use head/torso acting, not only arm movement.
 - Keep actors staged on the floor and readable against the environment; do not plan floating/flying movement unless the screenplay explicitly requires it.
 - Use close-up/medium shots for discoveries and interactions, follow/wide shots for real movement, and avoid cutting to an unrelated generic location just to create variety.
-- If POWERS ALLOWED is false, every power_effect must be "none".
-- If POWERS ALLOWED is true, use power effects only where the existing action/story clearly calls for one, but make sure the story contains at least two visible power-effect beats so the genre actually feels special.
-- Powers are stylized non-graphic VFX, not realistic violence.
+- Every power_effect must be "none" unless a future real-game mechanic explicitly enables a verified effect path.
 - Never add a new event just because an effect would look cool.
 
 Return:
