@@ -423,6 +423,16 @@ def _story_prompt(
         for i in range(3)
     )
     power_rules = _power_story_rules(genre)
+    original_series = bool(game_context.get("is_original_universe"))
+    narration_mode = (
+        "This is an ORIGINAL RECURRING ANIMATED SERIES episode, not gameplay commentary. "
+        "Narrate in natural third person about Max, Mia and Kai. Do not say 'I was playing', "
+        "'another player', 'this guy', 'the server', or pretend the events happened to the narrator. "
+        "A strong line sounds like: 'Max had one rule: never charge indoors. He broke it immediately.'"
+        if original_series
+        else
+        "This is a story about events inside a real Roblox game. Keep the narration conversational and game-grounded."
+    )
     return f"""
 AUDIENCE: {audience}
 CHANNEL TONE: {tone}
@@ -441,6 +451,9 @@ LOCKED CAUSAL STORY ARC:
 
 RECURRING CHANNEL CAST:
 {recurring_cast}
+
+NARRATION MODE:
+{narration_mode}
 
 Create a short cinematic mini-movie that takes place INSIDE {game_context.get("game_name")}.
 Use 1-3 characters from the recurring cast whenever possible. Keep their names, exact
@@ -471,7 +484,7 @@ NON-NEGOTIABLE:
 - Every scene must CAUSE or ENABLE the next important beat. If a scene can be removed without changing the story, remove it.
 - Fill because_of and changes for every scene. Scene 2+ must be causally traceable to an earlier choice, event or verified game mechanic.
 - Never use "randomly", "somehow", "out of nowhere", "for no reason" or coincidence to move the plot forward.
-- Tell it like a creator recounting something that just happened in the game, not like a movie trailer.
+- Follow NARRATION MODE exactly. The voice should still sound casual and human, but original-series episodes are narrated as a story about the recurring cast, not fake first-person gameplay.
 - Keep it inside ONE continuous game session, but the VIDEO must visibly progress.
 - Use at least 4 visually different rooms, areas, obstacles, set-pieces or background compositions from the same game when the verified context allows it.
 - The background must look like a polished ROBLOX GAME ENVIRONMENT: Roblox Studio-style materials, simple readable geometry, stylized game lighting and game-scale props. Never make a photoreal real-world movie set or a Minecraft voxel map.
@@ -1878,11 +1891,21 @@ def _polish_narration(
         }
         for idx, scene in enumerate(scenes)
     ]
+    original_series = bool(game_context.get("is_original_universe"))
+    narration_style = (
+        "Natural third-person animated-series storyteller. Use Max/Mia/Kai by name. "
+        "Do not pretend the narrator is a player in the scene. Avoid 'I was playing', 'this guy', "
+        "'another player', 'the server' and generic gameplay recap language."
+        if original_series
+        else
+        "Natural first-person/observer gamer recap where appropriate."
+    )
     result = chat_json(
         "You are a human-sounding YouTube Shorts narration editor. Return JSON only.",
         f"""
 AUDIENCE: {audience}
-GAME: {game_context.get("game_name")}
+WORLD/GAME: {game_context.get("game_name")}
+NARRATION STYLE: {narration_style}
 TARGET RUNTIME: {target_seconds} seconds
 TARGET SPOKEN WORDS: roughly {round(target_seconds * 2.05)}-{round(target_seconds * 2.35)} words
 
@@ -1899,8 +1922,9 @@ Rules:
 - Usually 6-14 words per line. Use the longer runtime to tell more STORY, not to pad sentences.
 - Total narration should land close to the target spoken-word range above.
 - Use contractions: I'm, I'd, we're, didn't, couldn't, etc.
-- Natural everyday wording, like a gamer telling a friend what happened five minutes ago.
-- Include small human phrasing where natural: "I thought...", "we nearly...", "he just...", "for a second...", but do not force filler.
+- Natural everyday wording. Follow NARRATION STYLE exactly.
+- For original-series episodes, favour specific character phrasing like "Max knew...", "Mia caught it...", "Kai had one shot..." instead of fake first-person gameplay.
+- Use small human phrasing where natural, but never add filler just to sound casual.
 - Do not sound like a trailer, documentary, news reader, motivational speaker or AI narrator.
 - Avoid restarting the story every scene.
 - Do not repeatedly start with I / Then / And then / So / But then / Suddenly.
@@ -2386,7 +2410,11 @@ def _finalize_story_quality(
         # Once we've given the editor a couple of real rewrite attempts, allow a
         # structurally sound screenplay through for a V3 render even when the
         # subjective critic is still asking for more polish. Keep all warnings.
-        if attempt >= 2 and _production_safe_score(score):
+        if (
+            attempt >= 2
+            and not game_context.get("is_original_universe")
+            and _production_safe_score(score)
+        ):
             score["passed"] = True
             score["accepted_below_target"] = True
             score["production_safe"] = True
@@ -2394,7 +2422,12 @@ def _finalize_story_quality(
             return candidate
 
         # If both normal gates already pass, one improvement pass is enough.
-        if score.get("passed") and logic_audit.get("passed") and attempt >= 1:
+        if (
+            score.get("passed")
+            and logic_audit.get("passed")
+            and attempt >= 1
+            and not game_context.get("is_original_universe")
+        ):
             score["accepted_below_target"] = True
             score["production_safe"] = True
             candidate["story_score"] = score
@@ -2466,7 +2499,10 @@ def _finalize_story_quality(
             best_story["story_score"].get("quality_target_met")
         )
         best_story["story_score"]["production_safe"] = True
-    elif _production_safe_score(best_story["story_score"]):
+    elif (
+        not game_context.get("is_original_universe")
+        and _production_safe_score(best_story["story_score"])
+    ):
         best_story["story_score"]["passed"] = True
         best_story["story_score"]["accepted_below_target"] = True
         best_story["story_score"]["production_safe"] = True
