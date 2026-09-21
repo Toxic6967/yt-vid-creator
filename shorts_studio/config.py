@@ -41,8 +41,10 @@ DB_PATH = DATA_DIR / "shorts_studio.db"
 VOICE_ROOT = (STORAGE_ROOT / "voice") if STORAGE_ROOT else (ASSET_DIR / "voice")
 CHATTERBOX_DIR = VOICE_ROOT / "chatterbox"
 CHATTERBOX_PYTHON = CHATTERBOX_DIR / ".venv" / "Scripts" / "python.exe"
+ROBLOX_ASSET_DIR = ASSET_DIR / "roblox_official"
+ROBLOX_R15_FBX = ROBLOX_ASSET_DIR / "BlockyCharacter.fbx"
 
-for path in (DATA_DIR, OUTPUT_DIR, MEDIA_OUTPUT_DIR, ASSET_DIR, MUSIC_DIR, SFX_DIR, KOKORO_DIR, CACHE_DIR, WORKFLOW_DIR):
+for path in (DATA_DIR, OUTPUT_DIR, MEDIA_OUTPUT_DIR, ASSET_DIR, MUSIC_DIR, SFX_DIR, KOKORO_DIR, CACHE_DIR, WORKFLOW_DIR, ROBLOX_ASSET_DIR):
     path.mkdir(parents=True, exist_ok=True)
 
 
@@ -87,6 +89,10 @@ class Settings:
     blender_executable: str = os.getenv(
         "SHORTS_STUDIO_BLENDER",
         "",
+    )
+    roblox_r15_fbx: str = os.getenv(
+        "SHORTS_STUDIO_R15_FBX",
+        str(ROBLOX_R15_FBX),
     )
     default_visual_mode: str = os.getenv(
         "SHORTS_STUDIO_VISUAL_MODE",
