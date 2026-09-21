@@ -12,7 +12,7 @@ from mathutils import Vector
 
 
 FPS = 30
-RENDERER_VERSION = "3.3-cinematic-r15"
+RENDERER_VERSION = "v3.5-blender5-action-api"
 
 
 def parse_args():
@@ -433,17 +433,60 @@ def key(obj, frame, *, location=None, rotation=None, scale=None):
         obj.keyframe_insert(data_path="scale", frame=frame)
 
 
+def _iter_action_fcurves(action):
+    """Yield F-Curves across both legacy Blender Actions and Blender 5.x layered Actions."""
+    if action is None:
+        return
+
+    seen = set()
+
+    # Blender <= 4.x / legacy Action API.
+    legacy = getattr(action, "fcurves", None)
+    if legacy is not None:
+        try:
+            for fcurve in legacy:
+                pointer = fcurve.as_pointer() if hasattr(fcurve, "as_pointer") else id(fcurve)
+                if pointer not in seen:
+                    seen.add(pointer)
+                    yield fcurve
+        except Exception:
+            pass
+
+    # Blender 5.x stores F-Curves in Action layers -> keyframe strips ->
+    # per-slot channelbags. Action.fcurves no longer exists there.
+    layers = getattr(action, "layers", None)
+    if layers is not None:
+        try:
+            for layer in layers:
+                for strip in getattr(layer, "strips", ()):
+                    for channelbag in getattr(strip, "channelbags", ()):
+                        for fcurve in getattr(channelbag, "fcurves", ()):
+                            pointer = fcurve.as_pointer() if hasattr(fcurve, "as_pointer") else id(fcurve)
+                            if pointer not in seen:
+                                seen.add(pointer)
+                                yield fcurve
+        except Exception:
+            pass
+
+
 def smooth_curves(*objects):
-    """Use clean eased curves instead of robotic linear keyframes."""
+    """Use clean eased curves without depending on one Blender Action API version."""
     for obj in objects:
+        if obj is None:
+            continue
         action = getattr(getattr(obj, "animation_data", None), "action", None)
         if not action:
             continue
-        for fcurve in action.fcurves:
-            for point in fcurve.keyframe_points:
-                point.interpolation = "BEZIER"
-                point.handle_left_type = "AUTO_CLAMPED"
-                point.handle_right_type = "AUTO_CLAMPED"
+        try:
+            for fcurve in _iter_action_fcurves(action):
+                for point in fcurve.keyframe_points:
+                    point.interpolation = "BEZIER"
+                    point.handle_left_type = "AUTO_CLAMPED"
+                    point.handle_right_type = "AUTO_CLAMPED"
+        except Exception as exc:
+            # Curve smoothing is visual polish only. Never abort a whole Story
+            # because Blender changed animation API internals again.
+            print(f"[Shorts Studio] Curve smoothing skipped for {getattr(obj, 'name', 'object')}: {exc}")
 
 
 def add_point_light(name, loc, color, energy=650.0, parent=None):
@@ -894,7 +937,7 @@ def setup_camera(camera_name, motion, frame_end, *, target_x=0.0, high_energy=Fa
             cam.keyframe_insert(data_path="rotation_euler",frame=frame)
         cam.location = end_loc
 
-    smooth_curves(cam)
+    smooth_curves(cam, cam.data)
     return cam
 
 def setup_lighting(*, role="build", powered=False):
