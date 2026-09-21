@@ -40,6 +40,7 @@ def normalise_animation_plan(
         for item in (script.get("characters") or [])
         if item.get("id")
     }
+    power_rules = ((script.get("game_context") or {}).get("power_rules") or {})
     shots: list[dict[str, Any]] = []
 
     for idx, scene in enumerate(scenes):
@@ -134,6 +135,21 @@ def normalise_animation_plan(
                 travel = 0.8 if clip == "walk" else (1.25 if clip == "run" else 1.65)
                 end_lane = start_lane + direction * travel
 
+            power_effect = normalise_power_effect(
+                proposed.get("power_effect"),
+                allow_powers=allow_powers,
+                action=(str(scene.get("action") or "") if actor_index == 0 else ""),
+            )
+            allowed_for_character = {
+                str(x).lower()
+                for x in ((power_rules.get(cid) or {}).get("abilities") or [])
+            }
+            if allowed_for_character and power_effect not in allowed_for_character:
+                # Original-series powers are character-specific. Never let Max
+                # suddenly use Mia's shield or Kai's lightning because the
+                # animation planner guessed an effect.
+                power_effect = "none"
+
             actors.append(
                 {
                     "id": cid,
@@ -144,11 +160,7 @@ def normalise_animation_plan(
                     "start_lane": _clamp(start_lane, -2.4, 2.4),
                     "end_lane": _clamp(end_lane, -2.4, 2.4),
                     "facing": "left" if str(proposed.get("facing")).lower() == "left" else "right",
-                    "power_effect": normalise_power_effect(
-                        proposed.get("power_effect"),
-                        allow_powers=allow_powers,
-                        action=(str(scene.get("action") or "") if actor_index == 0 else ""),
-                    ),
+                    "power_effect": power_effect,
                 }
             )
 
