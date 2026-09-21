@@ -1064,7 +1064,7 @@ def _configure_compositor(scene, *, powered=False):
             pass
 
 
-def configure_scene(frame_end, output, *, powered=False):
+def configure_scene(frame_end, frame_dir, *, powered=False):
     scene = bpy.context.scene
     try:
         scene.render.engine = "BLENDER_EEVEE_NEXT"
@@ -1094,21 +1094,18 @@ def configure_scene(frame_end, output, *, powered=False):
 
     _configure_compositor(scene, powered=powered)
 
-    scene.render.image_settings.file_format = "FFMPEG"
-    scene.render.ffmpeg.format = "MPEG4"
-    scene.render.ffmpeg.codec = "H264"
-    scene.render.ffmpeg.audio_codec = "NONE"
+    # Blender 5.2 no longer accepts FFMPEG as an image_settings file format.
+    # Render an ordinary frame sequence and let Shorts Studio's known-good
+    # FFmpeg binary encode it afterward. This is stable across Blender 4/5.
+    frame_dir = Path(frame_dir)
+    frame_dir.mkdir(parents=True, exist_ok=True)
+    scene.render.image_settings.file_format = "JPEG"
     try:
-        scene.render.ffmpeg.constant_rate_factor = "HIGH"
-        scene.render.ffmpeg.ffmpeg_preset = "GOOD"
-        scene.render.ffmpeg.video_bitrate = 14000
+        scene.render.image_settings.quality = 95
     except Exception:
         pass
-
-    # Blender's movie renderer may append its own extension depending on build/settings.
-    # Render to an extension-free stem, then normalise the emitted movie ourselves.
     scene.render.use_file_extension = True
-    scene.render.filepath = str(Path(output).with_suffix(""))
+    scene.render.filepath = str(frame_dir / "frame_")
 
     try:
         scene.view_settings.look = "AgX - Medium High Contrast"
@@ -1153,38 +1150,27 @@ def render_shot(shot, output_dir):
 
     index = int(shot.get("index") or 0)+1
     output = output_dir/f"scene_{index:02d}.mp4"
-    stem = output.with_suffix("")
-    for stale in output_dir.glob(stem.name + "*.mp4"):
-        try:
-            stale.unlink()
-        except Exception:
-            pass
+    frame_dir = output_dir / f"scene_{index:02d}_frames"
 
-    configure_scene(frame_end,output,powered=powered)
+    if frame_dir.exists():
+        shutil.rmtree(frame_dir, ignore_errors=True)
+    frame_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        output.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    configure_scene(frame_end,frame_dir,powered=powered)
     bpy.context.scene.frame_set(1)
     bpy.ops.render.render(animation=True)
 
-    # Normalise Blender's actual output to the exact filename expected by Shorts Studio.
-    candidates = [
-        output,
-        stem.with_suffix(".mp4"),
-        *sorted(output_dir.glob(stem.name + "*.mp4")),
-    ]
-    rendered = next(
-        (
-            path for path in candidates
-            if path.exists() and path.is_file() and path.stat().st_size > 4096
-        ),
-        None,
-    )
-    if rendered is None:
-        files = ", ".join(path.name for path in sorted(output_dir.iterdir()) if path.is_file())
+    rendered_frames = sorted(frame_dir.glob("frame_*.jpg"))
+    if len(rendered_frames) < frame_end:
+        files = ", ".join(path.name for path in rendered_frames[-8:])
         raise RuntimeError(
-            f"Blender finished scene {index} but no MP4 was emitted. "
-            f"Expected stem {stem.name}. Files present: {files or 'none'}"
+            f"Blender finished scene {index} but only rendered {len(rendered_frames)}/{frame_end} JPEG frames. "
+            f"Last frames: {files or 'none'}"
         )
-    if rendered.resolve() != output.resolve():
-        shutil.move(str(rendered), str(output))
 
     report = {
         "renderer_version": RENDERER_VERSION,
@@ -1193,7 +1179,9 @@ def render_shot(shot, output_dir):
         "frames": frame_end,
         "fps": FPS,
         "output": str(output),
-        "bytes": output.stat().st_size,
+        "frames_dir": str(frame_dir),
+        "frame_pattern": "frame_%04d.jpg",
+        "rendered_frame_count": len(rendered_frames),
         "camera": shot.get("camera"),
         "camera_motion": shot.get("camera_motion"),
         "actors": [
