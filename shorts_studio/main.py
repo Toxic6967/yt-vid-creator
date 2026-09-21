@@ -7,7 +7,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -85,15 +85,26 @@ def _safe_health_component(name: str, fn) -> dict:
 
 
 @app.get("/api/health")
-def api_health() -> dict:
-    return {
-        "app": {"ok": True, "name": settings.app_name},
+def api_health() -> JSONResponse:
+    payload = {
+        "app": {
+            "ok": True,
+            "name": settings.app_name,
+            "build": "v4-story-recovery-20260921",
+        },
         "ollama": _safe_health_component("ollama", ollama_health),
         "ffmpeg": _safe_health_component("ffmpeg", ffmpeg_health),
         "comfyui": _safe_health_component("comfyui", comfyui_health),
         "voice": _safe_health_component("voice", human_voice_health),
         "animation": _safe_health_component("animation", animation_health),
     }
+    return JSONResponse(
+        content=payload,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 def _ensure_story_backend_ready(visual_mode: str = "animated") -> None:
