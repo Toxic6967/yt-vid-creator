@@ -245,7 +245,7 @@ def make_topic_short(topic_id: str) -> dict:
         int(profile["target_seconds"]),
         content_type,
         "auto",
-        "game" if content_type == "story" else "original",
+        "game",
         "animated",
     )
 
