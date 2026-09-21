@@ -93,6 +93,65 @@ def _validate_rendered_clip(path: Path) -> tuple[bool, str]:
     return True, "ok"
 
 
+def _encode_frame_sequence(report: dict[str, Any], clip: Path) -> None:
+    frames_dir = Path(str(report.get("frames_dir") or ""))
+    pattern = str(report.get("frame_pattern") or "frame_%04d.jpg")
+    fps = int(report.get("fps") or 24)
+    frame_count = int(report.get("rendered_frame_count") or report.get("frames") or 0)
+
+    if not frames_dir.exists():
+        raise RuntimeError(f"Blender frame directory is missing: {frames_dir}")
+
+    frames = sorted(frames_dir.glob("frame_*.jpg"))
+    if not frames:
+        raise RuntimeError(f"Blender rendered no JPEG frames in {frames_dir}")
+
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-framerate",
+        str(fps),
+        "-start_number",
+        "1",
+        "-i",
+        str(frames_dir / pattern),
+    ]
+    if frame_count > 0:
+        command.extend(["-frames:v", str(frame_count)])
+    command.extend(
+        [
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "medium",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            str(clip),
+        ]
+    )
+
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=60 * 60,
+    )
+    if result.returncode != 0 or not clip.exists():
+        raise RuntimeError(
+            "FFmpeg could not encode the Blender frame sequence: "
+            + (result.stderr or result.stdout or "unknown FFmpeg error")[-1600:]
+        )
+
+
 def _sample_visual_quality(
     path: Path,
     sample_dir: Path,
@@ -225,6 +284,19 @@ def render_animation_plan(
     for shot in plan.get("shots") or []:
         index = int(shot.get("index", len(visuals))) + 1
         clip = clips_dir / f"scene_{index:02d}.mp4"
+        report_path = clips_dir / f"scene_{index:02d}.json"
+        render_report: dict[str, Any] = {}
+        if report_path.exists():
+            try:
+                render_report = json.loads(report_path.read_text(encoding="utf-8"))
+            except Exception:
+                render_report = {}
+
+        # Blender 5 renders frame sequences; encode them with the app's tested
+        # FFmpeg binary before running the normal clip validators.
+        if not clip.exists() and render_report.get("frames_dir"):
+            _encode_frame_sequence(render_report, clip)
+
         valid, reason = _validate_rendered_clip(clip)
         if not valid:
             files = ", ".join(
@@ -232,7 +304,6 @@ def render_animation_plan(
                 for path in sorted(clips_dir.glob("*"))
                 if path.is_file()
             )
-            report_path = clips_dir / f"scene_{index:02d}.json"
             report = ""
             if report_path.exists():
                 try:
@@ -250,14 +321,6 @@ def render_animation_plan(
                 + (f"Scene report: {report}. " if report else "")
                 + (f"Blender log tail: {log_tail}" if log_tail else "")
             )
-
-        report_path = clips_dir / f"scene_{index:02d}.json"
-        render_report: dict[str, Any] = {}
-        if report_path.exists():
-            try:
-                render_report = json.loads(report_path.read_text(encoding="utf-8"))
-            except Exception:
-                render_report = {}
 
         actor_clips = {
             str(actor.get("clip") or "idle")
@@ -285,6 +348,13 @@ def render_animation_plan(
                 f"Blender scene {index} rendered, but visual validation rejected it: "
                 f"{json.dumps(visual_quality, ensure_ascii=False)}"
             )
+
+        frames_dir_value = render_report.get("frames_dir")
+        if frames_dir_value:
+            try:
+                shutil.rmtree(Path(str(frames_dir_value)), ignore_errors=True)
+            except Exception:
+                pass
 
         visuals.append(
             {
