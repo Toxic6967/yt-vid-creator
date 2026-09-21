@@ -7,21 +7,21 @@ from PIL import Image, ImageDraw
 
 
 PALETTES = {
-    "max": {
+    "player": {
         "skin": (232, 189, 143),
         "shirt": (45, 94, 205),
         "pants": (31, 35, 45),
         "shoes": (236, 239, 244),
         "hair": (67, 42, 28),
     },
-    "mia": {
+    "friend": {
         "skin": (224, 177, 132),
         "shirt": (126, 69, 190),
         "pants": (34, 35, 43),
         "shoes": (239, 239, 242),
         "hair": (38, 27, 30),
     },
-    "kai": {
+    "teammate": {
         "skin": (218, 171, 127),
         "shirt": (166, 40, 44),
         "pants": (33, 34, 40),
@@ -256,7 +256,7 @@ def build_cast_reference(
 
     for idx, character in enumerate(characters[:count]):
         cid = str(character.get("id") or "").lower()
-        palette = PALETTES.get(cid, PALETTES["max"])
+        palette = PALETTES.get(cid, PALETTES["player"])
         _draw_r15(draw, xs[idx], ground, scale, palette)
 
     image.save(destination, quality=96)
