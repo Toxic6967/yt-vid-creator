@@ -321,12 +321,26 @@ def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
     old = get_job(job_id)
     if not old:
         raise HTTPException(404, "Job not found")
-    if old.get("content_type") == "story":
+
+    is_story = old.get("content_type") == "story"
+    if is_story:
         _ensure_story_backend_ready(old.get("visual_mode", "animated"))
+        # Auto-generated Story titles are outputs, not prompts. Reusing a failed
+        # generated title such as "The Glowing Door" kept trapping regeneration
+        # inside the same weak premise. Preserve only an idea the user actually
+        # typed; otherwise commission a genuinely fresh Story.
+        next_topic = payload.topic if payload.topic else old.get("requested_topic")
+    else:
+        next_topic = (
+            payload.topic
+            or old.get("selected_topic")
+            or old.get("requested_topic")
+        )
+
     return _queue_short(
         old["channel_name"],
         old["niche"],
-        payload.topic or old.get("selected_topic") or old.get("requested_topic"),
+        next_topic,
         old["voice"],
         old["target_seconds"],
         old.get("content_type", "auto"),
