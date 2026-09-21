@@ -65,6 +65,8 @@ Rules:
 - Return exactly {len(scenes)} shots, indexes 0..{max(0, len(scenes)-1)}.
 - Use the characters already listed for each shot.
 - One primary readable animation per visible character.
+- Every animation must physically match the CURRENT scene action and CURRENT verified game environment. Do not invent travel, combat, doors, vehicles or props that the screenplay did not establish.
+- Prefer interactions that make the researched Roblox game readable on screen: run only when the action says run/chase/escape, jump for an actual obstacle, open for an established door/container, push for a real button/lever, pickup for an established item, and react/turn/point for dialogue or discovery.
 - Prefer Roblox-like movement: run, jump, crouch, point, react, open, push, pickup, fall, celebrate.
 - Keep positions within lanes -2.4 to +2.4.
 - start_lane/end_lane are screen-space staging positions, not game coordinates.
@@ -74,6 +76,8 @@ Rules:
 - Do not repeat the same camera + motion combination more than twice in a row.
 - Running/walking/dashing actors should visibly travel across the staging lanes instead of running in place.
 - Reactions should use head/torso acting, not only arm movement.
+- Keep actors staged on the floor and readable against the environment; do not plan floating/flying movement unless the screenplay explicitly requires it.
+- Use close-up/medium shots for discoveries and interactions, follow/wide shots for real movement, and avoid cutting to an unrelated generic location just to create variety.
 - If POWERS ALLOWED is false, every power_effect must be "none".
 - If POWERS ALLOWED is true, use power effects only where the existing action/story clearly calls for one, but make sure the story contains at least two visible power-effect beats so the genre actually feels special.
 - Powers are stylized non-graphic VFX, not realistic violence.
