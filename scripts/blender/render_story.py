@@ -12,7 +12,7 @@ from mathutils import Vector
 
 
 FPS = 30
-RENDERER_VERSION = "v3.5-blender5-action-api"
+RENDERER_VERSION = "v3.6-blender5-compositor-fix"
 
 
 def parse_args():
@@ -973,6 +973,97 @@ def setup_lighting(*, role="build", powered=False):
     rim.data.size = 3.2
     look_at(rim,(0,0,3.0))
 
+def _configure_compositor(scene, *, powered=False):
+    """Configure optional bloom without ever making compositing a render blocker.
+
+    Blender 5.x removed Scene.node_tree and moved compositing to the
+    Scene.compositing_node_group data block. The renderer supports both APIs.
+    If a future Blender build changes compositor nodes again, we disable the
+    compositor and continue rendering instead of failing the whole Story.
+    """
+    try:
+        if bpy.app.version >= (5, 0, 0):
+            tree = bpy.data.node_groups.new(
+                f"ShortsStudioComp_{scene.name}",
+                "CompositorNodeTree",
+            )
+            scene.compositing_node_group = tree
+
+            render_layers = tree.nodes.new(type="CompositorNodeRLayers")
+            glare = tree.nodes.new(type="CompositorNodeGlare")
+            output = tree.nodes.new(type="NodeGroupOutput")
+
+            tree.interface.new_socket(
+                name="Image",
+                in_out="OUTPUT",
+                socket_type="NodeSocketColor",
+            )
+
+            # Blender 5 converted most old Glare properties into node inputs.
+            # Set only sockets/properties that exist in this exact build.
+            for socket_name, value in (
+                ("Threshold", 0.8 if powered else 2.8),
+                ("Size", 0.55 if powered else 0.30),
+                ("Strength", 1.10 if powered else 0.35),
+            ):
+                socket = glare.inputs.get(socket_name)
+                if socket is not None:
+                    try:
+                        socket.default_value = value
+                    except Exception:
+                        pass
+
+            type_socket = glare.inputs.get("Type")
+            if type_socket is not None:
+                try:
+                    type_socket.default_value = "FOG_GLOW"
+                except Exception:
+                    pass
+
+            quality_socket = glare.inputs.get("Quality")
+            if quality_socket is not None:
+                try:
+                    quality_socket.default_value = "HIGH"
+                except Exception:
+                    pass
+
+            # links.new() accepts sockets regardless of argument order differences
+            # seen across compositor API examples; use the normal output->input form.
+            tree.links.new(render_layers.outputs["Image"], glare.inputs["Image"])
+            tree.links.new(glare.outputs["Image"], output.inputs["Image"])
+
+            try:
+                scene.render.use_compositing = True
+            except Exception:
+                pass
+            return
+
+        # Blender 4.x compatibility.
+        scene.use_nodes = True
+        tree = scene.node_tree
+        tree.nodes.clear()
+        render_layers = tree.nodes.new("CompositorNodeRLayers")
+        glare = tree.nodes.new("CompositorNodeGlare")
+        try:
+            glare.glare_type = "FOG_GLOW"
+            glare.quality = "HIGH"
+            glare.threshold = 0.8 if powered else 2.8
+            glare.size = 6
+        except Exception:
+            pass
+        composite = tree.nodes.new("CompositorNodeComposite")
+        tree.links.new(render_layers.outputs["Image"], glare.inputs["Image"])
+        tree.links.new(glare.outputs["Image"], composite.inputs["Image"])
+    except Exception as exc:
+        # Bloom is cosmetic. Never throw away a whole 65-second Story because a
+        # Blender compositor API changed.
+        print(f"[Shorts Studio] compositor disabled: {exc}")
+        try:
+            scene.render.use_compositing = False
+        except Exception:
+            pass
+
+
 def configure_scene(frame_end, output, *, powered=False):
     scene = bpy.context.scene
     try:
@@ -1001,20 +1092,7 @@ def configure_scene(frame_end, output, *, powered=False):
     except Exception:
         pass
 
-    # Compositor glow gives powers a polished game-VFX bloom without asking AI
-    # video to hallucinate the effect frame by frame.
-    scene.use_nodes = True
-    tree = scene.node_tree
-    tree.nodes.clear()
-    render_layers = tree.nodes.new("CompositorNodeRLayers")
-    glare = tree.nodes.new("CompositorNodeGlare")
-    glare.glare_type = "FOG_GLOW"
-    glare.quality = "HIGH"
-    glare.threshold = 0.8 if powered else 2.8
-    glare.size = 6
-    composite = tree.nodes.new("CompositorNodeComposite")
-    tree.links.new(render_layers.outputs["Image"], glare.inputs["Image"])
-    tree.links.new(glare.outputs["Image"], composite.inputs["Image"])
+    _configure_compositor(scene, powered=powered)
 
     scene.render.image_settings.file_format = "FFMPEG"
     scene.render.ffmpeg.format = "MPEG4"
