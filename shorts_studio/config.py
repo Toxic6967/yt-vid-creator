@@ -50,11 +50,11 @@ for path in (DATA_DIR, OUTPUT_DIR, MEDIA_OUTPUT_DIR, ASSET_DIR, MUSIC_DIR, SFX_D
 
 @dataclass(frozen=True)
 class Settings:
-    app_name: str = "Shorts Studio V3"
+    app_name: str = "Shorts Studio V5"
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     ollama_model: str = os.getenv("SHORTS_STUDIO_MODEL", "qwen3:8b")
     default_voice: str = os.getenv("SHORTS_STUDIO_VOICE", "auto-youthful-male")
-    default_target_seconds: int = int(os.getenv("SHORTS_STUDIO_TARGET_SECONDS", "65"))
+    default_target_seconds: int = int(os.getenv("SHORTS_STUDIO_TARGET_SECONDS", "58"))
     comfyui_base_url: str = os.getenv("COMFYUI_BASE_URL", "http://127.0.0.1:8188")
     comfyui_image_checkpoint: str = os.getenv("COMFYUI_IMAGE_CHECKPOINT", "")
     comfyui_video_workflow: str = os.getenv("COMFYUI_VIDEO_WORKFLOW", str(WORKFLOW_DIR / "video_api.json"))

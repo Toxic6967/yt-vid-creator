@@ -52,7 +52,7 @@ def init_db() -> None:
                 selected_topic TEXT,
                 content_type TEXT NOT NULL DEFAULT 'auto',
                 story_genre TEXT NOT NULL DEFAULT 'auto',
-                story_world TEXT NOT NULL DEFAULT 'original',
+                story_world TEXT NOT NULL DEFAULT 'game',
                 visual_mode TEXT NOT NULL DEFAULT 'animated',
                 voice TEXT NOT NULL,
                 target_seconds INTEGER NOT NULL,
@@ -137,7 +137,7 @@ def init_db() -> None:
         if "story_genre" not in job_columns:
             conn.execute("ALTER TABLE jobs ADD COLUMN story_genre TEXT NOT NULL DEFAULT 'auto'")
         if "story_world" not in job_columns:
-            conn.execute("ALTER TABLE jobs ADD COLUMN story_world TEXT NOT NULL DEFAULT 'original'")
+            conn.execute("ALTER TABLE jobs ADD COLUMN story_world TEXT NOT NULL DEFAULT 'game'")
         if "visual_mode" not in job_columns:
             conn.execute("ALTER TABLE jobs ADD COLUMN visual_mode TEXT NOT NULL DEFAULT 'animated'")
 
@@ -199,7 +199,7 @@ def create_job(job: dict[str, Any]) -> None:
             (
                 job["id"], now, now, job["channel_name"], job["niche"],
                 job.get("requested_topic"), job.get("content_type", "auto"),
-                job.get("story_genre", "auto"), job.get("story_world", "original"),
+                job.get("story_genre", "auto"), "game",
                 job.get("visual_mode", "animated"), job["voice"], job["target_seconds"],
                 "queued", "Queued", 0,
             ),

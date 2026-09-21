@@ -8,11 +8,11 @@ class GenerateRequest(BaseModel):
     niche: str = Field(min_length=2, max_length=160)
     topic: str | None = Field(default=None, max_length=220)
     content_type: str = Field(default="auto", pattern=r"^(auto|story|trend|relatable|evergreen)$")
-    story_genre: str = Field(default="auto", pattern=r"^(auto|funny|horror|mystery|action|relatable|sad|powers)$")
-    story_world: str = Field(default="original", pattern=r"^(original|game)$")
+    story_genre: str = Field(default="auto", pattern=r"^(auto|funny|horror|mystery|action|relatable|sad)$")
+    story_world: str = Field(default="game", pattern=r"^game$")
     visual_mode: str = Field(default="animated", pattern=r"^(animated|generative)$")
     voice: str = Field(default="auto-youthful-male", max_length=80)
-    target_seconds: int = Field(default=65, ge=45, le=75)
+    target_seconds: int = Field(default=58, ge=45, le=75)
 
     @field_validator("topic")
     @classmethod
@@ -33,7 +33,7 @@ class ChannelProfileRequest(BaseModel):
     tone: str = Field(default="Natural, cinematic Roblox mini-movie storytelling; conversational, specific, suspenseful or funny without fake hype", max_length=160)
     audience: str = Field(default="Kids / young Roblox players (roughly 8-14); energetic, clear, exciting, never babyish", min_length=3, max_length=180)
     voice: str = Field(default="auto-youthful-male", max_length=80)
-    target_seconds: int = Field(default=65, ge=45, le=75)
+    target_seconds: int = Field(default=58, ge=45, le=75)
     trend_weight: int = Field(default=70, ge=0, le=100)
     evergreen_weight: int = Field(default=20, ge=0, le=100)
     experiment_weight: int = Field(default=10, ge=0, le=100)

@@ -1,82 +1,64 @@
-# Shorts Studio V3
+# Shorts Studio V5
 
-Private/local-first **AI-directed Roblox animation studio** for Windows.
+Private/local-first **automatic Roblox YouTube Shorts studio** for Windows.
 
-The main workflow builds short cinematic Roblox stories aimed at young Roblox players: a strong opening, a recognisable situation, recurring/consistent characters, escalating conflict, a real payoff, character dialogue, generated movie-style scenes, active-word captions, subtle SFX, metadata, and a manual review queue.
+The workflow is built **only around real Roblox experiences**. Full Auto chooses or accepts a recognisable Roblox game, researches its real mechanics and locations, writes a short story around things players actually do, narrates it, builds game-specific environment plates, animates consistent Roblox-style characters in Blender, adds captions/SFX/music, and places the result in a manual review queue.
 
 **Nothing is auto-published to YouTube.**
 
-## V3 visual direction
+## V5 direction
 
-Story Studio V3 prefers **controlled Roblox R15 animation** over full-frame AI video generation.
+The target is short Roblox machinima: readable characters, clear physical actions, familiar game situations, fast camera language and a payoff that makes sense.
 
-The default path is now:
+Default flow:
 
-`GAME RESEARCH → STORY → LOGIC AUDIT → NARRATION → ROBLOX ENVIRONMENT PLATES → ANIMATION SHOT PLAN → FIXED R15 RIGS → BLENDER ACTION/CAMERA/VFX RENDER → CAPTIONS/SFX/MUSIC → REVIEW`
+`REAL GAME DISCOVERY → GAME RESEARCH → STORY → LOGIC AUDIT → NARRATION → GAME-SPECIFIC ENVIRONMENT PLATES → SHOT/BLOCKING PLAN → BLENDER ROBLOX MACHINIMA → CAPTIONS/SFX/MUSIC → QUALITY GATE → REVIEW`
 
-This keeps the characters consistent and prevents frame-to-frame generative morphing. FLUX is still used to create Roblox-looking environment plates; Blender then animates fixed R15-style characters over those environments. The old FLUX→LTX generative path remains available as a legacy fallback.
+There is no fictional channel universe or recurring named cast. Each Short is tied to the selected real Roblox game and uses only the player roles needed for that video.
 
-Story Studio also includes an optional **Powers / animated action** genre. Powers are treated as original fictional abilities in the channel's animated universe, not as claims about the real Roblox game's mechanics. Available reusable effects include energy, dashes, shields, shockwaves, telekinesis, portals and lightning.
+Typical real-game formats include DOORS-style survival/horror situations, teammate betrayal, rare-item luck, obbies, round-based games, server mysteries, funny reversals and satisfying wins. The writer is instructed not to invent mechanics that the research did not establish.
 
-The V3 scene/shot architecture is intentionally reusable for a future long-form mode, but 10–15 minute episode generation is not exposed yet.
+## Why V5 changed the renderer
 
-## Animation engine setup
+The previous renderer depended too heavily on importing one R15 FBX correctly and then placing it over a mostly flat AI background. A bad import or weak rig could make the avatar look like detached blocks/spheres even when the rest of the pipeline worked.
 
-Run:
+V5 instead builds a deterministic segmented Roblox-style avatar directly in Blender:
 
-```bat
-install_animation_engine.bat
-```
+- separate upper/lower torso, upper/lower arms and legs, hands and feet
+- classic readable face and hair silhouette
+- proper floor/ground contact and shadow
+- reusable shoulder/elbow/hip/knee pivots
+- walk/run/dash cycles, jumps, crouches, reactions, pointing, pickups, buttons/doors, falls and celebrations
+- game-action props such as doors, keys, buttons, chests and collectibles when the screenplay establishes them
+- vertical camera presets plus push, track, follow, orbit and reveal motion
+- foreground floor/depth geometry so the result reads as a 3D scene instead of a character pasted onto a slideshow
 
-This checks for Blender and can install it through Windows winget. Restart Shorts Studio afterward.
+The official Roblox BlockyCharacter FBX is now only an optional legacy/reference asset. V5 rendering does not fail just because that FBX is absent or imports differently in a newer Blender version.
 
-For the complete Story stack:
+## Environment plates
 
-```bat
-upgrade_story_quality.bat
-```
+ComfyUI/FLUX is still used for the researched Roblox environment plate.
 
-V3 animated Story mode still uses ComfyUI/FLUX for the game-environment plates, so ComfyUI must be available when a Story starts.
+V5 prompts the plate generator to produce:
 
-## Current creative direction
+- a recognisable verified game location/set-piece
+- a player-height perspective
+- a coherent horizon and depth
+- one clear solid foreground floor for the animated characters
+- uncluttered foreground staging space
+- no accidental humanoids, floating blobs, unrelated vehicles, readable text or UI
 
-Story Studio is deliberately not a generic AI-slop generator. Before rendering, the local writer creates several concepts and scores them for hook, relatability, escalation, payoff, dialogue, visual movie potential, character consistency, and cringe avoidance.
+Blender then supplies the consistent characters, physical actions, props, lighting, camera motion and effects.
 
-Weak stories are rewritten before expensive media generation. Story mode rejects canned morals, babyish wording, forced slang, random shock value, long exposition and generic creator filler.
-
-Typical formats include relatable gameplay pain, horror-game situations, teammate betrayal, rare-item luck, obbies, server mysteries, survival rounds, funny reversals and satisfying wins.
-
-## Story pipeline
-
-`IDEAS → COMMISSIONING SCORE → CAUSAL SCREENPLAY → LOGIC AUDIT → SHOT PLAN → CONTINUOUS NARRATION → ENVIRONMENT PLATES → CONTROLLED R15 ANIMATION → ACTIVE CAPTIONS → SFX/MUSIC → EDIT → QUALITY GATE → REVIEW`
-
-Story scenes carry exact character descriptions (hair, clothing, colours and personality), environment, action, camera, emotion, motion priority and dialogue speaker.
-
-For continuity, later SDXL keyframes can use the previous keyframe as an img2img reference. The stronger video path animates generated keyframes rather than asking a text-to-video model to invent the character and scene from scratch.
-
-## Stack
-
-- FastAPI dashboard: `127.0.0.1:8765`
-- SQLite queue/history
-- Ollama + `qwen3:8b` for local story planning/writing/scoring
-- ComfyUI for images and video
-- SDXL for cinematic keyframes
-- Blender/Eevee for deterministic R15-style character animation, reusable motion, cameras and power VFX
-- FLUX.2 Klein for Roblox game-environment plates and legacy generative Story imagery
-- Optional LTX 2B FP8 keyframe-to-video backend for legacy Story mode
-- Wan 2.1 retained for standalone/legacy video tools
-- Chatterbox for continuous Story narration, with Kokoro retained for legacy/fallback tools
-- FFmpeg through `imageio-ffmpeg`
-- ASS captions using actual TTS word timings
-- locally generated procedural SFX for whoosh/impact/alert/glitch/reward cues
-
-## Windows setup
+## Setup
 
 From the repository:
 
 ```bat
 setup_windows.bat
 ollama pull qwen3:8b
+install_animation_engine.bat
+upgrade_story_quality.bat
 ```
 
 Start ComfyUI, then:
@@ -85,70 +67,65 @@ Start ComfyUI, then:
 py run.py
 ```
 
-Open `http://127.0.0.1:8765`.
+Open:
 
-## Cinematic Story video backend
+`http://127.0.0.1:8765`
 
-For the higher-quality Story mode, run:
+The animation installer checks/installs Blender. The old Roblox FBX download is best-effort only and does not block V5.
 
-```bat
-install_story_video_models.bat
-```
+## Recommended Story settings
 
-The installer finds the real Comfy Desktop backend/model folder and installs the local LTX story-video files. These are large downloads.
+In Video Studio → Story:
 
-After installation:
+- **Story genre:** Auto
+- **Target:** about 58 seconds
+- **Visual mode:** Animated / V5 machinima
+- **Game/story idea:** leave blank to let Full Auto choose, or enter a game such as DOORS, Dandy's World, Murder Mystery 2 or 99 Nights in the Forest
 
-1. Completely close ComfyUI.
-2. Reopen ComfyUI.
-3. Restart Shorts Studio with `py run.py`.
-4. Open Video Studio and check the engine status.
+The actual available game is still validated through the research stage; a named game is not treated as permission to invent unsupported mechanics.
 
-When detected, the UI reports:
+## Stack
 
-`ComfyUI connected • cinematic keyframe→video engine ready (LTX 2B FP8)`
+- FastAPI dashboard: `127.0.0.1:8765`
+- SQLite queue/history
+- Ollama + `qwen3:8b` for local planning/writing/scoring
+- web discovery/research for real Roblox game context
+- ComfyUI + FLUX.2 Klein for Roblox environment plates
+- Blender/Eevee for deterministic Roblox machinima characters, actions, props, cameras and VFX
+- Chatterbox for continuous Story narration
+- FFmpeg through `imageio-ffmpeg`
+- ASS active-word captions using narration timing
+- procedural/local SFX support
+- optional LTX keyframe-to-video legacy/generative fallback
 
-The RTX 3060 Ti 8GB is at the low end for this backend, so generation can be slow and memory-sensitive. Shorts Studio unloads Qwen before ComfyUI media generation to avoid both systems competing for VRAM.
+## Quality gates
 
-## Story quality rules
+An MP4 existing does not mean a Story passes.
 
-A Story-mode export is not considered finished simply because an MP4 exists. The quality gate requires a passing story/retention score, no placeholder storyboard visuals, appropriate runtime, a real output file, and several completed cinematic keyframe-to-video shots.
-
-If the cinematic backend is unavailable or too few quality motion shots finish, Story mode stops instead of silently substituting the old low-quality text-to-video look.
-
-## Captions
-
-Story captions use real word-boundary timing, short 2–4 word chunks, currently-spoken-word highlighting, word pop/scale animation, stronger hook/reveal/payoff treatment, compact two-line layouts, and placement intended to avoid character faces.
-
-## Audio
-
-Story characters can receive separate neural voices. Character dialogue uses gentler rate/pitch settings than the narrator so it sounds more conversational.
-
-Put licensed music in `data/assets/music/` if you want background music. Built-in original procedural SFX are generated locally for supported scene cues, so the app does not need to scrape copyrighted sound packs.
+Story mode checks screenplay/retention quality, causal logic, duration, environment variety, completed animated shots, clip decodability, visible motion where motion is expected, and output existence. Weak stories or broken scene renders should stop or enter review rather than silently being called upload-ready.
 
 ## Outputs
 
-Each job is stored under `data/outputs/<job-id>/`. A successful job includes `final.mp4` and `manifest.json`, with story, characters, shot plan, generation details and quality checks.
+Each job is stored under:
 
-## Privacy / costs
+`data/outputs/<job-id>/`
 
-- Local dashboard only.
-- Ollama inference is local.
-- ComfyUI generation is local.
-- No OpenAI, Anthropic, ElevenLabs or Runway API is required.
-- Edge TTS and web discovery still require internet access.
-- No automatic YouTube publishing.
+A completed job includes `final.mp4` and `manifest.json`. V5 animation also stores the shot plan and per-scene render reports while building the Short.
 
 ## Development sanity check
 
 ```bat
-py -m compileall shorts_studio run.py
+py -m compileall shorts_studio scripts/blender run.py
 ```
+
+GitHub pull requests also run the Python sanity workflow.
 
 ## Troubleshooting
 
-If the dashboard says Ollama is unavailable, test `ollama list`.
+If Ollama is unavailable, test `ollama list`.
 
-If Story mode says the cinematic backend is missing, run `install_story_video_models.bat`, then restart ComfyUI and Shorts Studio.
+If animated Story mode says Blender is missing, run `install_animation_engine.bat` and restart Shorts Studio.
 
-If a Story job fails its quality gate, check the Review Queue/manifest. The app is intentionally designed to reject weak media instead of calling it upload-ready.
+If ComfyUI environment generation is unavailable, start ComfyUI and run `upgrade_story_quality.bat` if the Story image models are missing.
+
+If a Story fails the quality gate, open its Review/manifest information before regenerating. V5 is intentionally stricter about broken animation and unrelated game visuals.

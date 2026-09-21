@@ -6,25 +6,19 @@ from typing import Any
 
 from .ollama_client import chat_json
 from .story_game import story_game_prompt_context
-from .asset_registry import power_prompt_context
 
 
 def _power_mode(genre: str | None) -> bool:
-    return str(genre or "").strip().lower() == "powers"
+    # Fictional channel-universe powers were removed. Any unusual ability shown
+    # in a Story must be a verified mechanic of the selected real Roblox game.
+    return False
 
 
 def _power_story_rules(genre: str | None) -> str:
-    if not _power_mode(genre):
-        return (
-            "POWERS ARE NOT ENABLED. Do not invent magic, portals, energy attacks or sudden superpowers. "
-            "Every unusual capability must come from the verified game context."
-        )
     return (
-        "POWER STORY MODE IS ENABLED. The recurring cast may use only the ORIGINAL FICTIONAL abilities below. "
-        "These abilities are part of our animated channel universe, NOT claims about the real Roblox game's mechanics. "
-        "Game locations, items, enemies, objectives and UI must still stay faithful to verified game context. "
-        "Powers must have setup, limits and consequences; they cannot randomly solve the climax.\n"
-        + power_prompt_context()
+        "Do not invent magic, portals, energy attacks, special abilities or superpowers. "
+        "If the selected Roblox game genuinely has unusual abilities, use only abilities explicitly supported "
+        "by VERIFIED GAME CONTEXT and treat them as game mechanics, not channel lore."
     )
 
 
@@ -51,42 +45,40 @@ def _clean(value: Any, limit: int = 500) -> str:
 
 
 def _default_character(idx: int) -> dict[str, str]:
+    # These are per-video fallback roles only and carry no lore between Shorts.
     defaults = [
         {
-            "id": "max",
-            "name": "Max",
+            "id": "player",
+            "name": "Player",
             "gender": "male",
             "visual_identity": (
                 "authentic Roblox R15 player avatar with classic Roblox proportions, softly beveled plastic head, "
                 "simple classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox joints; "
-                "messy dark-brown Roblox catalog hair accessory, royal-blue hoodie clothing texture, black cargo-style pants, white shoes; "
-                "recognizably Roblox, not voxel/cubic Minecraft, not LEGO, not a human child and not a Pixar character"
+                "dark Roblox catalog hair, blue hoodie, dark pants, white shoes; recognizably Roblox, not Minecraft, LEGO or human"
             ),
-            "personality": "confident, competitive, gets himself into trouble",
+            "personality": "focused player who takes a risky chance when the game puts pressure on them",
         },
         {
-            "id": "mia",
-            "name": "Mia",
+            "id": "friend",
+            "name": "Friend",
             "gender": "female",
             "visual_identity": (
                 "authentic Roblox R15 player avatar with classic Roblox proportions, softly beveled plastic head, "
                 "simple classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox joints; "
-                "long dark Roblox ponytail catalog hair accessory, purple jacket clothing texture, black pants, white shoes; "
-                "recognizably Roblox, not voxel/cubic Minecraft, not LEGO, not a human child and not a Pixar character"
+                "dark ponytail catalog hair, purple jacket, dark pants, white shoes; recognizably Roblox, not Minecraft, LEGO or human"
             ),
-            "personality": "quick-thinking, sarcastic, notices details first",
+            "personality": "quick-thinking teammate who notices important game details",
         },
         {
-            "id": "kai",
-            "name": "Kai",
+            "id": "teammate",
+            "name": "Teammate",
             "gender": "male",
             "visual_identity": (
                 "authentic Roblox R15 player avatar with classic Roblox proportions, softly beveled plastic head, "
                 "simple classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox joints; "
-                "short black Roblox catalog hair accessory, red-and-black jacket clothing texture, dark pants, red shoes; "
-                "recognizably Roblox, not voxel/cubic Minecraft, not LEGO, not a human child and not a Pixar character"
+                "short black catalog hair, red jacket, dark pants, grey shoes; recognizably Roblox, not Minecraft, LEGO or human"
             ),
-            "personality": "calm, loyal, suspicious when something feels wrong",
+            "personality": "steady teammate who reacts naturally to the game's mechanics and risks",
         },
     ]
     return dict(defaults[idx % len(defaults)])
@@ -171,7 +163,7 @@ AUDIENCE: {audience}
 CHANNEL TONE: {tone}
 REQUESTED GENRE: {genre}
 
-POWER/FANTASY RULES:
+VERIFIED ABILITY RULES:
 {_power_story_rules(genre)}
 
 REAL ROBLOX GAME CONTEXT:
@@ -184,8 +176,7 @@ Every idea must:
 - be understandable immediately even to a first-time viewer;
 - have one specific character goal, one mistake/choice that worsens it, one earned turning point and one payoff;
 - NEVER use "a random/another player chases us" as the central conflict;
-- if this is the original Astra City universe, treat Max/Mia/Kai like recurring animated-series characters with relationships and power limits;
-- if this is a real-game context, stay faithful to that game's verified mechanics;
+- stay faithful to the selected game's verified mechanics;
 - have enough CAUSAL STORY DEPTH to sustain 45-70 seconds without filler;
 - naturally move through several visually different areas/set-pieces from the verified game context.
 
@@ -200,9 +191,7 @@ Make the 12 ideas genuinely different from one another. Mix structures such as:
 - risky shortcut -> cost -> comeback.
 Do not make all 12 "friend disappears" or "mysterious empty server" stories.
 
-Good story energy: a character causes a problem, tries the obvious fix, pays a cost,
-learns something useful, then earns the climax. For Astra City, use power limits, friendship tension,
-a Core Drone/Rift/blackout, a rescue, a bad decision or a clever combination of abilities.
+Good story energy: a player makes a choice, the real game mechanic creates a problem, the obvious fix costs them something, then they earn the climax with a game-specific decision.
 Never use a vague stranger/player chase as the entire story.
 
 Do NOT write generic "Roblox world" stories that could happen in any game.
@@ -242,8 +231,7 @@ Return {{"ideas":[{{"premise":"...","genre":"...","opening":"...","escalation":"
         "You are a ruthless Roblox Shorts commissioning editor. Return JSON only.",
         f"""
 AUDIENCE: {audience}
-WORLD/GAME: {game_context.get("game_name")}
-ORIGINAL SERIES: {bool(game_context.get("is_original_universe"))}
+GAME: {game_context.get("game_name")}
 CANDIDATES:
 {json.dumps(ideas, ensure_ascii=False)}
 
@@ -256,7 +244,7 @@ Score each 0-100 for:
 - originality
 - causal_depth: can this support a real 45-70 second goal->setback->turn->climax story without filler?
 - visual_progression: can it naturally move through multiple different game areas/set-pieces?
-- game_specificity: does this unmistakably belong in the supplied world/game? For Astra City, reward use of recurring cast powers, limits, locations and threats instead of random generic Roblox conflict.
+- game_specificity: does this unmistakably belong in the selected real Roblox game using its verified mechanics and locations?
 - cringe_avoidance (100 = not cringe)
 
 Pick the best idea for a 45-70 second cinematic Roblox mini-movie.
@@ -365,14 +353,13 @@ Design ONE coherent mini-movie arc.
 
 Rules:
 - One central player goal only.
-- Every major problem must come from a VERIFIED game mechanic, player choice, earlier mistake, or (only in powers genre) an already-established approved fictional ability.
-- Do not invent random hackers, secret weapons, mystery NPCs, fake items or lore. Follow POWER/FANTASY RULES exactly.
+- Every major problem must come from a VERIFIED game mechanic, player choice or earlier mistake.
+- Do not invent random hackers, secret weapons, mystery NPCs, fake items or lore. Follow VERIFIED ABILITY RULES exactly.
 - The failed attempt must make the next problem worse or more urgent.
 - The turning point must be something the player notices/decides/uses, not coincidence.
 - The climax must resolve the same goal established near the beginning.
 - The payoff must directly answer the hook and feel earned.
 - Make the character choices emotionally understandable to a young Roblox audience.
-- In the original Astra City universe, never make the central conflict "someone/another player is chasing us." Use an established threat, power mistake, rescue problem, rivalry within the cast, blackout, Core Drone or Rift consequence instead.
 - Longer runtime means more escalation and character decisions, not extra unrelated subplots.
 
 Return exactly:
@@ -418,20 +405,10 @@ def _story_prompt(
     arc_plan: dict[str, Any],
 ) -> str:
     requested = idea.strip() if idea else "Use the selected premise supplied by the commissioning editor."
-    recurring_cast = "\n".join(
-        f"- {_default_character(i)['name']}: {_default_character(i)['visual_identity']}; personality: {_default_character(i)['personality']}"
-        for i in range(3)
-    )
     power_rules = _power_story_rules(genre)
-    original_series = bool(game_context.get("is_original_universe"))
     narration_mode = (
-        "This is an ORIGINAL RECURRING ANIMATED SERIES episode, not gameplay commentary. "
-        "Narrate in natural third person about Max, Mia and Kai. Do not say 'I was playing', "
-        "'another player', 'this guy', 'the server', or pretend the events happened to the narrator. "
-        "A strong line sounds like: 'Max had one rule: never charge indoors. He broke it immediately.'"
-        if original_series
-        else
-        "This is a story about events inside a real Roblox game. Keep the narration conversational and game-grounded."
+        "This is a story about events inside a real Roblox game. Keep the narration conversational, specific "
+        "to the game's mechanics, and grounded in what a real player could actually experience."
     )
     return f"""
 AUDIENCE: {audience}
@@ -449,24 +426,21 @@ POWER/FANTASY RULES:
 LOCKED CAUSAL STORY ARC:
 {json.dumps(arc_plan, ensure_ascii=False, indent=2)}
 
-RECURRING CHANNEL CAST:
-{recurring_cast}
+CHARACTERS:
+Create only the 1-3 Roblox player roles needed for THIS video. They have no lore outside this Short.
 
 NARRATION MODE:
 {narration_mode}
 
 Create a short cinematic mini-movie that takes place INSIDE {game_context.get("game_name")}.
-Use 1-3 characters from the recurring cast whenever possible. Keep their names, exact
-hair/clothing/colours and core personalities unchanged. A one-off side character is allowed
-only when the plot genuinely needs one.
+Use 1-3 Roblox player characters only when the plot needs them. Keep each avatar's hair, clothing and colours consistent throughout THIS Short.
 
 The audience is real young Roblox players, not toddlers. It must feel like a situation,
 fear, joke, win, loss, betrayal, grind, teammate problem, rare-item moment, horror-game
 moment, server moment, obby moment or friendship moment they can recognise.
 
 NON-NEGOTIABLE:
-- Hook in the FIRST 1-2 seconds. Start inside a SPECIFIC problem caused by a character choice, established threat or power failure; no introduction.
-- If this is the original Astra City universe, the episode must feel like part of a recurring animated series, not fake gameplay commentary. Never make "running from another player/guy" the plot.
+- Hook in the FIRST 1-2 seconds. Start inside a SPECIFIC problem caused by a player choice or verified game mechanic; no introduction.
 - Use about 10-13 purposeful scenes for a normal ~65 second Story. Aim for 12. Scale with runtime. Maximum 3 characters.
 - Think in six macro beats first: hook/problem → goal/setup → first setback → escalation → turning point/climax → payoff.
 - Do not split one event into multiple filler scenes just to hit a scene count.
@@ -484,14 +458,14 @@ NON-NEGOTIABLE:
 - Every scene must CAUSE or ENABLE the next important beat. If a scene can be removed without changing the story, remove it.
 - Fill because_of and changes for every scene. Scene 2+ must be causally traceable to an earlier choice, event or verified game mechanic.
 - Never use "randomly", "somehow", "out of nowhere", "for no reason" or coincidence to move the plot forward.
-- Follow NARRATION MODE exactly. The voice should still sound casual and human, but original-series episodes are narrated as a story about the recurring cast, not fake first-person gameplay.
+- Follow NARRATION MODE exactly. The voice should sound casual and human, like a real creator recounting a game situation.
 - Keep it inside ONE continuous game session, but the VIDEO must visibly progress.
 - Use at least 4 visually different rooms, areas, obstacles, set-pieces or background compositions from the same game when the verified context allows it.
 - The background must look like a polished ROBLOX GAME ENVIRONMENT: Roblox Studio-style materials, simple readable geometry, stylized game lighting and game-scale props. Never make a photoreal real-world movie set or a Minecraft voxel map.
 - Never leave two adjacent scenes with the same environment AND the same camera framing. Each cut must reveal new visual information.
 - Conflict must escalate every few seconds.
 - Establish one clear central goal and keep it alive through the whole Short.
-- Do not introduce random new villains, secret weapons, rare items or lore. Portals/powers are allowed ONLY when POWER/FANTASY RULES explicitly enable them, and they must be established early, limited, causal and relevant to the original goal.
+- Do not introduce random new villains, secret weapons, rare items, abilities or lore unless VERIFIED GAME CONTEXT establishes them.
 - No coincidence may solve the climax. The ending must come from a character decision, skill, mistake or verified game mechanic established earlier.
 - The ending must pay off the opening: twist, funny reversal, satisfying win, scary reveal,
   or relatable punchline.
@@ -513,14 +487,14 @@ NON-NEGOTIABLE:
   Never use voxel/Minecraft cube anatomy, pixel faces, LEGO/minifigure proportions, realistic human anatomy,
   Pixar/cartoon children, fingers, noses or realistic mouths.
 - Reuse the same important props and environmental details when the story returns to a location.
-- Use at least TWO supplied world/game-specific mechanics, powers, threats, locations or established props.
+- Use at least TWO supplied game-specific mechanics, threats, locations, objectives or established props.
 - Never invent a fake item, enemy, currency, room, objective or UI element outside the supplied context.
 
 Return JSON exactly:
 {{
   "title":"working story title",
   "game_name":"{game_context.get('game_name')}",
-  "genre":"funny|horror|mystery|action|relatable|sad|powers",
+  "genre":"funny|horror|mystery|action|relatable|sad",
   "premise":"one sentence",
   "story_goal":"the one clear thing the player wants during this story",
   "stakes":"what they lose/fail/miss if the goal goes wrong",
@@ -803,7 +777,7 @@ def _fallback_scene_scaffold(
                 "role": "hook" if idx == 0 else ("payoff" if idx == desired-1 else role),
                 "speaker": "narrator",
                 "narration": text,
-                "characters": ["max"],
+                "characters": ["player"],
                 "environment": environment,
                 "action": full_beat,
                 "because_of": "opening situation" if idx == 0 else previous,
@@ -837,15 +811,7 @@ def _generate_scene_batches(
         game_context=game_context,
         arc_plan=arc_plan,
     )
-    original_series = bool(game_context.get("is_original_universe"))
-    mode_rules = (
-        "ORIGINAL SERIES RULES: narrate about Max/Mia/Kai in third person; never invent a random player/guy chasing them; "
-        "use only named Astra City locations and established Core Drone/Rift/blackout/power-limit conflicts; "
-        "powers belong to their established character and have costs."
-        if original_series
-        else
-        "REAL-GAME RULES: keep every beat faithful to verified game mechanics and locations."
-    )
+    mode_rules = "REAL-GAME RULES: keep every beat faithful to verified game mechanics, locations, items and objectives."
     collected: list[dict[str, Any]] = []
     existing = [
         _coerce_writer_scene(scene, idx)
@@ -898,10 +864,10 @@ camera, emotion, on_screen_emphasis, sfx_cue, motion_priority.
 Rules:
 - narration is natural spoken English, normally 6-14 words;
 - speaker is narrator;
-- use recurring ids max, mia, kai;
+- use only character ids established for this Story, such as player, friend or teammate;
 - every beat is caused by an earlier action, choice, mistake or verified mechanic;
 - keep the one central goal and locked payoff;
-- obey MODE RULES; use exact supplied location names when possible; powers only when the supplied character power rules allow them;
+- obey MODE RULES; use exact supplied location names and verified game abilities/items when possible;
 - no filler, coincidence, fake lore, random secrets or unrelated twists;
 - continue naturally from PREVIOUS TWO SCENES;
 - vary camera and visual action;
@@ -950,15 +916,7 @@ def _repair_scene_count(
         return current
 
     arc = arc_plan or {}
-    original_series = bool(game_context.get("is_original_universe"))
-    mode_rules = (
-        "Write a third-person Astra City animated-series episode about Max/Mia/Kai. "
-        "No random player/guy chase, no server/gameplay recap, no invented threat. "
-        "Use established powers, limits, threats and exact location names from context."
-        if original_series
-        else
-        "Keep the screenplay faithful to the verified real Roblox game."
-    )
+    mode_rules = "Keep the screenplay faithful to the verified real Roblox game. Do not invent mechanics, items, rooms, enemies or abilities."
     existing = current.get("scenes") if isinstance(current.get("scenes"), list) else []
 
     # One compact whole-array repair is cheap enough to try first.
@@ -992,7 +950,7 @@ because_of, changes, camera, emotion, on_screen_emphasis, sfx_cue, motion_priori
 
 Every narration must be non-empty natural English, normally 6-14 words.
 Scene 1 is hook; final scene is payoff. One central goal. Real cause-and-effect.
-No filler/coincidence. Obey MODE RULES. Use supplied world/game facts and approved character powers only.
+No filler/coincidence. Obey MODE RULES. Use only supplied game facts and verified mechanics.
 Return ONLY {{"scenes":[...]}}.
 """,
             temperature=0.24,
@@ -1038,12 +996,13 @@ Return ONLY {{"scenes":[...]}}.
     current.setdefault("title", f"{game_context.get('game_name') or 'Roblox'} Story")
     return current
 
-def _canonical_original_environment(value: str, game_context: dict[str, Any], index: int) -> str:
-    if not game_context.get("is_original_universe"):
-        return value
+def _canonical_game_environment(value: str, game_context: dict[str, Any], index: int) -> str:
     names = [
         _clean(item.get("name"), 100)
-        for item in (game_context.get("visual_setpieces") or [])
+        for item in [
+            *(game_context.get("visual_setpieces") or []),
+            *(game_context.get("locations") or []),
+        ]
         if isinstance(item, dict) and _clean(item.get("name"), 100)
     ]
     if not names:
@@ -1052,10 +1011,9 @@ def _canonical_original_environment(value: str, game_context: dict[str, Any], in
     for name in names:
         if name.lower() in low or low in name.lower():
             return name
-    # Do not allow the writer to silently invent a new map. Use a stable
-    # supplied location as a safe fallback and let the shot director choose
-    # the best exact set-piece later.
-    return names[index % min(4, len(names))]
+    # If the writer invents a location name, repair it back to a researched
+    # game location rather than creating a fake map.
+    return names[index % min(6, len(names))]
 
 
 def _normalise_story(
@@ -1096,7 +1054,7 @@ def _normalise_story(
 
         game_name = _clean(raw.get("game_name") or game_context.get("game_name"), 80)
         environment = _clean(item.get("environment"), 180) or f"recognisable {game_name} Roblox area"
-        environment = _canonical_original_environment(environment, game_context, idx)
+        environment = _canonical_game_environment(environment, game_context, idx)
         action = _clean(item.get("action"), 220) or _clean(item.get("narration"), 220)
         because_of = _clean(item.get("because_of"), 180)
         changes = _clean(item.get("changes"), 200)
@@ -1186,7 +1144,6 @@ def _normalise_story(
             "player_situations": game_context.get("player_situations", []),
             "power_rules": game_context.get("power_rules", {}),
             "recurring_threats": game_context.get("recurring_threats", []),
-            "is_original_universe": bool(game_context.get("is_original_universe")),
             "avoid_inventing": game_context.get("avoid_inventing", []),
         },
         "genre": _clean(raw.get("genre") or "relatable", 24).lower(),
@@ -1289,32 +1246,15 @@ def _deterministic_story_checks(
     total_words = len(re.findall(r"\b[\w'-]+\b", narration))
     required_scene_min, desired_scene_count = _required_scene_count(target_seconds)
     required_scene_max = min(14, max(desired_scene_count + 2, required_scene_min))
-    original_series = bool((game_context or {}).get("is_original_universe"))
     expected_min = max(
         90,
-        round(target_seconds * (1.90 if original_series else 1.65)),
+        round(target_seconds * 1.65),
     )
     expected_max = min(
         180,
-        round(target_seconds * (2.35 if original_series else 2.30)),
+        round(target_seconds * 2.30),
     )
     banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
-    original_universe = bool((game_context or {}).get("is_original_universe"))
-    original_bad_conflict_patterns = (
-        r"running from (?:a|another|some|random) player",
-        r"(?:another|random|mystery|unknown) player .{0,35}(?:chase|follow|hunt)",
-        r"(?:a|some) guy .{0,35}(?:chase|follow|hunt)",
-        r"player was chasing",
-    )
-    original_bad_conflict_hits = (
-        [
-            pattern
-            for pattern in original_bad_conflict_patterns
-            if re.search(pattern, lower)
-        ]
-        if original_universe
-        else []
-    )
 
     line_starters = []
     for scene in scenes:
@@ -1386,10 +1326,8 @@ def _deterministic_story_checks(
         "visual_variety_ok": 4 <= len(unique_environments) <= 8 and len(unique_cameras) >= 5,
         "unique_environment_count": len(unique_environments),
         "unique_camera_count": len(unique_cameras),
-        "banned_phrase_ok": not banned_hits and not original_bad_conflict_hits,
+        "banned_phrase_ok": not banned_hits,
         "banned_hits": banned_hits,
-        "original_conflict_ok": not original_bad_conflict_hits,
-        "original_bad_conflict_hits": original_bad_conflict_hits,
         "max_scene_words": max_words,
         "word_count": total_words,
         "expected_word_range": [expected_min, expected_max],
@@ -1429,7 +1367,7 @@ Score 0-100:
 - movie_clarity: can every beat be understood visually?
 - character_consistency: are characters simple and reusable across shots?
 - visual_variety: do consecutive scenes visibly change framing, area, obstacle or set-piece instead of repeating one backdrop?
-- game_specificity: does this clearly happen inside the named game using real mechanics/locations rather than generic Roblox? In powers genre, approved fictional character powers are allowed but must not replace game-specific setting/mechanics.
+- game_specificity: does this clearly happen inside the named game using real mechanics, items and locations rather than generic Roblox?
 - cringe_avoidance: 100 means not cringe, not babyish, no forced slang, no fake moral.
 
 Also list exact problems and exact rewrite instructions.
@@ -1548,12 +1486,6 @@ Return:
     if mechanical["banned_hits"]:
         problems.append("Banned cringe/filler phrasing: " + ", ".join(mechanical["banned_hits"]))
         rewrite_instructions.append("Remove canned creator phrases, forced morals and generic AI filler.")
-    if not mechanical.get("original_conflict_ok", True):
-        problems.append("Original-series conflict is generic/random-player chase filler.")
-        rewrite_instructions.append(
-            "Replace the random player/guy chase with a specific Astra City conflict caused by a cast choice, power limit, Core Drone, Rift Surge, blackout or rescue problem."
-        )
-
     # "passed" is intentionally demanding, but not perfection-only. The old
     # thresholds caused endless rewrites where an otherwise understandable
     # story was thrown away for one 79/100 sub-score.
@@ -1587,7 +1519,6 @@ Return:
                 "coincidence_free_ok",
                 "single_narrator_ok",
                 "banned_phrase_ok",
-                "original_conflict_ok",
             )
         )
     )
@@ -1652,7 +1583,7 @@ STORY:
 Try to DISPROVE that this is a good story. Check:
 - causal_logic: does each meaningful event follow from an earlier action, mistake, clue or verified mechanic?
 - player_behavior: do the characters act like believable players, or do they become stupid just so the plot can happen?
-- game_truth: are game mechanics/locations/items used consistently with verified context? If powers genre is enabled, approved fictional character powers are allowed and must NOT be mistaken for real game mechanics.
+- game_truth: are game mechanics, locations, items and abilities used consistently with verified context, with nothing invented?
 - central_goal: is the same goal still driving the middle and climax?
 - escalation: do setbacks genuinely increase pressure rather than repeat the same problem?
 - turning_point: does a character notice/decide/use something that earns the change in direction?
@@ -1973,15 +1904,7 @@ def _polish_narration(
         }
         for idx, scene in enumerate(scenes)
     ]
-    original_series = bool(game_context.get("is_original_universe"))
-    narration_style = (
-        "Natural third-person animated-series storyteller. Use Max/Mia/Kai by name. "
-        "Do not pretend the narrator is a player in the scene. Avoid 'I was playing', 'this guy', "
-        "'another player', 'the server' and generic gameplay recap language."
-        if original_series
-        else
-        "Natural first-person/observer gamer recap where appropriate."
-    )
+    narration_style = "Natural first-person or observer gamer recap where appropriate, grounded in the selected Roblox game."
     result = chat_json(
         "You are a human-sounding YouTube Shorts narration editor. Return JSON only.",
         f"""
@@ -2005,7 +1928,6 @@ Rules:
 - Total narration should land close to the target spoken-word range above.
 - Use contractions: I'm, I'd, we're, didn't, couldn't, etc.
 - Natural everyday wording. Follow NARRATION STYLE exactly.
-- For original-series episodes, favour specific character phrasing like "Max knew...", "Mia caught it...", "Kai had one shot..." instead of fake first-person gameplay.
 - Use small human phrasing where natural, but never add filler just to sound casual.
 - Do not sound like a trailer, documentary, news reader, motivational speaker or AI narrator.
 - Avoid restarting the story every scene.
@@ -2494,7 +2416,6 @@ def _finalize_story_quality(
         # subjective critic is still asking for more polish. Keep all warnings.
         if (
             attempt >= 2
-            and not game_context.get("is_original_universe")
             and _production_safe_score(score)
         ):
             score["passed"] = True
@@ -2508,7 +2429,6 @@ def _finalize_story_quality(
             score.get("passed")
             and logic_audit.get("passed")
             and attempt >= 1
-            and not game_context.get("is_original_universe")
         ):
             score["accepted_below_target"] = True
             score["production_safe"] = True
@@ -2581,10 +2501,7 @@ def _finalize_story_quality(
             best_story["story_score"].get("quality_target_met")
         )
         best_story["story_score"]["production_safe"] = True
-    elif (
-        not game_context.get("is_original_universe")
-        and _production_safe_score(best_story["story_score"])
-    ):
+    elif _production_safe_score(best_story["story_score"]):
         best_story["story_score"]["passed"] = True
         best_story["story_score"]["accepted_below_target"] = True
         best_story["story_score"]["production_safe"] = True

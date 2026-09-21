@@ -91,7 +91,7 @@ def api_health() -> JSONResponse:
         "app": {
             "ok": True,
             "name": settings.app_name,
-            "build": "v4-story-recovery-20260921",
+            "build": "v5.2-roblox-machinima-20260921",
         },
         "ollama": _safe_health_component("ollama", ollama_health),
         "ffmpeg": _safe_health_component("ffmpeg", ffmpeg_health),
@@ -138,17 +138,11 @@ def _ensure_story_backend_ready(visual_mode: str = "animated") -> None:
     if visual_mode == "animated":
         animation = animation_health()
         if not animation.get("ready"):
-            if not animation.get("official_r15_ready"):
-                detail = (
-                    "The official Roblox R15 reference character is missing. "
-                    "Run install_animation_engine.bat so Shorts Studio can download and validate Roblox's official BlockyCharacter.fbx."
-                )
-            else:
-                detail = (
-                    "Blender is not ready for animated Story mode. "
-                    "Run install_animation_engine.bat and restart Shorts Studio."
-                )
-            raise HTTPException(409, detail)
+            raise HTTPException(
+                409,
+                "Blender is not ready for Roblox machinima Story mode. "
+                "Run install_animation_engine.bat and restart Shorts Studio.",
+            )
     else:
         if not state.get("story_video_ready"):
             missing = ", ".join(state.get("missing_story_video_models") or [])
@@ -169,7 +163,7 @@ def _queue_short(
     target_seconds: int,
     content_type: str = "auto",
     story_genre: str = "auto",
-    story_world: str = "original",
+    story_world: str = "game",
     visual_mode: str = "animated",
 ) -> dict:
     job_id = uuid.uuid4().hex[:12]
@@ -213,7 +207,7 @@ def auto_generate() -> dict:
         int(profile["target_seconds"]),
         "story",
         "auto",
-        "original",
+        "game",
         "animated",
     )
 
@@ -251,7 +245,7 @@ def make_topic_short(topic_id: str) -> dict:
         int(profile["target_seconds"]),
         content_type,
         "auto",
-        "game" if content_type == "story" else "original",
+        "game",
         "animated",
     )
 
@@ -311,7 +305,7 @@ def remake_as_story(job_id: str) -> dict:
         old["target_seconds"],
         "story",
         "auto",
-        old.get("story_world", "original"),
+        old.get("story_world", "game"),
         old.get("visual_mode", "animated"),
     )
 
@@ -345,7 +339,7 @@ def regenerate(job_id: str, payload: RegenerateRequest) -> dict:
         old["target_seconds"],
         old.get("content_type", "auto"),
         old.get("story_genre", "auto"),
-        old.get("story_world", "original"),
+        old.get("story_world", "game"),
         old.get("visual_mode", "animated"),
     )
 

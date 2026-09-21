@@ -17,7 +17,7 @@ jobs:
         run: python -m compileall -q shorts_studio scripts/blender run.py
       - name: Install smoke-test dependencies
         run: python -m pip install -q "httpx>=0.28,<1" "beautifulsoup4>=4.13,<5" "ddgs>=9.16,<10"
-      - name: Smoke test V3 schema and animation timeline
+      - name: Smoke test real-game schema and animation timeline
         env:
           SHORTS_STUDIO_DATA: ${{ runner.temp }}/shorts-data
         run: |
@@ -37,7 +37,7 @@ jobs:
               'niche': 'Roblox stories',
               'requested_topic': 'test',
               'content_type': 'story',
-              'story_genre': 'powers',
+              'story_genre': 'action',
               'visual_mode': 'animated',
               'voice': 'auto-youthful-male',
               'target_seconds': 65,
@@ -54,7 +54,7 @@ jobs:
               key = f'area {i}'
               scenes.append({
                   'role': 'hook' if i == 0 else ('payoff' if i == 5 else 'build'),
-                  'characters': ['max'],
+                  'characters': ['player'],
                   'environment_key': key,
                   'environment': key,
                   'action': actions[i],
@@ -66,44 +66,44 @@ jobs:
               {'shots': []},
               script={
                   'game_name': 'Test Game',
-                  'genre': 'powers',
-                  'characters': [{'id':'max','name':'Max','visual_identity':'R15'}],
+                  'genre': 'action',
+                  'characters': [{'id':'player','name':'Player','visual_identity':'R15'}],
                   'scenes': scenes,
               },
               scene_audio=audio,
               environment_plates=plates,
-              allow_powers=True,
+              allow_powers=False,
           )
           assert len(plan['shots']) == 6
-          assert plan['shots'][2]['actors'][0]['power_effect'] == 'shield'
-          assert plan['shots'][3]['actors'][0]['power_effect'] == 'energy_blast'
+          assert plan['shots'][0]['actors'][0]['clip'] == 'run'
+          assert plan['shots'][1]['actors'][0]['clip'] == 'jump'
+          assert all(a['power_effect'] == 'none' for s in plan['shots'] for a in s['actors'])
 
           # Regression guard for the old "0 usable scenes / needs 14" failure.
           minimum, desired = _required_scene_count(65)
           context = {
-              'game_name': 'Test Roblox World',
+              'game_name': 'DOORS',
               'visual_setpieces': [
-                  {'name': 'Atrium'},
-                  {'name': 'Transit Tunnel'},
-                  {'name': 'Rooftop'},
-                  {'name': 'Core Room'},
+                  {'name': 'Hotel Hallway'},
+                  {'name': 'Library'},
+                  {'name': 'Greenhouse'},
+                  {'name': 'Electrical Room'},
               ],
               'locations': [],
               'mechanics': [],
               'player_situations': [],
-              'is_original_universe': True,
           }
           arc = {
-              'central_goal': 'Max has to shut down the unstable Core Drone before the district loses power.',
-              'stakes': 'The blackout will spread across the district.',
-              'hook_event': 'The Core Drone overloads while Max is standing beside it.',
-              'setup': 'Mia finds the safest route toward the Core Room.',
-              'first_obstacle': 'A power surge seals the direct route.',
-              'failed_attempt': 'Max forces a shortcut and makes the surge worse.',
-              'escalation': 'The blackout reaches the transit tunnel.',
-              'turning_point': 'Kai notices the drone reacts to Max charging too quickly.',
-              'climax': 'They combine their abilities carefully enough to stabilize the drone.',
-              'payoff': 'The lights return before the final district goes dark.',
+              'central_goal': 'The player has to reach the next safe room before the threat catches up.',
+              'stakes': 'A failed route ends the run.',
+              'hook_event': 'The player opens a dangerous room with no safe hiding spot nearby.',
+              'setup': 'The player checks the hallway and picks a route toward the next room.',
+              'first_obstacle': 'The expected safe path is blocked by the room layout.',
+              'failed_attempt': 'The player commits to the wrong side and loses time.',
+              'escalation': 'The threat closes the distance as the player crosses the next area.',
+              'turning_point': 'The player notices a safer route using a verified room mechanic.',
+              'climax': 'The player uses the mechanic correctly and reaches the safe room.',
+              'payoff': 'The door shuts behind the player just before the threat arrives.',
           }
           scaffold = _fallback_scene_scaffold(
               desired=desired,
@@ -115,10 +115,10 @@ jobs:
               {
                   'title': 'CI Story',
                   'game_name': context['game_name'],
-                  'genre': 'powers',
+                  'genre': 'action',
                   'characters': [
-                      {'id':'max','name':'Max','gender':'male'},
-                      {'id':'mia','name':'Mia','gender':'female'},
+                      {'id':'player','name':'Player','gender':'male'},
+                      {'id':'friend','name':'Friend','gender':'female'},
                   ],
                   'story_goal': arc['central_goal'],
                   'stakes': arc['stakes'],
@@ -132,5 +132,5 @@ jobs:
           assert len(normalized['scenes']) >= minimum
           assert normalized['scenes'][0]['role'] == 'hook'
           assert normalized['scenes'][-1]['role'] == 'payoff'
-          print('V3 smoke test OK')
+          print('Real-game smoke test OK')
           PY
