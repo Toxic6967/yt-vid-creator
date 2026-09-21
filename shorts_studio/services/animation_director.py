@@ -17,7 +17,7 @@ def render_animated_story(
     state = blender_health()
     if not state.get("ready"):
         raise RuntimeError(
-            "V3 AI-directed Roblox animation is selected, but Blender is not installed. "
+            "V5 Roblox machinima animation is selected, but Blender is not installed. "
             "Run install_animation_engine.bat, restart Shorts Studio, then regenerate."
         )
 
