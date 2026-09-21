@@ -718,6 +718,18 @@ def _usable_raw_scene_count(raw: dict[str, Any]) -> int:
     )
 
 
+def _compact_spoken_line(value: Any, fallback: str, max_words: int = 14) -> str:
+    """Make deterministic fallback narration short enough to survive the first quality pass."""
+    text = _clean(value, 260) or fallback
+    words = re.findall(r"\S+", text)
+    if len(words) > max_words:
+        text = " ".join(words[:max_words]).rstrip(" ,;:-")
+    text = re.sub(r"\s+", " ", text).strip()
+    if text and text[-1] not in ".!?":
+        text += "."
+    return text
+
+
 def _fallback_scene_scaffold(
     *,
     desired: int,
@@ -762,14 +774,28 @@ def _fallback_scene_scaffold(
     previous = "opening situation"
     for idx in range(desired):
         role, beat = beats[min(idx, len(beats)-1)]
-        text = _clean(beat, 220) or _clean(arc_plan.get("central_goal"), 220) or "The run gets harder."
+        full_beat = (
+            _clean(beat, 220)
+            or _clean(arc_plan.get("central_goal"), 220)
+            or "The situation gets harder."
+        )
+        text = _compact_spoken_line(full_beat, "The situation gets harder.")
         if idx and text == _clean(scenes[-1].get("narration"), 240):
             if role == "payoff":
-                text = f"That finally settles it: {text}"
+                text = _compact_spoken_line(
+                    f"That finally resolves it: {full_beat}",
+                    "That finally resolves the opening problem.",
+                )
             elif role == "reveal":
-                text = f"That changes the plan: {text}"
+                text = _compact_spoken_line(
+                    f"That changes the plan: {full_beat}",
+                    "That changes the plan completely.",
+                )
             else:
-                text = f"That makes the next move harder: {text}"
+                text = _compact_spoken_line(
+                    f"That forces the next move: {full_beat}",
+                    "That forces them to change the plan.",
+                )
 
         environment = setpieces[idx % min(len(setpieces), 6)]
         scenes.append(
@@ -779,7 +805,7 @@ def _fallback_scene_scaffold(
                 "narration": text,
                 "characters": ["max"],
                 "environment": environment,
-                "action": text,
+                "action": full_beat,
                 "because_of": "opening situation" if idx == 0 else previous,
                 "changes": (
                     _clean(beats[min(idx+1, len(beats)-1)][1], 180)
