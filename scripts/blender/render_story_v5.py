@@ -13,9 +13,9 @@ import bpy
 from mathutils import Vector
 
 
-FPS = 24
-RENDER_WIDTH = 720
-RENDER_HEIGHT = 1280
+FPS = 30
+RENDER_WIDTH = 1080
+RENDER_HEIGHT = 1920
 AVATAR_HEIGHT = 5.35
 
 
@@ -214,14 +214,58 @@ def key_scale(obj, frame, value):
     obj.keyframe_insert(data_path="scale", frame=frame)
 
 
+def _action_fcurves_for_datablock(action, datablock):
+    """Return existing F-curves without relying on Blender's removed Action.fcurves API."""
+    if action is None:
+        return []
+
+    # Blender <= 4.x legacy API.
+    legacy = getattr(action, "fcurves", None)
+    if legacy is not None:
+        try:
+            return list(legacy)
+        except Exception:
+            pass
+
+    # Blender 4.4+/5.x slotted Actions. Prefer the exact slot attached to this
+    # datablock, then gracefully scan any existing channelbags.
+    curves = []
+    anim_data = getattr(datablock, "animation_data", None)
+    action_slot = getattr(anim_data, "action_slot", None) if anim_data else None
+    for layer in getattr(action, "layers", []) or []:
+        for strip in getattr(layer, "strips", []) or []:
+            if action_slot is not None and hasattr(strip, "channelbag"):
+                try:
+                    bag = strip.channelbag(action_slot)
+                    if bag is not None:
+                        curves.extend(list(getattr(bag, "fcurves", []) or []))
+                        continue
+                except Exception:
+                    pass
+            for bag in getattr(strip, "channelbags", []) or []:
+                try:
+                    if action_slot is None or getattr(bag, "slot", None) == action_slot:
+                        curves.extend(list(getattr(bag, "fcurves", []) or []))
+                except Exception:
+                    continue
+    return curves
+
+
 def set_linear_interpolation(obj):
     data = getattr(obj, "animation_data", None)
     action = getattr(data, "action", None) if data else None
     if not action:
         return
-    for curve in action.fcurves:
-        for point in curve.keyframe_points:
-            point.interpolation = "BEZIER"
+
+    # BEZIER gives the procedural body acting natural ease-in/ease-out. Blender
+    # 5.x stores these curves in channelbags rather than action.fcurves.
+    for curve in _action_fcurves_for_datablock(action, obj):
+        try:
+            for point in curve.keyframe_points:
+                point.interpolation = "BEZIER"
+            curve.update()
+        except Exception:
+            pass
 
 
 def build_avatar(cid: str, lane: float, depth: float = 0.0):
@@ -517,10 +561,21 @@ def floor_color(text: str):
     return (0.22, 0.24, 0.28)
 
 
-def build_stage(background_path: str | None, environment: str):
+def build_stage(background_path: str | None, environment: str, shot_index: int = 0):
+    """Build a real 3D foreground/midground around the researched environment plate."""
+    env = str(environment or "Roblox game").lower()
     color = floor_color(environment)
-    floor_mat = new_material("StageFloorMat", color, roughness=0.62)
-    add_child_box("StageFloor", add_empty("StageRoot"), (0, 1.65, -0.11), (12.5, 8.4, 0.20), floor_mat, 0.04)
+    stage_root = add_empty("StageRoot")
+    floor_mat = new_material("StageFloorMat", color, roughness=0.58)
+    wall_color = tuple(min(1.0, max(0.035, c * 0.76 + 0.035)) for c in color)
+    trim_color = tuple(min(1.0, max(0.05, c * 1.18 + 0.025)) for c in color)
+    wall_mat = new_material("StageWallMat", wall_color, roughness=0.66)
+    trim_mat = new_material("StageTrimMat", trim_color, roughness=0.48)
+    dark_mat = new_material("StageDarkMat", tuple(max(0.025, c * 0.48) for c in color), roughness=0.72)
+
+    # Large actual floor under the avatars. The backplate supplies game-specific
+    # art while the 3D pieces below create perspective, shadows and parallax.
+    add_child_box("StageFloor", stage_root, (0, 2.05, -0.11), (14.0, 10.2, 0.22), floor_mat, 0.04)
 
     if background_path:
         source = Path(str(background_path))
@@ -534,26 +589,71 @@ def build_stage(background_path: str | None, environment: str):
             tex = nodes.new("ShaderNodeTexImage")
             tex.image = image
             emission = nodes.new("ShaderNodeEmission")
-            emission.inputs["Strength"].default_value = 0.93
+            emission.inputs["Strength"].default_value = 0.86
             output = nodes.new("ShaderNodeOutputMaterial")
             links.new(tex.outputs["Color"], emission.inputs["Color"])
             links.new(emission.outputs["Emission"], output.inputs["Surface"])
 
+            # Farther back than V5 originally used, leaving room for real 3D
+            # midground geometry between the actors and image.
             bpy.ops.mesh.primitive_plane_add(
-                location=(0, 5.65, 5.55),
+                location=(0, 7.35, 5.95),
                 rotation=(math.radians(90), 0, 0),
             )
             plane = bpy.context.object
             plane.name = "GameEnvironmentBackplate"
-            plane.scale = (5.55, 9.9, 1)
+            plane.scale = (6.35, 11.25, 1)
+            # Slight deterministic offset means repeat visits to one location
+            # do not look like the exact same crop every time.
+            plane.location.x = ((shot_index % 3) - 1) * 0.22
             bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
             plane.data.materials.append(material)
 
-    # A pair of unobtrusive side blocks gives real foreground parallax during
-    # tracks/orbits instead of making the whole shot feel like a flat slideshow.
-    side_mat = new_material("StageSideMat", tuple(min(1.0, c * 0.78) for c in color), roughness=0.72)
-    add_child_box("StageLeftDepth", add_empty("StageLeftRoot"), (-5.55, 3.5, 1.0), (0.65, 3.4, 2.0), side_mat, 0.08)
-    add_child_box("StageRightDepth", add_empty("StageRightRoot"), (5.55, 3.5, 1.0), (0.65, 3.4, 2.0), side_mat, 0.08)
+    variant = shot_index % 3
+
+    # Camera-near framing pieces: intentionally off-centre so lateral camera
+    # motion reveals depth instead of merely zooming a flat image.
+    left_x = -5.15 + variant * 0.18
+    right_x = 5.15 - ((variant + 1) % 3) * 0.14
+    add_child_box("ForegroundLeft", stage_root, (left_x, 0.55, 1.55), (0.72, 2.0, 3.1), dark_mat, 0.10)
+    add_child_box("ForegroundRight", stage_root, (right_x, 1.10, 1.35), (0.72, 2.4, 2.7), dark_mat, 0.10)
+
+    # Environment-aware set dressing. These are architectural/readability
+    # pieces only; gameplay-critical props still come from add_context_props().
+    if any(word in env for word in ("hall", "hotel", "corridor", "room", "door")):
+        for x in (-3.75, 3.75):
+            add_child_box(f"HallWall{x}", stage_root, (x, 3.35, 2.2), (1.05, 5.0, 4.4), wall_mat, 0.07)
+        for y in (1.8, 4.1):
+            add_child_box(f"HallBeam{y}", stage_root, (0, y, 4.65), (7.4, 0.38, 0.35), trim_mat, 0.05)
+    elif "library" in env:
+        for x in (-3.85, 3.85):
+            for y in (1.8, 3.7, 5.5):
+                add_child_box(f"Shelf{x}_{y}", stage_root, (x, y, 1.65), (1.18, 0.60, 3.30), wall_mat, 0.05)
+                for z in (0.72, 1.48, 2.24):
+                    add_child_box(f"ShelfTrim{x}_{y}_{z}", stage_root, (x, y - 0.34, z), (1.06, 0.10, 0.12), trim_mat, 0.025)
+    elif any(word in env for word in ("greenhouse", "forest", "garden", "woods")):
+        for i, x in enumerate((-4.1, -3.1, 3.2, 4.15)):
+            h = 1.6 + ((i + variant) % 3) * 0.45
+            add_child_box(f"PlantStem{i}", stage_root, (x, 3.0 + (i % 2) * 1.4, h / 2), (0.22, 0.22, h), dark_mat, 0.10)
+            add_child_sphere(f"PlantTop{i}", stage_root, (x, 3.0 + (i % 2) * 1.4, h + 0.45), (0.72, 0.58, 0.62), trim_mat, 18, 10)
+    elif any(word in env for word in ("cave", "tunnel", "mine", "sewer")):
+        for i, x in enumerate((-4.25, -3.25, 3.35, 4.3)):
+            rock = add_child_box(f"RockColumn{i}", stage_root, (x, 3.0 + (i % 2) * 1.25, 1.35), (1.15, 1.00, 2.75), wall_mat, 0.24)
+            rock.rotation_euler[2] = math.radians((-8 if i % 2 else 9) + variant * 2)
+    elif any(word in env for word in ("street", "plaza", "city", "town")):
+        for i, x in enumerate((-4.0, 4.0)):
+            add_child_box(f"StreetPost{i}", stage_root, (x, 3.15, 1.55), (0.22, 0.22, 3.1), dark_mat, 0.06)
+            add_child_box(f"StreetTop{i}", stage_root, (x, 3.15, 3.1), (0.85, 0.34, 0.34), trim_mat, 0.08)
+        add_child_box("StreetBarrierL", stage_root, (-3.0, 4.7, 0.48), (2.1, 0.48, 0.80), wall_mat, 0.08)
+        add_child_box("StreetBarrierR", stage_root, (3.0, 4.7, 0.48), (2.1, 0.48, 0.80), wall_mat, 0.08)
+    elif any(word in env for word in ("obby", "tower", "platform", "parkour")):
+        for i, (x, y, z) in enumerate(((-4.0, 3.3, 0.42), (3.8, 4.1, 0.78), (-3.3, 5.3, 1.10))):
+            add_child_box(f"ObbyPlatform{i}", stage_root, (x, y, z), (2.1, 1.35, 0.34), trim_mat, 0.06)
+    else:
+        # Neutral game-architecture pieces for locations without a keyword match.
+        add_child_box("MidLeft", stage_root, (-3.9, 4.0, 1.15), (1.2, 1.5, 2.3), wall_mat, 0.10)
+        add_child_box("MidRight", stage_root, (3.9, 4.6, 1.45), (1.35, 1.5, 2.9), wall_mat, 0.10)
+        add_child_box("MidTrim", stage_root, (0, 5.15, 4.45), (7.2, 0.38, 0.32), trim_mat, 0.05)
 
 
 def add_context_props(shot):
@@ -604,7 +704,7 @@ def look_at(obj, target):
     obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
 
 
-def setup_camera(camera_name, motion, frame_end, focus_x=0.0):
+def setup_camera(camera_name, motion, frame_end, focus_x=0.0, end_focus_x=None):
     bpy.ops.object.camera_add()
     cam = bpy.context.object
     cam.name = "StoryCamera"
@@ -620,6 +720,7 @@ def setup_camera(camera_name, motion, frame_end, focus_x=0.0):
         "high-angle": ((focus_x, -9.2, 5.65), 55, 2.95),
     }
     loc, lens, target_z = presets.get(camera_name, presets["medium"])
+    end_focus_x = focus_x if end_focus_x is None else float(end_focus_x)
     cam.location = loc
     cam.data.lens = lens
     cam.data.sensor_width = 32
@@ -629,28 +730,42 @@ def setup_camera(camera_name, motion, frame_end, focus_x=0.0):
 
     end = Vector(loc)
     if motion == "push_in":
-        end.y += 0.72
+        end.y += 1.28
+        end.x += (end_focus_x - focus_x) * 0.30
     elif motion == "pull_back":
-        end.y -= 0.78
+        end.y -= 1.18
+        end.x += (end_focus_x - focus_x) * 0.20
     elif motion == "track_left":
-        end.x -= 0.72
+        end.x -= 1.30
     elif motion == "track_right":
-        end.x += 0.72
+        end.x += 1.30
     elif motion == "follow":
-        end.x += 0.48
-        end.y += 0.28
+        end.x += (end_focus_x - focus_x) + 0.60
+        end.y += 0.42
     elif motion == "small_orbit":
-        end.x += 0.66
-        end.y += 0.30
+        end.x += 1.05
+        end.y += 0.48
     elif motion == "reveal_pan":
-        cam.location.x -= 0.70
-        look_at(cam, (focus_x, 0, target_z))
+        cam.location.x -= 1.20
+        look_at(cam, (focus_x - 0.30, 0, target_z))
         cam.keyframe_insert(data_path="location", frame=1)
         cam.keyframe_insert(data_path="rotation_euler", frame=1)
-        end.x = focus_x + 0.70
+        end.x = end_focus_x + 0.95
+
+    # Mid-shot camera key makes movement feel authored rather than a single
+    # mechanical A-to-B zoom.
+    mid = max(2, frame_end // 2)
+    start_vec = Vector(loc)
+    mid_loc = start_vec.lerp(end, 0.52)
+    if motion in {"small_orbit", "reveal_pan"}:
+        mid_loc.y += 0.24
+    cam.location = mid_loc
+    look_at(cam, ((focus_x + end_focus_x) / 2, 0, target_z))
+    cam.keyframe_insert(data_path="location", frame=mid)
+    cam.keyframe_insert(data_path="rotation_euler", frame=mid)
 
     cam.location = end
-    look_at(cam, (focus_x, 0, target_z))
+    look_at(cam, (end_focus_x, 0, target_z))
     cam.keyframe_insert(data_path="location", frame=frame_end)
     cam.keyframe_insert(data_path="rotation_euler", frame=frame_end)
     set_linear_interpolation(cam)
@@ -705,9 +820,22 @@ def configure_scene(frame_end, frames_dir: Path):
     scene.frame_start = 1
     scene.frame_end = frame_end
     scene.render.image_settings.file_format = "JPEG"
-    scene.render.image_settings.quality = 94
+    scene.render.image_settings.quality = 98
     scene.render.use_file_extension = True
+    try:
+        scene.render.image_settings.color_mode = "RGB"
+    except Exception:
+        pass
     scene.render.filepath = str(frames_dir / "frame_")
+    # Prefer higher temporal sampling where the installed EEVEE API exposes it.
+    eevee = getattr(scene, "eevee", None)
+    if eevee is not None:
+        for attr, value in (("taa_render_samples", 128), ("taa_samples", 64)):
+            if hasattr(eevee, attr):
+                try:
+                    setattr(eevee, attr, value)
+                except Exception:
+                    pass
     try:
         scene.render.film_transparent = False
     except Exception:
@@ -724,24 +852,29 @@ def render_shot(shot, output_dir: Path):
     frame_end = max(2, round(duration * FPS))
     environment = str(shot.get("environment") or shot.get("environment_key") or "Roblox game")
 
-    build_stage(shot.get("background_path"), environment)
+    build_stage(shot.get("background_path"), environment, int(shot.get("index") or 0))
     setup_lighting(environment)
     add_context_props(shot)
 
     actors = shot.get("actors") or []
-    lanes = []
+    start_lanes = []
+    end_lanes = []
     for actor in actors:
         try:
-            lanes.append(float(actor.get("start_lane") or 0.0))
-            lanes.append(float(actor.get("end_lane") if actor.get("end_lane") is not None else actor.get("start_lane") or 0.0))
+            start_lane = float(actor.get("start_lane") or 0.0)
+            end_lane = float(actor.get("end_lane") if actor.get("end_lane") is not None else start_lane)
+            start_lanes.append(start_lane)
+            end_lanes.append(end_lane)
         except Exception:
             pass
-    focus_x = sum(lanes) / len(lanes) if lanes else 0.0
+    focus_x = sum(start_lanes) / len(start_lanes) if start_lanes else 0.0
+    end_focus_x = sum(end_lanes) / len(end_lanes) if end_lanes else focus_x
     setup_camera(
         str(shot.get("camera") or "medium"),
         str(shot.get("camera_motion") or "static"),
         frame_end,
         focus_x=focus_x,
+        end_focus_x=end_focus_x,
     )
 
     render_actor_ids = []
@@ -769,7 +902,7 @@ def render_shot(shot, output_dir: Path):
     bpy.ops.render.render(animation=True)
 
     report = {
-        "renderer_version": "roblox_machinima_v5",
+        "renderer_version": "roblox_machinima_v5.2",
         "backend": "blender_roblox_machinima_v5",
         "frames_dir": str(frames_dir),
         "frame_pattern": "frame_%04d.jpg",
