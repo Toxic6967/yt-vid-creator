@@ -341,10 +341,11 @@ def run_pipeline(job_id: str) -> None:
             story_attempt_summaries: list[dict] = []
             script = None
             best_total = -1.0
-            for story_attempt in range(1, 4):
+            max_story_attempts = 5 if story_world == "original" else 3
+            for story_attempt in range(1, max_story_attempts + 1):
                 _stage(
                     job_id,
-                    f"Writing + repairing Story pass {story_attempt}/3 inside {research.get('game_name','Roblox')}",
+                    f"Writing + repairing Story pass {story_attempt}/{max_story_attempts} inside {research.get('game_name','Roblox')}",
                     24 + story_attempt * 3,
                 )
                 try:
@@ -410,6 +411,17 @@ def run_pipeline(job_id: str) -> None:
                 mechanical = story_score.get("mechanical") or {}
                 logic_audit = story_score.get("logic_audit") or {}
                 logic_scores = logic_audit.get("scores") or {}
+
+                # The original series is the flagship mode. Do not render a weak
+                # script just because it is technically parseable; that produced
+                # the nonsense "run from another player" videos.
+                if story_world == "original":
+                    problems = "; ".join(str(x) for x in (story_score.get("problems") or [])[:8])
+                    raise RuntimeError(
+                        "Original-series story did not meet the quality bar after five independent builds. "
+                        + (f"Remaining blockers: {problems}" if problems else "The episode premise/arc was not strong enough.")
+                    )
+
                 production_safe = bool(story_score.get("production_safe")) or (
                     float(story_score.get("total") or 0) >= 48
                     and bool(mechanical.get("scene_count_ok"))
