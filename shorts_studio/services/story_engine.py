@@ -177,13 +177,15 @@ POWER/FANTASY RULES:
 REAL ROBLOX GAME CONTEXT:
 {story_game_prompt_context(game_context)}
 
-Create 12 DIFFERENT mini-movie ideas that happen INSIDE this exact Roblox game.
+Create 12 DIFFERENT mini-movie ideas that happen inside the supplied Roblox world/context.
 
 Every idea must:
-- depend on a real mechanic, objective, location, item, enemy, round rule or player situation from the game context; in powers genre, the approved fictional character ability may create extra pressure/action but must interact with the real game situation rather than replace it;
-- be recognisable to someone who actually plays the game;
-- be understandable even if the viewer only knows the game casually;
-- use the game's mechanics to create the problem and payoff;
+- use the supplied locations, character abilities, threats or mechanics rather than inventing random filler;
+- be understandable immediately even to a first-time viewer;
+- have one specific character goal, one mistake/choice that worsens it, one earned turning point and one payoff;
+- NEVER use "a random/another player chases us" as the central conflict;
+- if this is the original Astra City universe, treat Max/Mia/Kai like recurring animated-series characters with relationships and power limits;
+- if this is a real-game context, stay faithful to that game's verified mechanics;
 - have enough CAUSAL STORY DEPTH to sustain 45-70 seconds without filler;
 - naturally move through several visually different areas/set-pieces from the verified game context.
 
@@ -198,9 +200,10 @@ Make the 12 ideas genuinely different from one another. Mix structures such as:
 - risky shortcut -> cost -> comeback.
 Do not make all 12 "friend disappears" or "mysterious empty server" stories.
 
-Good story energy: unlucky timing, teammate mistake, clutch save, scary close call,
-rare drop luck, greed, betrayal, panic, risky shortcut, one-player-left moment, or a funny
-reversal caused by the GAME itself.
+Good story energy: a character causes a problem, tries the obvious fix, pays a cost,
+learns something useful, then earns the climax. For Astra City, use power limits, friendship tension,
+a Core Drone/Rift/blackout, a rescue, a bad decision or a clever combination of abilities.
+Never use a vague stranger/player chase as the entire story.
 
 Do NOT write generic "Roblox world" stories that could happen in any game.
 Avoid fake inspirational morals, random lore dumps, generic "evil hacker" stories,
@@ -239,7 +242,8 @@ Return {{"ideas":[{{"premise":"...","genre":"...","opening":"...","escalation":"
         "You are a ruthless Roblox Shorts commissioning editor. Return JSON only.",
         f"""
 AUDIENCE: {audience}
-GAME: {game_context.get("game_name")}
+WORLD/GAME: {game_context.get("game_name")}
+ORIGINAL SERIES: {bool(game_context.get("is_original_universe"))}
 CANDIDATES:
 {json.dumps(ideas, ensure_ascii=False)}
 
@@ -252,7 +256,7 @@ Score each 0-100 for:
 - originality
 - causal_depth: can this support a real 45-70 second goal->setback->turn->climax story without filler?
 - visual_progression: can it naturally move through multiple different game areas/set-pieces?
-- game_specificity: would a real player recognise that this story belongs in THIS game?
+- game_specificity: does this unmistakably belong in the supplied world/game? For Astra City, reward use of recurring cast powers, limits, locations and threats instead of random generic Roblox conflict.
 - cringe_avoidance (100 = not cringe)
 
 Pick the best idea for a 45-70 second cinematic Roblox mini-movie.
@@ -367,7 +371,8 @@ Rules:
 - The turning point must be something the player notices/decides/uses, not coincidence.
 - The climax must resolve the same goal established near the beginning.
 - The payoff must directly answer the hook and feel earned.
-- Keep it relatable to actual players of this game.
+- Make the character choices emotionally understandable to a young Roblox audience.
+- In the original Astra City universe, never make the central conflict "someone/another player is chasing us." Use an established threat, power mistake, rescue problem, rivalry within the cast, blackout, Core Drone or Rift consequence instead.
 - Longer runtime means more escalation and character decisions, not extra unrelated subplots.
 
 Return exactly:
@@ -447,7 +452,8 @@ fear, joke, win, loss, betrayal, grind, teammate problem, rare-item moment, horr
 moment, server moment, obby moment or friendship moment they can recognise.
 
 NON-NEGOTIABLE:
-- Hook in the FIRST 1-2 seconds. Start inside the problem; no introduction.
+- Hook in the FIRST 1-2 seconds. Start inside a SPECIFIC problem caused by a character choice, established threat or power failure; no introduction.
+- If this is the original Astra City universe, the episode must feel like part of a recurring animated series, not fake gameplay commentary. Never make "running from another player/guy" the plot.
 - Use about 10-13 purposeful scenes for a normal ~65 second Story. Aim for 12. Scale with runtime. Maximum 3 characters.
 - Think in six macro beats first: hook/problem → goal/setup → first setback → escalation → turning point/climax → payoff.
 - Do not split one event into multiple filler scenes just to hit a scene count.
@@ -494,8 +500,8 @@ NON-NEGOTIABLE:
   Never use voxel/Minecraft cube anatomy, pixel faces, LEGO/minifigure proportions, realistic human anatomy,
   Pixar/cartoon children, fingers, noses or realistic mouths.
 - Reuse the same important props and environmental details when the story returns to a location.
-- Use at least TWO real game-specific mechanics/locations/items from the verified game context.
-- Never invent a fake item, enemy, currency, room, objective or UI element.
+- Use at least TWO supplied world/game-specific mechanics, powers, threats, locations or established props.
+- Never invent a fake item, enemy, currency, room, objective or UI element outside the supplied context.
 
 Return JSON exactly:
 {{
@@ -1157,7 +1163,11 @@ def _writer_view(story: dict) -> dict[str, Any]:
     }
 
 
-def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, Any]:
+def _deterministic_story_checks(
+    story: dict,
+    target_seconds: int,
+    game_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     scenes = story.get("scenes") or []
     narration = str(story.get("narration") or "")
     lower = narration.lower()
@@ -1194,6 +1204,22 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
     expected_min = max(80, round(target_seconds * 1.65))
     expected_max = min(175, round(target_seconds * 2.30))
     banned_hits = [phrase for phrase in BANNED_STORY_PATTERNS if phrase in lower]
+    original_universe = bool((game_context or {}).get("is_original_universe"))
+    original_bad_conflict_patterns = (
+        r"running from (?:a|another|some|random) player",
+        r"(?:another|random|mystery|unknown) player .{0,35}(?:chase|follow|hunt)",
+        r"(?:a|some) guy .{0,35}(?:chase|follow|hunt)",
+        r"player was chasing",
+    )
+    original_bad_conflict_hits = (
+        [
+            pattern
+            for pattern in original_bad_conflict_patterns
+            if re.search(pattern, lower)
+        ]
+        if original_universe
+        else []
+    )
 
     line_starters = []
     for scene in scenes:
@@ -1265,8 +1291,10 @@ def _deterministic_story_checks(story: dict, target_seconds: int) -> dict[str, A
         "visual_variety_ok": 4 <= len(unique_environments) <= 8 and len(unique_cameras) >= 5,
         "unique_environment_count": len(unique_environments),
         "unique_camera_count": len(unique_cameras),
-        "banned_phrase_ok": not banned_hits,
+        "banned_phrase_ok": not banned_hits and not original_bad_conflict_hits,
         "banned_hits": banned_hits,
+        "original_conflict_ok": not original_bad_conflict_hits,
+        "original_bad_conflict_hits": original_bad_conflict_hits,
         "max_scene_words": max_words,
         "word_count": total_words,
         "expected_word_range": [expected_min, expected_max],
@@ -1279,7 +1307,7 @@ def _score_story(
     target_seconds: int,
     game_context: dict[str, Any],
 ) -> dict[str, Any]:
-    mechanical = _deterministic_story_checks(story, target_seconds)
+    mechanical = _deterministic_story_checks(story, target_seconds, game_context)
     result = chat_json(
         "You are a ruthless short-form story editor for a successful Roblox channel. Return JSON only.",
         f"""
@@ -1425,6 +1453,11 @@ Return:
     if mechanical["banned_hits"]:
         problems.append("Banned cringe/filler phrasing: " + ", ".join(mechanical["banned_hits"]))
         rewrite_instructions.append("Remove canned creator phrases, forced morals and generic AI filler.")
+    if not mechanical.get("original_conflict_ok", True):
+        problems.append("Original-series conflict is generic/random-player chase filler.")
+        rewrite_instructions.append(
+            "Replace the random player/guy chase with a specific Astra City conflict caused by a cast choice, power limit, Core Drone, Rift Surge, blackout or rescue problem."
+        )
 
     # "passed" is intentionally demanding, but not perfection-only. The old
     # thresholds caused endless rewrites where an otherwise understandable
@@ -1459,6 +1492,7 @@ Return:
                 "coincidence_free_ok",
                 "single_narrator_ok",
                 "banned_phrase_ok",
+                "original_conflict_ok",
             )
         )
     )
