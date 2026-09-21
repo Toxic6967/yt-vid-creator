@@ -195,15 +195,30 @@ def render_animation_plan(
         timeout=60 * 60 * 3,
     )
     log = animation_dir / "blender.log"
+    combined_output = (result.stdout or "") + "\n--- STDERR ---\n" + (result.stderr or "")
     log.write_text(
-        (result.stdout or "") + "\n--- STDERR ---\n" + (result.stderr or ""),
+        combined_output,
         encoding="utf-8",
         errors="replace",
     )
-    if result.returncode != 0:
+
+    # Blender can print an uncaught Python traceback from --python while the
+    # outer Blender process still exits without a useful non-zero status.
+    # Detect the script crash directly so we report the real error instead of
+    # falling through to a confusing "video file missing" validation failure.
+    python_crashed = (
+        "Traceback (most recent call last):" in combined_output
+        or "AttributeError:" in combined_output
+        or "NameError:" in combined_output
+        or "SyntaxError:" in combined_output
+        or "TypeError:" in combined_output
+        or "RuntimeError:" in combined_output
+    )
+    if result.returncode != 0 or python_crashed:
+        tail = combined_output[-2400:]
         raise RuntimeError(
-            "Blender animation render failed. "
-            f"See {log}. Last output: {(result.stderr or result.stdout or '')[-1200:]}"
+            "Blender animation script crashed before a scene video was completed. "
+            f"See {log}. Blender output tail: {tail}"
         )
 
     visuals: list[dict[str, Any]] = []
