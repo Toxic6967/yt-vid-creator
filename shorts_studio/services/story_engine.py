@@ -6,25 +6,19 @@ from typing import Any
 
 from .ollama_client import chat_json
 from .story_game import story_game_prompt_context
-from .asset_registry import power_prompt_context
 
 
 def _power_mode(genre: str | None) -> bool:
-    return str(genre or "").strip().lower() == "powers"
+    # Fictional channel-universe powers were removed. Any unusual ability shown
+    # in a Story must be a verified mechanic of the selected real Roblox game.
+    return False
 
 
 def _power_story_rules(genre: str | None) -> str:
-    if not _power_mode(genre):
-        return (
-            "POWERS ARE NOT ENABLED. Do not invent magic, portals, energy attacks or sudden superpowers. "
-            "Every unusual capability must come from the verified game context."
-        )
     return (
-        "POWER STORY MODE IS ENABLED. The recurring cast may use only the ORIGINAL FICTIONAL abilities below. "
-        "These abilities are part of our animated channel universe, NOT claims about the real Roblox game's mechanics. "
-        "Game locations, items, enemies, objectives and UI must still stay faithful to verified game context. "
-        "Powers must have setup, limits and consequences; they cannot randomly solve the climax.\n"
-        + power_prompt_context()
+        "Do not invent magic, portals, energy attacks, special abilities or superpowers. "
+        "If the selected Roblox game genuinely has unusual abilities, use only abilities explicitly supported "
+        "by VERIFIED GAME CONTEXT and treat them as game mechanics, not channel lore."
     )
 
 
@@ -51,42 +45,41 @@ def _clean(value: Any, limit: int = 500) -> str:
 
 
 def _default_character(idx: int) -> dict[str, str]:
+    # These are per-video fallback roles only. They are NOT recurring channel
+    # characters and carry no lore between Shorts.
     defaults = [
         {
-            "id": "max",
-            "name": "Max",
+            "id": "player",
+            "name": "Player",
             "gender": "male",
             "visual_identity": (
                 "authentic Roblox R15 player avatar with classic Roblox proportions, softly beveled plastic head, "
                 "simple classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox joints; "
-                "messy dark-brown Roblox catalog hair accessory, royal-blue hoodie clothing texture, black cargo-style pants, white shoes; "
-                "recognizably Roblox, not voxel/cubic Minecraft, not LEGO, not a human child and not a Pixar character"
+                "dark Roblox catalog hair, blue hoodie, dark pants, white shoes; recognizably Roblox, not Minecraft, LEGO or human"
             ),
-            "personality": "confident, competitive, gets himself into trouble",
+            "personality": "focused player who takes a risky chance when the game puts pressure on them",
         },
         {
-            "id": "mia",
-            "name": "Mia",
+            "id": "friend",
+            "name": "Friend",
             "gender": "female",
             "visual_identity": (
                 "authentic Roblox R15 player avatar with classic Roblox proportions, softly beveled plastic head, "
                 "simple classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox joints; "
-                "long dark Roblox ponytail catalog hair accessory, purple jacket clothing texture, black pants, white shoes; "
-                "recognizably Roblox, not voxel/cubic Minecraft, not LEGO, not a human child and not a Pixar character"
+                "dark ponytail catalog hair, purple jacket, dark pants, white shoes; recognizably Roblox, not Minecraft, LEGO or human"
             ),
-            "personality": "quick-thinking, sarcastic, notices details first",
+            "personality": "quick-thinking teammate who notices important game details",
         },
         {
-            "id": "kai",
-            "name": "Kai",
+            "id": "teammate",
+            "name": "Teammate",
             "gender": "male",
             "visual_identity": (
                 "authentic Roblox R15 player avatar with classic Roblox proportions, softly beveled plastic head, "
                 "simple classic Roblox face decal, R15 torso, separate upper/lower arms and legs with visible Roblox joints; "
-                "short black Roblox catalog hair accessory, red-and-black jacket clothing texture, dark pants, red shoes; "
-                "recognizably Roblox, not voxel/cubic Minecraft, not LEGO, not a human child and not a Pixar character"
+                "short black catalog hair, red jacket, dark pants, grey shoes; recognizably Roblox, not Minecraft, LEGO or human"
             ),
-            "personality": "calm, loyal, suspicious when something feels wrong",
+            "personality": "steady teammate who reacts naturally to the game's mechanics and risks",
         },
     ]
     return dict(defaults[idx % len(defaults)])
