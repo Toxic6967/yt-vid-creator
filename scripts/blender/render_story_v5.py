@@ -58,7 +58,7 @@ def rgb(value: str):
 
 
 PALETTES = {
-    "max": {
+    "player": {
         "skin": rgb("#E2B584"),
         "shirt": rgb("#2864D7"),
         "pants": rgb("#202630"),
@@ -66,7 +66,7 @@ PALETTES = {
         "hair": rgb("#4B3023"),
         "accent": rgb("#55B8FF"),
     },
-    "mia": {
+    "friend": {
         "skin": rgb("#DDAA7E"),
         "shirt": rgb("#8149C7"),
         "pants": rgb("#252733"),
@@ -74,7 +74,7 @@ PALETTES = {
         "hair": rgb("#2C2028"),
         "accent": rgb("#E4D8FF"),
     },
-    "kai": {
+    "teammate": {
         "skin": rgb("#D5A377"),
         "shirt": rgb("#B33740"),
         "pants": rgb("#20232B"),
