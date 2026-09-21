@@ -105,7 +105,7 @@ def _validate_rendered_clip(path: Path) -> tuple[bool, str]:
 def _encode_frame_sequence(report: dict[str, Any], clip: Path) -> None:
     frames_dir = Path(str(report.get("frames_dir") or ""))
     pattern = str(report.get("frame_pattern") or "frame_%04d.jpg")
-    fps = int(report.get("fps") or 24)
+    fps = int(report.get("fps") or 30)
     frame_count = int(report.get("rendered_frame_count") or report.get("frames") or 0)
 
     if not frames_dir.exists():
@@ -137,9 +137,9 @@ def _encode_frame_sequence(report: dict[str, Any], clip: Path) -> None:
             "-c:v",
             "libx264",
             "-preset",
-            "medium",
+            "slow",
             "-crf",
-            "18",
+            "15",
             "-pix_fmt",
             "yuv420p",
             "-movflags",
